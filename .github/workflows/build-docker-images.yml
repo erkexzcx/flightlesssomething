@@ -35,12 +35,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Go Build Cache for Docker
-        uses: actions/cache@v3
-        with:
-          path: go-build-cache
-          key: ${{ matrix.platform }}-go-build-cache-${{ hashFiles('**/go.sum') }}
-
       - name: inject go-build-cache into docker
         uses: reproducible-containers/buildkit-cache-dance@v2.1.2
         with:
