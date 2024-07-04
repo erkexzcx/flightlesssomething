@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/gin-contrib/sessions"
@@ -48,7 +47,6 @@ func getLoginCallback(c *gin.Context) {
 
 	token, err := discordConf.Exchange(context.Background(), c.Query("code"))
 	if err != nil {
-		log.Println(err)
 		c.HTML(http.StatusInternalServerError, "error_raw.tmpl", gin.H{
 			"errorMessage": "Failed to exchange code for token",
 		})
@@ -57,7 +55,6 @@ func getLoginCallback(c *gin.Context) {
 
 	res, err := discordConf.Client(context.Background(), token).Get("https://discord.com/api/users/@me")
 	if err != nil {
-		log.Println(err)
 		c.HTML(http.StatusInternalServerError, "error_raw.tmpl", gin.H{
 			"errorMessage": "Failed to get user details from Discord",
 		})
