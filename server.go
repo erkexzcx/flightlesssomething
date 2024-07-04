@@ -71,6 +71,7 @@ func Start(c *Config) {
 
 	// Setup gin //
 
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.Use(sessions.Sessions("mysession", store))
 
