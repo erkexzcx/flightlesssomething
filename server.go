@@ -29,16 +29,18 @@ var (
 func Start(c *Config) {
 	// Setup data dir //
 
-	_, err := os.Stat(c.DataDir)
-	if os.IsNotExist(err) {
-		err := os.Mkdir(c.DataDir, 0755)
-		if err != nil {
-			panic("Failed to create data dir: " + err.Error())
-		}
-	} else if err != nil {
-		panic("Failed to check data dir: " + err.Error())
-	}
+	//// Commented out, otherwise In Docker it would throw 'panic: Failed to create data dir: mkdir "/data": no such file or directory'
+	// _, err := os.Stat(c.DataDir)
+	// if os.IsNotExist(err) {
+	// 	err := os.Mkdir(c.DataDir, 0755)
+	// 	if err != nil {
+	// 		panic("Failed to create data dir: " + err.Error())
+	// 	}
+	// } else if err != nil {
+	// 	panic("Failed to check data dir: " + err.Error())
+	// }
 
+	var err error
 	benchmarksDir = filepath.Join(c.DataDir, "benchmarks")
 	_, err = os.Stat(benchmarksDir)
 	if os.IsNotExist(err) {
