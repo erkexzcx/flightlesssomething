@@ -9,6 +9,6 @@ ARG TARGETVARIANT
 ARG version
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} go build -a -ldflags "-w -s -X main.version=$version -extldflags '-static'" -o fm ./cmd/flightlesssomething/main.go
 
-FROM scratch
+FROM alpine:3.20
 COPY --from=builder /app/fm /fm
 ENTRYPOINT ["/fm"]
