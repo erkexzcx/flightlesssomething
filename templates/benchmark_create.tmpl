@@ -1,0 +1,23 @@
+{{template "header.tmpl" .}}
+
+<div class="d-flex justify-content-between align-items-center">
+    <h2>New benchmark</h2>
+</div>
+
+<form action="/benchmark" method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label for="exampleInputEmail1" class="form-label">Title</label>
+    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Title of the benchmark" required name="title" maxlength="100">
+  </div>
+  <div class="mb-3">
+    <label for="exampleInputPassword1" class="form-label">Description</label>
+    <textarea id="exampleInputPassword1" class="form-control" rows="4" placeholder="Description of your benchmark" required name="description" maxlength="500"></textarea>
+  </div>
+  <div class="mb-3">
+    <label for="inputGroupFile01" class="form-label">CSV file(s)</label>
+    <input type="file" class="form-control" id="inputGroupFile01" required multiple name="files">
+  </div>
+  <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+
+{{template "footer.tmpl" .}}
