@@ -24,7 +24,6 @@
 
 {{if eq .benchmark.UserID .userID }}
 <a class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#exampleModal">Delete benchmark</a>
-{{end}}
 
 <div class="modal" id="exampleModal" tabindex="-1">
   <div class="modal-dialog">
@@ -45,6 +44,7 @@
     </div>
   </div>
 </div>
+{{end}}
 
 <div id="fpsChart" style="height:250pt;"></div>
 <div id="frameTimeChart" style="height:250pt;"></div>
