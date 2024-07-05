@@ -636,42 +636,35 @@
     });
 
     function calculateSpikes(data, threshold) {
-        if (data.length < 3) {
-            throw new Error("Data length must be greater than or equal to 3.");
+        if (data.length < 6) {
+            throw new Error("Data length must be greater than or equal to 6.");
         }
 
         let spikeCount = 0;
-        let previousWasSpike = false;
 
-        // Helper function to calculate the moving average of the last 3 points
-        function movingAverage(arr, index, windowSize) {
-            if (index < windowSize - 1) {
-                return null; // Not enough data points to calculate the moving average
-            }
+        // Helper function to calculate the moving average with a minimum of 6 points
+        function movingAverage(arr, index) {
+            const windowSize = Math.max(6, Math.ceil(arr.length * 0.05)); // 5 % of the data
+            const halfWindowSize = Math.floor(windowSize / 2);
+            const start = Math.max(0, index - halfWindowSize);
+            const end = Math.min(arr.length - 1, index + halfWindowSize);
+            const actualWindowSize = end - start + 1;
+
             let sum = 0;
-            for (let i = index - windowSize + 1; i <= index; i++) {
+            for (let i = start; i <= end; i++) {
                 sum += arr[i];
             }
-            return sum / windowSize;
+            return sum / actualWindowSize;
         }
 
-        for (let i = 4; i < data.length; i++) { // Start from the 3rd point
+        for (let i = 0; i < data.length; i++) {
             const currentPoint = data[i];
-            const movingAvg = movingAverage(data, i, 3);
-
-            if (movingAvg === null) {
-                continue; // Skip if not enough data points to calculate the moving average
-            }
+            const movingAvg = movingAverage(data, i);
 
             const change = Math.abs(currentPoint - movingAvg) / movingAvg * 100;
 
             if (change > threshold) {
-                if (!previousWasSpike) {
-                    spikeCount++;
-                    previousWasSpike = true;
-                }
-            } else {
-                previousWasSpike = false;
+                spikeCount++;
             }
         }
 
