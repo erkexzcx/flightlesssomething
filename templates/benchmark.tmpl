@@ -22,7 +22,7 @@
     </div>
 </div>
 
-{{if .username}}
+{{if eq .benchmark.UserID .userID }}
 <a class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#exampleModal">Delete benchmark</a>
 {{end}}
 
