@@ -20,6 +20,11 @@ type DiscordUser struct {
 func getLogin(c *gin.Context) {
 	session := sessions.Default(c)
 
+	if session.Get("ID") != nil {
+		c.Redirect(http.StatusTemporaryRedirect, "/")
+		return
+	}
+
 	discordState, err := getRandomString()
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error_raw.tmpl", gin.H{
