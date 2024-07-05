@@ -277,7 +277,7 @@ func deleteBenchmark(c *gin.Context) {
 	}
 
 	// Delete benchmark from DB
-	result = db.Delete(&benchmark)
+	result = db.Unscoped().Delete(&benchmark)
 	if result.Error != nil {
 		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
 			"activePage": "error",
