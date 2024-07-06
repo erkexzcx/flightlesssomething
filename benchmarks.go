@@ -199,7 +199,7 @@ func postBenchmarkCreate(c *gin.Context) {
 		Description: description,
 
 		SpecDistro:    csvSpecs.Distro,
-		SpecCPU:       csvSpecs.Distro,
+		SpecCPU:       csvSpecs.CPU,
 		SpecGPU:       csvSpecs.GPU,
 		SpecRAM:       csvSpecs.RAM,
 		SpecKernel:    csvSpecs.Kernel,
