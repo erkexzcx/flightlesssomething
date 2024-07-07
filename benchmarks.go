@@ -168,13 +168,13 @@ func postBenchmarkCreate(c *gin.Context) {
 		})
 		return
 	}
-	if len(files) > 30 {
+	if len(files) > 50 {
 		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
 			"activePage": "error",
 			"username":   session.Get("Username"),
 			"userID":     session.Get("ID"),
 
-			"errorMessage": "Too many files uploaded (max 30)",
+			"errorMessage": "Too many files uploaded (max 50)",
 		})
 		return
 	}
