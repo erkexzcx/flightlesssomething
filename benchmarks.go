@@ -135,13 +135,13 @@ func postBenchmarkCreate(c *gin.Context) {
 	}
 
 	description := strings.TrimSpace(c.PostForm("description"))
-	if len(description) > 500 || description == "" {
+	if len(description) > 500 {
 		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
 			"activePage": "error",
 			"username":   session.Get("Username"),
 			"userID":     session.Get("ID"),
 
-			"errorMessage": "Description must not be empty or exceed 500 characters",
+			"errorMessage": "Description must not exceed 500 characters",
 		})
 		return
 	}
