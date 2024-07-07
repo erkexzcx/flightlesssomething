@@ -7,10 +7,11 @@
 <form action="/benchmark" method="post" enctype="multipart/form-data">
   <div class="mb-3">
     <label for="exampleInputEmail1" class="form-label">Title</label>
-    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Title of the benchmark" required name="title" maxlength="100">
+    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Title of your benchmark" required name="title" maxlength="100">
+    <div id="emailHelp" class="form-text"><small>For example: <code><i>Forza Horizon 5: BORE vs SCX schedulers</i></code></small></div>
   </div>
   <div class="mb-3">
-    <label for="exampleInputPassword1" class="form-label">Description</label>
+    <label for="exampleInputPassword1" class="form-label">Description <small>(optional)</small></label>
     <textarea id="exampleInputPassword1" class="form-control" rows="4" placeholder="Description of your benchmark" name="description" maxlength="500"></textarea>
   </div>
   <div class="mb-3">
@@ -19,5 +20,25 @@
   </div>
   <button type="submit" class="btn btn-primary">Submit</button>
 </form>
+
+<div class="d-flex justify-content-between align-items-center">
+    <h2 class="mt-3">Notes:</h2>
+</div>
+
+<ul>
+  <li>CSV file name (without .csv) is used as a name in charts.
+    <ul>
+      <li>You cannot rename once benchmark is submitted.</li>
+    </ul>
+  </li>
+  <li>You can upload at max 50 CSV files for a single benchmark.
+  </li>
+  <li>Only MangoHUD log format is supported.
+    <ul>
+      <li>If you want to upload RivaTuner log format - modify/convert it to MangoHud format <b>by hand</b>.</li>
+      <li>RivaTuner log format (.htm) is not supported yet.</li>
+    </ul>
+  </li>
+</ul>
 
 {{template "footer.tmpl" .}}
