@@ -1,29 +1,21 @@
 {{template "header.tmpl" .}}
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="p-3">
-            <div class="text-center">
-                <h5><b>{{ .benchmark.Title }}</b></h5>
-                <p>{{ .benchmark.Description }}</p>
-                <p><small>Submitted <b>{{ .benchmark.CreatedAtHumanized }}</b> by <b>{{ .benchmark.User.Username }}.</b></small></p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <ul>
-            <li>Distro: <code>{{ .benchmark.SpecDistro }}</code></li>
-            <li>Kernel: <code>{{ .benchmark.SpecKernel }}</code></li>
-            <li>GPU: <code>{{ .benchmark.SpecGPU }}</code></li>
-            <li>CPU: <code>{{ .benchmark.SpecCPU }}</code></li>
-            <li>RAM: <code>{{ .benchmark.SpecRAM }}</code></li>
-            <li>Scheduler: <code>{{ .benchmark.SpecScheduler }}</code></li>
-        </ul>
-    </div>
+<div class="d-flex justify-content-between align-items-center">
+    <h2>Benchmark #{{ .benchmark.ID }}</h2>
+</div>
+
+<div class="text-center">
+    <h5><b>{{ .benchmark.Title }}</b></h5>
+    <p>{{ .benchmark.Description }}</p>
+    <p><small>Submitted <b>{{ .benchmark.CreatedAtHumanized }}</b> by <b>{{ .benchmark.User.Username }}.</b></small></p>
 </div>
 
 {{if eq .benchmark.UserID .userID }}
-<a class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#exampleModal">Delete benchmark</a>
+<div class="row">
+    <div class="col-12">
+        <a class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#exampleModal">Delete benchmark</a>
+    </div>
+</div>
 
 <div class="modal" id="exampleModal" tabindex="-1">
   <div class="modal-dialog">
@@ -45,6 +37,35 @@
   </div>
 </div>
 {{end}}
+
+<div class="row">
+    <div class="col-12">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th scope="col">Label</th>
+                    <th scope="col">OS</th>
+                    <th scope="col">CPU</th>
+                    <th scope="col">GPU</th>
+                    <th scope="col">RAM</th>
+                    <th scope="col">OS specific</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{- range .benchmarkData }}
+                <tr>
+                    <th scope="row">{{ .Label }}</th>
+                    <td>{{ .SpecOS }}</td>
+                    <td>{{ .SpecGPU }}</td>
+                    <td>{{ .SpecCPU }}</td>
+                    <td>{{ .SpecRAM }}</td>
+                    <td>{{ .SpecLinuxKernel }} {{ .SpecLinuxScheduler }}</td>
+                </tr>
+                {{- end }}
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <div id="fpsChart" style="height:250pt;"></div>
 <div id="frameTimeChart" style="height:250pt;"></div>
@@ -100,78 +121,81 @@
 <script src="https://code.highcharts.com/modules/boost.js"></script>
 
 <script>
-    // Render data here
     var fpsDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .FPSPointsArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataFPS }} },
         {{- end }}
     ];
 
     var frameTimeDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .FrameTimeArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataFrameTime }} },
         {{- end }}
     ];
 
     var cpuLoadDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .CPULoadArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataCPULoad }} },
         {{- end }}
     ];
 
     var gpuLoadDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPULoadArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPULoad }} },
         {{- end }}
     ];
 
     var cpuTempDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .CPUTempArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataCPUTemp }} },
         {{- end }}
     ];
 
     var gpuTempDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPUTempArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPUTemp }} },
         {{- end }}
     ];
 
     var gpuCoreClockDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPUCoreClockArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPUCoreClock }} },
         {{- end }}
     ];
 
     var gpuMemClockDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPUMemClockArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPUMemClock }} },
         {{- end }}
     ];
 
     var gpuVRAMUsedDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPUVRAMUsedArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPUVRAMUsed }} },
         {{- end }}
     ];
 
     var gpuPowerDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .GPUPowerArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataGPUPower }} },
         {{- end }}
     ];
 
     var ramUsedDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .RAMUsedArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataRAMUsed }} },
         {{- end }}
     ];
 
     var swapUsedDataArrays = [
         {{- range .benchmarkData }}
-        { label: '{{ .Filename }}', data: '{{ .SwapUsedArray }}' },
+        { label: '{{ .Label }}', data: {{ .DataSwapUsed }} },
         {{- end }}
     ];
+
+</script>
+
+<script>
 
     // Define a set of colors to be used for the charts
     var colors = Highcharts.getOptions().colors;
@@ -364,18 +388,10 @@
         };
     }
 
-    function createDataset(label, data, color) {
-        return {
-            name: label,
-            data: data.split(',').map(Number),
-            color: color
-        };
-    }
-
     function createChart(chartId, title, description, unit, dataArrays, maxY = null) {
         var options = getLineChartOptions(title, description, unit, maxY);
         options.series = dataArrays.map(function(dataArray, index) {
-            return createDataset(dataArray.label, dataArray.data, colors[index % colors.length]);
+            return {name: dataArray.label, data: dataArray.data, color: colors[index % colors.length]};
         });
 
         Highcharts.chart(chartId, options);
@@ -421,11 +437,11 @@
 
     // Calculate average CPU and GPU load
     var cpuLoadAverages = cpuLoadDataArrays.map(function(dataArray) {
-        return calculateAverage(dataArray.data.split(',').map(Number));
+        return calculateAverage(dataArray.data);
     });
 
     var gpuLoadAverages = gpuLoadDataArrays.map(function(dataArray) {
-        return calculateAverage(dataArray.data.split(',').map(Number));
+        return calculateAverage(dataArray.data);
     });
 
     // Create bar charts for average CPU and GPU load
@@ -439,10 +455,9 @@
     var maxFPSData = [];
 
     fpsDataArrays.forEach(function(dataArray) {
-        var data = dataArray.data.split(',').map(Number);
-        var minFPS = calculatePercentile(data, 1);
-        var avgFPS = calculateAverage(data);
-        var maxFPS = calculatePercentile(data, 97);
+        var minFPS = calculatePercentile(dataArray.data, 1);
+        var avgFPS = calculateAverage(dataArray.data);
+        var maxFPS = calculatePercentile(dataArray.data, 97);
 
         categories.push(dataArray.label);
         minFPSData.push(minFPS);
@@ -546,8 +561,7 @@
 
     // Calculate average FPS for each filename
     var avgFPSData = fpsDataArrays.map(function(dataArray) {
-        var data = dataArray.data.split(',').map(Number);
-        return calculateAverage(data);
+        return calculateAverage(dataArray.data);
     });
 
     // Calculate FPS as a percentage of the first element
@@ -675,8 +689,7 @@
         document.getElementById('spikeThresholdValue').innerText = threshold + '%';
 
         var spikePercentages = fpsDataArrays.map(function(dataArray) {
-            var data = dataArray.data.split(',').map(Number);
-            return calculateSpikes(data, threshold);
+            return calculateSpikes(dataArray.data, threshold);
         });
 
         Highcharts.chart('spikesChart', {

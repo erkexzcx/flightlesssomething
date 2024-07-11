@@ -181,7 +181,7 @@ func postBenchmarkCreate(c *gin.Context) {
 
 	// Read CSV files
 	// Store to disk only when DB record is created successfully
-	csvFiles, csvSpecs, err := readCSVFiles(files)
+	csvFiles, err := readBenchmarkFiles(files)
 	if err != nil {
 		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
 			"activePage": "error",
@@ -197,13 +197,6 @@ func postBenchmarkCreate(c *gin.Context) {
 		UserID:      session.Get("ID").(uint),
 		Title:       title,
 		Description: description,
-
-		SpecDistro:    csvSpecs.Distro,
-		SpecCPU:       csvSpecs.CPU,
-		SpecGPU:       csvSpecs.GPU,
-		SpecRAM:       csvSpecs.RAM,
-		SpecKernel:    csvSpecs.Kernel,
-		SpecScheduler: csvSpecs.Scheduler,
 	}
 
 	result := db.Create(&benchmark)
@@ -331,7 +324,7 @@ func getBenchmark(c *gin.Context) {
 	var benchmark Benchmark
 	benchmark.ID = uint(intID)
 
-	var csvFiles []*CSVFile
+	var benchmarkDatas []*BenchmarkData
 	var errCSV, errDB error
 	errHTTPStatus := http.StatusInternalServerError
 
@@ -340,7 +333,7 @@ func getBenchmark(c *gin.Context) {
 
 	go func() {
 		defer wg.Done()
-		csvFiles, errCSV = retrieveBenchmarkData(benchmark.ID)
+		benchmarkDatas, errCSV = retrieveBenchmarkData(benchmark.ID)
 	}()
 
 	go func() {
@@ -379,6 +372,6 @@ func getBenchmark(c *gin.Context) {
 		"userID":     session.Get("ID"),
 
 		"benchmark":     benchmark,
-		"benchmarkData": csvFiles,
+		"benchmarkData": benchmarkDatas,
 	})
 }
