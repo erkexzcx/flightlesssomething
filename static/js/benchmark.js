@@ -1,4 +1,15 @@
-// Define a set of colors to be used for the charts
+Highcharts.setOptions({
+    chart: {
+        animation: false
+    },
+    plotOptions: {
+        series: {
+            animation: false
+        }
+    }
+});
+
+
 var colors = Highcharts.getOptions().colors;
 
 function getLineChartOptions(title, description, unit, maxY = null) {
