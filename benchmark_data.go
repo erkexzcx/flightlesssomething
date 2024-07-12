@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"mime/multipart"
 	"os"
@@ -197,6 +198,7 @@ func readMangoHudFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse GPU mem clock value '%s': %v", record[7], err)
 		}
+		val = math.Round(val*2*100000) / 100000 // multiply by 2 (so it represents actual core clocks) and round to 5 decimal places
 		benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
 
 		val, err = strconv.ParseFloat(record[8], 64)
@@ -263,7 +265,7 @@ func readAfterburnerFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 		return nil, errors.New("failed to read file (err ab2)")
 	}
 	benchmarkData.SpecOS = "Windows" // Hardcode
-	benchmarkData.SpecCPU = truncateString(strings.TrimSpace(record[2]))
+	benchmarkData.SpecGPU = truncateString(strings.TrimSpace(record[2]))
 
 	// 3rd line contain headers for benchmark data. We need to pay attention to their order
 	if !scanner.Scan() {
@@ -380,6 +382,7 @@ func readAfterburnerFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse Memory usage value '%s': %v", record[8], err)
 			}
+			val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
 			benchmarkData.DataGPUVRAMUsed = append(benchmarkData.DataGPUVRAMUsed, val)
 		}
 
@@ -396,6 +399,7 @@ func readAfterburnerFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse RAM usage value '%s': %v", record[10], err)
 			}
+			val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
 			benchmarkData.DataRAMUsed = append(benchmarkData.DataRAMUsed, val)
 		}
 

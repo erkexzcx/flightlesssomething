@@ -242,7 +242,7 @@ createChart('cpuTempChart', 'CPU Temperature', '', '°C', cpuTempDataArrays);
 createChart('gpuTempChart', 'GPU Temperature', '', '°C', gpuTempDataArrays);
 createChart('gpuCoreClockChart', 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays);
 createChart('gpuMemClockChart', 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays);
-createChart('gpuVRAMUsedChart', 'GPU VRAM Usage', '', '%', gpuVRAMUsedDataArrays, 100);
+createChart('gpuVRAMUsedChart', 'GPU VRAM Usage', '', 'GB', gpuVRAMUsedDataArrays);
 createChart('gpuPowerChart', 'GPU Power', '', 'W', gpuPowerDataArrays);
 createChart('ramUsedChart', 'RAM Usage', '', 'GB', ramUsedDataArrays);
 createChart('swapUsedChart', 'SWAP Usage', '', 'GB', swapUsedDataArrays);
