@@ -1,5 +1,7 @@
 {{template "header.tmpl" .}}
 
+<link rel="stylesheet" href="/static/css/benchmark.css">
+
 <div class="d-flex justify-content-between align-items-center">
     <h2>Benchmark #{{ .benchmark.ID }}</h2>
     <div>
@@ -19,30 +21,32 @@
 <div class="row">
     <div class="col-12">
         <h5 class="text-center" style="font-size: 16px; font-weight: bold;">Specifications</h5>
-        <table class="table table-sm table-bordered">
-            <thead>
-                <tr>
-                    <th scope="col">Label</th>
-                    <th scope="col">OS</th>
-                    <th scope="col">GPU</th>
-                    <th scope="col">CPU</th>
-                    <th scope="col">RAM</th>
-                    <th scope="col">OS specific</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{- range .benchmarkData }}
-                <tr>
-                    <th scope="row">{{ .Label }}</th>
-                    <td>{{ .SpecOS }}</td>
-                    <td>{{ .SpecGPU }}</td>
-                    <td>{{ .SpecCPU }}</td>
-                    <td>{{ .SpecRAM }}</td>
-                    <td>{{ .SpecLinuxKernel }} {{ .SpecLinuxScheduler }}</td>
-                </tr>
-                {{- end }}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-nowrap">
+                <thead>
+                    <tr>
+                        <th scope="col">Label</th>
+                        <th scope="col">OS</th>
+                        <th scope="col">GPU</th>
+                        <th scope="col">CPU</th>
+                        <th scope="col">RAM</th>
+                        <th scope="col">OS specific</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{- range .benchmarkData }}
+                    <tr>
+                        <th scope="row">{{ .Label }}</th>
+                        <td>{{ .SpecOS }}</td>
+                        <td>{{ .SpecGPU }}</td>
+                        <td>{{ .SpecCPU }}</td>
+                        <td>{{ .SpecRAM }}</td>
+                        <td>{{ .SpecLinuxKernel }} {{ .SpecLinuxScheduler }}</td>
+                    </tr>
+                    {{- end }}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
