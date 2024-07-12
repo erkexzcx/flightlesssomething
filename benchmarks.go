@@ -375,3 +375,53 @@ func getBenchmark(c *gin.Context) {
 		"benchmarkData": benchmarkDatas,
 	})
 }
+
+func getBenchmarkDownload(c *gin.Context) {
+	session := sessions.Default(c)
+
+	// Get benchmark ID from the path
+	id := c.Param("id")
+
+	// Get benchmark details
+	intID, err := strconv.Atoi(id)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Internal server error occurred: " + err.Error(),
+		})
+		return
+	}
+
+	var benchmark Benchmark
+	benchmark.ID = uint(intID)
+
+	benchmarkDatas, err := retrieveBenchmarkData(benchmark.ID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage":   "error",
+			"username":     session.Get("Username"),
+			"userID":       session.Get("ID"),
+			"errorMessage": "Error occurred: " + err.Error(),
+		})
+		return
+	}
+
+	content, err := createZipFromBenchmarkData(benchmarkDatas)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage":   "error",
+			"username":     session.Get("Username"),
+			"userID":       session.Get("ID"),
+			"errorMessage": "Error occurred: " + err.Error(),
+		})
+		return
+	}
+
+	fileName := "benchmark_" + id + ".zip"
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename="+fileName)
+	c.Data(http.StatusOK, "application/zip", content.Bytes())
+}

@@ -94,6 +94,7 @@ func Start(c *Config) {
 	r.POST("/benchmark", postBenchmarkCreate)
 	r.GET("/benchmark/:id", getBenchmark)
 	r.DELETE("/benchmark/:id", deleteBenchmark)
+	r.GET("/benchmark/:id/download", getBenchmarkDownload)
 
 	r.GET("/user/:id", getUser)
 
