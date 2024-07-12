@@ -13,7 +13,7 @@
 <div class="text-center">
     <h5><b>{{ .benchmark.Title }}</b></h5>
     <p>{{ .benchmark.Description }}</p>
-    <p><small>Submitted <b>{{ .benchmark.CreatedAtHumanized }}</b> by <b>{{ .benchmark.User.Username }}.</b></small></p>
+    <p><small>Submitted <b>{{ .benchmark.CreatedAtHumanized }}</b> by <b><a href="/user/{{ .benchmark.User.ID }}">{{ .benchmark.User.Username }}</a></b></small></p>
 </div>
 
 <div class="row">
