@@ -14,6 +14,7 @@ type Config struct {
 	DiscordClientID     string
 	DiscordClientSecret string
 	DiscordRedirectURL  string
+	SessionSecret       string
 
 	Version bool
 }
@@ -25,6 +26,7 @@ func NewConfig() (*Config, error) {
 	discordClientID := flag.String("discord-client-id", "", "Discord OAuth2 client ID (see https://discord.com/developers/applications)")
 	discordClientSecret := flag.String("discord-client-secret", "", "Discord OAuth2 client secret (see https://discord.com/developers/applications)")
 	discordRedirectURL := flag.String("discord-redirect-url", "", "Discord OAuth2 redirect URL (<scheme>://<domain>/login/callback)")
+	sessionSecret := flag.String("session-secret", "", "Session secret")
 	flagVersion := flag.Bool("version", false, "prints version of the application")
 
 	envflag.Parse(envflag.WithPrefix("FS_"))
@@ -36,6 +38,7 @@ func NewConfig() (*Config, error) {
 		DiscordClientID:     *discordClientID,
 		DiscordClientSecret: *discordClientSecret,
 		DiscordRedirectURL:  *discordRedirectURL,
+		SessionSecret:       *sessionSecret,
 
 		Version: *flagVersion,
 	}
@@ -55,6 +58,9 @@ func NewConfig() (*Config, error) {
 	}
 	if config.DiscordRedirectURL == "" {
 		return nil, errors.New("missing discord-redirect-url argument")
+	}
+	if config.SessionSecret == "" {
+		return nil, errors.New("missing session-secret argument")
 	}
 
 	return config, nil

@@ -66,7 +66,7 @@ func Start(c *Config) {
 	if err != nil {
 		panic(err)
 	}
-	store := gormsessions.NewStore(db, true, []byte("secret"))
+	store := gormsessions.NewStore(db, true, []byte(c.SessionSecret))
 	db.AutoMigrate(&Benchmark{})
 
 	// Setup gin //
@@ -79,6 +79,13 @@ func Start(c *Config) {
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.tmpl"))
 	r.SetHTMLTemplate(tmpl)
 
+	// Serve static files
+	fileServer := http.FileServer(http.FS(staticFS))
+	r.GET("/static/*filepath", func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=3600")
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
+
 	r.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/benchmarks") })
 
 	r.GET("/benchmarks", getBenchmarks)
@@ -87,6 +94,7 @@ func Start(c *Config) {
 	r.POST("/benchmark", postBenchmarkCreate)
 	r.GET("/benchmark/:id", getBenchmark)
 	r.DELETE("/benchmark/:id", deleteBenchmark)
+	r.GET("/benchmark/:id/download", getBenchmarkDownload)
 
 	r.GET("/user/:id", getUser)
 

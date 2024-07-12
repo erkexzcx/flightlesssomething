@@ -22,23 +22,140 @@
 </form>
 
 <div class="d-flex justify-content-between align-items-center">
-    <h2 class="mt-3">Notes:</h2>
+    <h2 class="mt-3">Instructions:</h2>
 </div>
 
 <ul>
-  <li>CSV file name (without .csv) is used as a name in charts.
+  <li>Filename (without the extension) is the name of the label.
     <ul>
       <li>You cannot rename once benchmark is submitted.</li>
     </ul>
   </li>
   <li>You can upload at max 50 CSV files for a single benchmark.
   </li>
-  <li>Only MangoHUD log format is supported.
-    <ul>
-      <li>If you want to upload RivaTuner log format - modify/convert it to MangoHud format <b>by hand</b>.</li>
-      <li>RivaTuner log format (.htm) is not supported yet.</li>
-    </ul>
+  <li>Only MangoHUD (*.csv) and Afterburner (*.hml) formats are supported.
   </li>
 </ul>
+
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">MangoHud (Linux)</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="false">Afterburner (Windows)</button>
+  </li>
+</ul>
+<div class="tab-content" id="myTabContent">
+
+  <!-- MangoHud tab -->
+  <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
+        <ol>
+            <li>Install MangoHud overlay package to your Linux distribution appropriately. More information can be found <a href="https://wiki.archlinux.org/title/MangoHud" target="_blank">here</a>.</li>
+            <li>(Optional) install <code>Goverlay</code> application which allows you to configure MangoHud overlay with graphical UI.</li>
+            <li>Edit <code>~/.config/MangoHud/MangoHud.conf</code> with the following contents (read the in-code comments and update accordingly):
+                <pre><code class="language-ini">
+legacy_layout=false
+
+background_alpha=0.6
+round_corners=0
+background_alpha=0.6
+background_color=000000
+
+font_size=24
+text_color=FFFFFF
+position=top-left
+toggle_hud=Shift_R+F12
+pci_dev=0:0b:00.0
+table_columns=3
+gpu_text=GPU
+gpu_stats
+gpu_temp
+cpu_text=CPU
+cpu_stats
+core_load
+core_bars
+cpu_temp
+io_stats
+io_read
+io_write
+vram
+vram_color=AD64C1
+ram
+ram_color=C26693
+fps
+gpu_name
+frame_timing
+frametime_color=00FF00
+fps_limit_method=late
+toggle_fps_limit=Shift_L+F1
+fps_limit=0
+
+# Update to your preferred logs location here:
+output_folder=/home/user/mangohud_logs
+
+# Set this to maximum log duration (in seconds). It will autostop after this duration, which is useful if
+# you know the duration of your benchmark, otherwise set to something large, like 9999...
+log_duration=90
+
+# If your application starts right into the benchmark - setting this to e.g. '10' gives game 10s to load. If you
+# don't want it to autostart logging the data - leave this set to '0'.
+autostart_log=0
+
+# Set this to interval of how frequently logs are collected (in milliseconds). '100' is what I use, 50 provides
+# more data and is suitable for short benchmarks, while 200-500 is suitable for (very) long benchmarks.
+# 
+# NOTE - If you are comparing Linux and Windows, then make sure this value is identical in both!
+# 
+log_interval=100
+
+toggle_logging=Shift_L+F2
+                </code></pre>
+            </li>
+        </ol>
+        <p>When you start the game, overlay should be visible. Pressing <code>SHIFT+F2</code> starts the logging and either it ends due to <code>log_duration</code> value, or can be manually stopped by pressing <code>SHIFT+F2</code> again. Note that there is an indication in overlay, where it shows big red dot, indicating that recording in progress.</p>
+        <p>After recording is done, you might end up with (or without) <code>*-summary.csv</code> file. This file can be deleted. Then there is <code>&lt;game&gt;-&lt;timestamp&gt;.csv</code> file - rename it to a label that you want to see in the website. Something like <code>Linux</code> or <code>something else</code> (with or without <code>.csv</code> extension) will work.</p>
+  </div>
+
+  <!-- Afterburner tab -->
+  <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+    <ol>
+      <li>Install Afterburner. It will also install RivaTuner statistics server.</li>
+      <li>Open Afterburner, go to Settings, then "Monitoring" tab.</li>
+      <li>Change "Hardware polling period (in milliseconds)" to "100" (ensure ALL your benchmarks have the same interval value, even on Linux!)</li>
+      <li>Modify the graphs:
+          <ol>
+              <li>Disable everything</li>
+              <li>Enable the following:
+                  <ul>
+                      <li>GPU temperature</li>
+                      <li>GPU usage</li>
+                      <li>Memory usage</li>
+                      <li>Core clock</li>
+                      <li>Memory clock</li>
+                      <li>Power</li>
+                      <li>CPU temperature</li>
+                      <li>CPU usage</li>
+                      <li>RAM usage</li>
+                      <li>Framerate</li>
+                      <li>Frametime</li>
+                  </ul>
+              </li>
+              <li>(optional) Click on each, then check "Show in On-Screen Display" for each, so you can see them in Overlay</li>
+          </ol>
+      </li>
+      <li>Check "Log history to file"</li>
+      <li>Select location for such file (e.g. Desktop or Downloads works great).</li>
+      <li>Check "Recreate existing log files"</li>
+      <li>Uncheck "Log history to file" (yes, check to configure and then uncheck to disable <em>auto</em> recording when game starts)</li>
+      <li>Set "Begin logging" and "End logging" shortcuts. Suggestion is SHIFT+F2 and SHIFT+F3 appropriately.</li>
+      <li>Close Afterburner settings.</li>
+      <li>Ensure that AfterBurner and RivaTuner is running (opened or in system tray).</li>
+      <li>Start the game, overlay will show up in 5-30 seconds (keep clicking a mouse when the game is loading)</li>
+      <li>When starting benchmark, press shortcut to record, then press shortcut to stop recording. Note that there is no indication that game is being recorded or not.</li>
+    </ol>
+    <p>You will end up with a file, named <code>*.hml</code>. Rename it to a label that you want to see in the website. Something like <code>Windows</code> or <code>something else</code> (with or without <code>.hml</code> extension) will work.</p>
+  </div>
+
+</div>
 
 {{template "footer.tmpl" .}}

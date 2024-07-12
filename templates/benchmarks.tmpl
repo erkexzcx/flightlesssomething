@@ -1,9 +1,11 @@
 {{template "header.tmpl" .}}
 
+<link rel="stylesheet" href="/static/css/benchmarks.css">
+
 <div class="d-flex justify-content-between align-items-center">
     <h2>Benchmarks</h2>
     {{if .username}}
-    <a class="btn btn-primary" href="/benchmark">New benchmark</a>
+    <a class="btn btn-primary" href="/benchmark"><i class="fa-solid fa-plus"></i> New benchmark</a>
     {{end}}
 </div>
 
@@ -33,24 +35,6 @@
         </div>
     {{- end -}}
 </div>
-
-<style>
-    .list-group-item {
-        position: relative;
-    }
-    .stretched-link {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 1;
-    }
-    .username-link {
-        position: relative;
-        z-index: 2;
-    }
-</style>
 
 <div class="d-flex justify-content-center mt-2">
     <ul class="pagination">
