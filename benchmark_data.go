@@ -524,21 +524,24 @@ func createZipFromBenchmarkData(benchmarkData []*BenchmarkData) (*bytes.Buffer, 
 		dataHeader := []string{"fps", "frametime", "cpu_load", "gpu_load", "cpu_temp", "gpu_temp", "gpu_core_clock", "gpu_mem_clock", "gpu_vram_used", "gpu_power", "ram_used", "swap_used"}
 		csvWriter.Write(dataHeader)
 
+		// Determine the number of rows to write based on the length of the DataFPS array.
+		numRows := len(data.DataFPS)
+
 		// Write the data rows.
-		for i := range data.DataFPS {
+		for i := 0; i < numRows; i++ {
 			row := []string{
-				strconv.FormatFloat(data.DataFPS[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataFrameTime[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataCPULoad[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPULoad[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataCPUTemp[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPUTemp[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPUCoreClock[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPUMemClock[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPUVRAMUsed[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataGPUPower[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataRAMUsed[i], 'f', 4, 64),
-				strconv.FormatFloat(data.DataSwapUsed[i], 'f', 4, 64),
+				formatFloatOrZero(data.DataFPS, i),
+				formatFloatOrZero(data.DataFrameTime, i),
+				formatFloatOrZero(data.DataCPULoad, i),
+				formatFloatOrZero(data.DataGPULoad, i),
+				formatFloatOrZero(data.DataCPUTemp, i),
+				formatFloatOrZero(data.DataGPUTemp, i),
+				formatFloatOrZero(data.DataGPUCoreClock, i),
+				formatFloatOrZero(data.DataGPUMemClock, i),
+				formatFloatOrZero(data.DataGPUVRAMUsed, i),
+				formatFloatOrZero(data.DataGPUPower, i),
+				formatFloatOrZero(data.DataRAMUsed, i),
+				formatFloatOrZero(data.DataSwapUsed, i),
 			}
 			csvWriter.Write(row)
 		}
@@ -556,4 +559,12 @@ func createZipFromBenchmarkData(benchmarkData []*BenchmarkData) (*bytes.Buffer, 
 	}
 
 	return buf, nil
+}
+
+// Helper function to format float or return "0.0000" if index is out of range.
+func formatFloatOrZero(data []float64, index int) string {
+	if index < len(data) {
+		return strconv.FormatFloat(data[index], 'f', 4, 64)
+	}
+	return "0.0000"
 }
