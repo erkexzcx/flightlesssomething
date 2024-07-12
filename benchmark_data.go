@@ -198,7 +198,6 @@ func readMangoHudFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse GPU mem clock value '%s': %v", record[7], err)
 		}
-		val = math.Round(val*2*100000) / 100000 // multiply by 2 (so it represents actual core clocks) and round to 5 decimal places
 		benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
 
 		val, err = strconv.ParseFloat(record[8], 64)
@@ -374,6 +373,7 @@ func readAfterburnerFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse Memory clock value '%s': %v", record[7], err)
 			}
+			val = math.Round(val/2*100000) / 100000 // divide by 2 (so it represents core clocks in a same manner as Linux) and round to 5 decimal places
 			benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
 		}
 
