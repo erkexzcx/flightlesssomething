@@ -107,10 +107,12 @@ func readMangoHudFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
 		case 3:
 			kilobytes := new(big.Int)
 			_, ok := kilobytes.SetString(strings.TrimSpace(v), 10)
-			if !ok {
+			if ok {
+				// Contains number that represents kilobytes
 				bytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
 				benchmarkData.SpecRAM = humanize.Bytes(bytes.Uint64())
 			} else {
+				// Contains humanized (or invalid) value, so no conversion needed
 				benchmarkData.SpecRAM = truncateString(strings.TrimSpace(v))
 			}
 		case 4:
