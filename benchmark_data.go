@@ -80,6 +80,11 @@ func parseData(scanner *bufio.Scanner, headerMap map[string]int, benchmarkData *
 		}
 
 		for key, index := range headerMap {
+			// Skip timestamp fields for Afterburner format
+			if isAfterburner && (index == 1 || index == 2) {
+				continue
+			}
+
 			val, err := strconv.ParseFloat(record[index], 64)
 			if err != nil {
 				return fmt.Errorf("failed to parse %s value '%s': %v", key, record[index], err)
