@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ var (
 	benchmarksDir string
 )
 
-func Start(c *Config) {
+func Start(c *Config, version string) {
 	// Setup data dir //
 
 	_, err := os.Stat(c.DataDir)
@@ -78,8 +79,21 @@ func Start(c *Config) {
 	r := gin.Default()
 	r.Use(sessions.Sessions("mysession", store))
 
-	// Parse the embedded templates
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.tmpl"))
+	// Create a new FuncMap and add the version function
+	funcMap := template.FuncMap{
+		"version": func() string {
+			return version
+		},
+	}
+
+	// Create a new template, apply the function map, and parse the templates
+	tmpl := template.New("").Funcs(funcMap)
+	tmpl, err = tmpl.ParseFS(templatesFS, "templates/*.tmpl")
+	if err != nil {
+		log.Fatalf("Failed to parse templates: %v", err)
+	}
+
+	// Set the HTML template for Gin
 	r.SetHTMLTemplate(tmpl)
 
 	// Serve static files

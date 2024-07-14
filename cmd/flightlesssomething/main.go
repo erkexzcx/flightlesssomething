@@ -11,6 +11,10 @@ var (
 )
 
 func main() {
+	if version == "" {
+		version = "dev"
+	}
+
 	c, err := flightlesssomething.NewConfig()
 	if err != nil {
 		log.Fatalln("Failed to get config:", err)
@@ -21,5 +25,5 @@ func main() {
 		return
 	}
 
-	flightlesssomething.Start(c)
+	flightlesssomething.Start(c, version)
 }
