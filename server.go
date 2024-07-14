@@ -1,7 +1,11 @@
 package flightlesssomething
 
 import (
+	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -80,10 +84,46 @@ func Start(c *Config) {
 	r.SetHTMLTemplate(tmpl)
 
 	// Serve static files
-	fileServer := http.FileServer(http.FS(staticFS))
 	r.GET("/static/*filepath", func(c *gin.Context) {
+		filepath := c.Param("filepath")
+		file, err := staticFS.Open("static" + filepath)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		defer file.Close()
+
+		// Get file info
+		fileInfo, err := file.Stat()
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		// Read file content into a byte slice
+		content, err := fs.ReadFile(staticFS, "static"+filepath)
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		// Generate ETag based on file content
+		hash := sha1.New()
+		hash.Write(content)
+		etag := hex.EncodeToString(hash.Sum(nil))
+
+		// Set ETag and Cache-Control headers
+		c.Header("ETag", etag)
 		c.Header("Cache-Control", "public, max-age=3600")
-		fileServer.ServeHTTP(c.Writer, c.Request)
+
+		// Check if the ETag matches
+		if match := c.GetHeader("If-None-Match"); match == etag {
+			c.Status(http.StatusNotModified)
+			return
+		}
+
+		// Serve the file with ETag and Last-Modified headers
+		http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), bytes.NewReader(content))
 	})
 
 	r.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/benchmarks") })

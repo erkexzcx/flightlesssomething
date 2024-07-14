@@ -461,6 +461,133 @@ Highcharts.chart('avgChart', {
     }]
 });
 
+// Function to filter out the top and bottom 3% of FPS values
+function filterOutliers(data) {
+    data.sort((a, b) => a - b);
+    var start = Math.floor(data.length * 0.01); // Ignore bottom 1%
+    var end = Math.ceil(data.length * 0.97); // Ignore top 1%
+    return data.slice(start, end);
+}
+
+// Function to count occurrences of each FPS value
+function countFPS(data) {
+    var counts = {};
+    data.forEach(function(fps) {
+        var roundedFPS = Math.round(fps);
+        counts[roundedFPS] = (counts[roundedFPS] || 0) + 1;
+    });
+
+    var fpsArray = Object.keys(counts).map(function(key) {
+        return [parseInt(key), counts[key]];
+    }).sort(function(a, b) {
+        return a[0] - b[0];
+    });
+
+    // Combine closest FPS values until we have 100 or fewer points
+    while (fpsArray.length > 100) {
+        var minDiff = Infinity;
+        var minIndex = -1;
+
+        // Find the pair with the smallest difference
+        for (var i = 0; i < fpsArray.length - 1; i++) {
+            var diff = fpsArray[i + 1][0] - fpsArray[i][0];
+            if (diff < minDiff) {
+                minDiff = diff;
+                minIndex = i;
+            }
+        }
+
+        // Combine the closest pair
+        fpsArray[minIndex][1] += fpsArray[minIndex + 1][1];
+        fpsArray[minIndex][0] = (fpsArray[minIndex][0] + fpsArray[minIndex + 1][0]) / 2;
+        fpsArray.splice(minIndex + 1, 1);
+    }
+
+    return fpsArray;
+}
+
+// Calculate counts for each dataset after filtering outliers
+var densityData = fpsDataArrays.map(function(dataArray) {
+    var filteredData = filterOutliers(dataArray.data);
+    return {
+        name: dataArray.label,
+        data: countFPS(filteredData)
+    };
+});
+
+// Create the chart
+Highcharts.chart('densityChart', {
+    chart: {
+        type: 'areaspline',
+        backgroundColor: null
+    },
+    title: {
+        text: 'FPS Density',
+        style: {
+            color: '#FFFFFF',
+            fontSize: '16px'
+        }
+    },
+    xAxis: {
+        title: {
+            text: 'FPS',
+            style: {
+                color: '#FFFFFF'
+            }
+        },
+        labels: {
+            style: {
+                color: '#FFFFFF'
+            }
+        }
+    },
+    yAxis: {
+        title: {
+            text: 'Count',
+            style: {
+                color: '#FFFFFF'
+            }
+        },
+        labels: {
+            style: {
+                color: '#FFFFFF'
+            }
+        },
+        gridLineColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    tooltip: {
+        shared: true,
+        backgroundColor: '#1E1E1E',
+        borderColor: '#FFFFFF',
+        style: {
+            color: '#FFFFFF'
+        },
+        formatter: function() {
+            var points = this.points;
+            var tooltipText = '<b>' + points[0].series.name + '</b>: ' + points[0].y + ' points at ~' + Math.round(points[0].x) + ' FPS';
+            return tooltipText;
+        }
+    },
+    plotOptions: {
+        areaspline: {
+            fillOpacity: 0.5,
+            marker: {
+                enabled: false
+            }
+        }
+    },
+    legend: {
+        enabled: true,
+        itemStyle: {
+            color: '#FFFFFF'
+        }
+    },
+    credits: {
+        enabled: false
+    },
+    series: densityData
+});
+
 function calculateSpikes(data, threshold) {
     if (data.length < 6) {
         throw new Error("Data length must be greater than or equal to 6.");
