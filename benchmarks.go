@@ -188,7 +188,7 @@ func postBenchmarkCreate(c *gin.Context) {
 			"username":   session.Get("Username"),
 			"userID":     session.Get("ID"),
 
-			"errorMessage": "Error occurred while reading CSV files: " + err.Error(),
+			"errorMessage": "Error occurred while reading files: " + err.Error(),
 		})
 		return
 	}
