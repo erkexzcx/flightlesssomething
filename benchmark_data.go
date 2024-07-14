@@ -81,7 +81,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[string]int, benchmarkData *
 
 		for key, index := range headerMap {
 			// Skip timestamp fields for Afterburner format
-			if isAfterburner && (index == 1 || index == 2) {
+			if isAfterburner && (index == 0 || index == 1) {
 				continue
 			}
 
@@ -362,33 +362,44 @@ func createZipFromBenchmarkData(benchmarkData []*BenchmarkData) (*bytes.Buffer, 
 
 		// Write the header.
 		header := []string{"os", "cpu", "gpu", "ram", "kernel", "driver", "cpuscheduler"}
-		csvWriter.Write(header)
 		specs := []string{data.SpecOS, data.SpecCPU, data.SpecGPU, data.SpecRAM, data.SpecLinuxKernel, "", data.SpecLinuxScheduler}
+		csvWriter.Write(header)
 		csvWriter.Write(specs)
 
+		// Dynamically build the data header and rows based on available data.
+		dataHeader := []string{}
+		dataRows := [][]string{}
+
+		addColumn := func(headerName string, data []float64) {
+			if len(data) > 0 {
+				dataHeader = append(dataHeader, headerName)
+				for i := 0; i < len(data); i++ {
+					if len(dataRows) <= i {
+						dataRows = append(dataRows, make([]string, len(dataHeader)-1))
+					}
+					dataRows[i] = append(dataRows[i], formatFloatOrZero(data, i))
+				}
+			}
+		}
+
+		addColumn("fps", data.DataFPS)
+		addColumn("frametime", data.DataFrameTime)
+		addColumn("cpu_load", data.DataCPULoad)
+		addColumn("gpu_load", data.DataGPULoad)
+		addColumn("cpu_temp", data.DataCPUTemp)
+		addColumn("gpu_temp", data.DataGPUTemp)
+		addColumn("gpu_core_clock", data.DataGPUCoreClock)
+		addColumn("gpu_mem_clock", data.DataGPUMemClock)
+		addColumn("gpu_vram_used", data.DataGPUVRAMUsed)
+		addColumn("gpu_power", data.DataGPUPower)
+		addColumn("ram_used", data.DataRAMUsed)
+		addColumn("swap_used", data.DataSwapUsed)
+
 		// Write the data header.
-		dataHeader := []string{"fps", "frametime", "cpu_load", "gpu_load", "cpu_temp", "gpu_temp", "gpu_core_clock", "gpu_mem_clock", "gpu_vram_used", "gpu_power", "ram_used", "swap_used"}
 		csvWriter.Write(dataHeader)
 
-		// Determine the number of rows to write based on the length of the DataFPS array.
-		numRows := len(data.DataFPS)
-
 		// Write the data rows.
-		for i := 0; i < numRows; i++ {
-			row := []string{
-				formatFloatOrZero(data.DataFPS, i),
-				formatFloatOrZero(data.DataFrameTime, i),
-				formatFloatOrZero(data.DataCPULoad, i),
-				formatFloatOrZero(data.DataGPULoad, i),
-				formatFloatOrZero(data.DataCPUTemp, i),
-				formatFloatOrZero(data.DataGPUTemp, i),
-				formatFloatOrZero(data.DataGPUCoreClock, i),
-				formatFloatOrZero(data.DataGPUMemClock, i),
-				formatFloatOrZero(data.DataGPUVRAMUsed, i),
-				formatFloatOrZero(data.DataGPUPower, i),
-				formatFloatOrZero(data.DataRAMUsed, i),
-				formatFloatOrZero(data.DataSwapUsed, i),
-			}
+		for _, row := range dataRows {
 			csvWriter.Write(row)
 		}
 
