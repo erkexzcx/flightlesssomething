@@ -2,8 +2,7 @@ package flightlesssomething
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -100,25 +99,22 @@ func Start(c *Config) {
 			return
 		}
 
-		// Read file content into a byte slice
-		content, err := fs.ReadFile(staticFS, "static"+filepath)
-		if err != nil {
-			c.Status(http.StatusInternalServerError)
-			return
-		}
+		// Generate ETag based on file modification time
+		etag := fmt.Sprintf("%x-%x", fileInfo.ModTime().Unix(), fileInfo.Size())
 
-		// Generate ETag based on file content
-		hash := sha1.New()
-		hash.Write(content)
-		etag := hex.EncodeToString(hash.Sum(nil))
-
-		// Set ETag and Cache-Control headers
+		// Set ETag header
 		c.Header("ETag", etag)
-		c.Header("Cache-Control", "public, max-age=3600")
 
 		// Check if the ETag matches
 		if match := c.GetHeader("If-None-Match"); match == etag {
 			c.Status(http.StatusNotModified)
+			return
+		}
+
+		// Read file content into a byte slice
+		content, err := fs.ReadFile(staticFS, "static"+filepath)
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
 			return
 		}
 

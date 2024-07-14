@@ -1,236 +1,71 @@
-Highcharts.setOptions({
-    chart: {
-        animation: false
-    },
-    plotOptions: {
-        series: {
-            animation: false
-        }
-    }
-});
+// Common chart options
+const commonChartOptions = {
+    chart: {backgroundColor: null, style: {color: '#FFFFFF'}, animation: false},
+    title: {style: {color: '#FFFFFF', fontSize: '16px'}},
+    subtitle: {style: {color: '#FFFFFF', fontSize: '12px'}},
+    xAxis: {labels: {style: {color: '#FFFFFF'}}, lineColor: '#FFFFFF', tickColor: '#FFFFFF'},
+    yAxis: {labels: {style: {color: '#FFFFFF'}}, gridLineColor: 'rgba(255, 255, 255, 0.1)'},
+    tooltip: {backgroundColor: '#1E1E1E', borderColor: '#FFFFFF', style: {color: '#FFFFFF'}},
+    legend: {itemStyle: {color: '#FFFFFF'}},
+    credits: {enabled: false},
+    plotOptions: {series: {animation: false}}
+};
 
+// Highcharts global options
+Highcharts.setOptions({chart: {animation: false}, plotOptions: {series: {animation: false}}});
 
-var colors = Highcharts.getOptions().colors;
+const colors = Highcharts.getOptions().colors;
 
 function getLineChartOptions(title, description, unit, maxY = null) {
     return {
-        chart: {
-            type: 'line',
-            backgroundColor: null, // Set background to transparent
-            style: {
-                color: '#FFFFFF'
-            },
-            zooming: {
-                type: 'x'
-            }
-        },
-        title: {
-            text: title,
-            style: {
-                color: '#FFFFFF',
-                fontSize: '16px'
-            }
-        },
-        subtitle: {
-            text: description,
-            style: {
-                color: '#FFFFFF',
-                fontSize: '12px'
-            }
-        },
-        xAxis: {
-            lineColor: '#FFFFFF',
-            tickColor: '#FFFFFF',
-            labels: {
-                enabled: false
-            }
-        },
-        yAxis: {
-            title: {
-                text: null
-            },
-            labels: {
-                formatter: function() {
-                    return this.value.toFixed(2) + ' ' + unit;
-                },
-                style: {
-                    color: '#FFFFFF'
-                }
-            },
-            gridLineColor: 'rgba(255, 255, 255, 0.1)',
-            max: maxY
-        },
-        legend: {
-            align: 'center',
-            verticalAlign: 'bottom',
-            itemStyle: {
-                color: '#FFFFFF'
-            }
-        },
-        tooltip: {
-            shared: false,
-            pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f} ' + unit + '</b><br/>', // Include unit in tooltip
-            backgroundColor: '#1E1E1E',
-            borderColor: '#FFFFFF',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        plotOptions: {
-            line: {
-                marker: {
-                    enabled: false,
-                    symbol: 'circle',
-                    lineColor: null,
-                    radius: 1.5,
-                    states: {
-                        hover: {
-                            enabled: true,
-                        }
-                    }
-                },
-                lineWidth: 1,
-                animation: false
-            }
-        },
-        credits: {
-            enabled: false
-        },
+        ...commonChartOptions,
+        chart: {...commonChartOptions.chart, type: 'line', zooming: {type: 'x'}},
+        title: {...commonChartOptions.title, text: title},
+        subtitle: {...commonChartOptions.subtitle, text: description},
+        xAxis: {...commonChartOptions.xAxis, labels: {enabled: false}}, // Hide X-axis labels
+        yAxis: {...commonChartOptions.yAxis, max: maxY, labels: {...commonChartOptions.yAxis.labels, formatter: function() {return this.value.toFixed(2) + ' ' + unit;}}},
+        tooltip: {...commonChartOptions.tooltip, pointFormat: `<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f} ${unit}</b><br/>`},
+        plotOptions: {line: {marker: {enabled: false, symbol: 'circle', radius: 1.5, states: {hover: {enabled: true}}}, lineWidth: 1}},
+        legend: {...commonChartOptions.legend, enabled: true},
         series: [],
-        exporting: {
-            buttons: {
-                contextButton: {
-                    menuItems: [
-                        'viewFullscreen',
-                        'printChart',
-                        'separator',
-                        'downloadPNG',
-                        'downloadJPEG',
-                        'downloadPDF',
-                        'downloadSVG',
-                        'separator',
-                        'downloadCSV',
-                        'downloadXLS'
-                    ]
-                }
-            }
-        }
+        exporting: {buttons: {contextButton: {menuItems: ['viewFullscreen', 'printChart', 'separator', 'downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG', 'separator', 'downloadCSV', 'downloadXLS']}}}
     };
 }
 
 function getBarChartOptions(title, unit, maxY = null) {
     return {
-        chart: {
-            type: 'bar',
-            backgroundColor: null, // Set background to transparent
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        title: {
-            text: title,
-            style: {
-                color: '#FFFFFF',
-                fontSize: '16px'
-            }
-        },
-        xAxis: {
-            categories: [],
-            title: {
-                text: null
-            },
-            labels: {
-                style: {
-                    color: '#FFFFFF'
-                }
-            }
-        },
-        yAxis: {
-            min: 0,
-            max: maxY,
-            title: {
-                text: unit,
-                align: 'high',
-                style: {
-                    color: '#FFFFFF'
-                }
-            },
-            labels: {
-                overflow: 'justify',
-                style: {
-                    color: '#FFFFFF'
-                },
-                formatter: function() {
-                    return this.value.toFixed(2) + ' ' + unit;
-                }
-            },
-            gridLineColor: 'rgba(255, 255, 255, 0.1)'
-        },
-        tooltip: {
-            valueSuffix: ' ' + unit,
-            backgroundColor: '#1E1E1E',
-            borderColor: '#FFFFFF',
-            style: {
-                color: '#FFFFFF'
-            },
-            formatter: function() {
-                return '<b>' + this.point.category + '</b>: ' + this.y.toFixed(2) + ' ' + unit;
-            }
-        },
-        plotOptions: {
-            bar: {
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        color: '#FFFFFF'
-                    },
-                    formatter: function() {
-                        return this.y.toFixed(2) + ' ' + unit;
-                    }
-                }
-            }
-        },
-        legend: {
-            enabled: false, // Disable legend
-        },
-        credits: {
-            enabled: false
-        },
+        ...commonChartOptions,
+        chart: {...commonChartOptions.chart, type: 'bar'},
+        title: {...commonChartOptions.title, text: title},
+        xAxis: {...commonChartOptions.xAxis, categories: [], title: {text: null}},
+        yAxis: {...commonChartOptions.yAxis, min: 0, max: maxY, title: {text: unit, align: 'high', style: {color: '#FFFFFF'}}, labels: {...commonChartOptions.yAxis.labels, formatter: function() {return this.value.toFixed(2) + ' ' + unit;}}},
+        tooltip: {...commonChartOptions.tooltip, valueSuffix: ' ' + unit, formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ${unit}`;}},
+        plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' ' + unit;}}}},
+        legend: {enabled: false},
         series: []
     };
 }
 
 function createChart(chartId, title, description, unit, dataArrays, maxY = null) {
-    var options = getLineChartOptions(title, description, unit, maxY);
-    options.series = dataArrays.map(function(dataArray, index) {
-        return {name: dataArray.label, data: dataArray.data, color: colors[index % colors.length]};
-    });
-
+    const options = getLineChartOptions(title, description, unit, maxY);
+    options.series = dataArrays.map((dataArray, index) => ({name: dataArray.label, data: dataArray.data, color: colors[index % colors.length]}));
     Highcharts.chart(chartId, options);
 }
 
 function createBarChart(chartId, title, unit, categories, data, colors, maxY = null) {
-    var options = getBarChartOptions(title, unit, maxY);
+    const options = getBarChartOptions(title, unit, maxY);
     options.xAxis.categories = categories;
-    options.series = [{
-        name: title,
-        data: data,
-        colorByPoint: true,
-        colors: colors
-    }];
-
+    options.series = [{name: title, data: data, colorByPoint: true, colors: colors}];
     Highcharts.chart(chartId, options);
 }
 
 function calculateAverage(data) {
-    const sum = data.reduce((acc, value) => acc + value, 0);
-    return sum / data.length;
+    return data.reduce((acc, value) => acc + value, 0) / data.length;
 }
 
 function calculatePercentile(data, percentile) {
     data.sort((a, b) => a - b);
-    const index = Math.ceil(percentile / 100 * data.length) - 1;
-    return data[index];
+    return data[Math.ceil(percentile / 100 * data.length) - 1];
 }
 
 // Create line charts
@@ -248,256 +83,87 @@ createChart('ramUsedChart', 'RAM Usage', '', 'GB', ramUsedDataArrays);
 createChart('swapUsedChart', 'SWAP Usage', '', 'GB', swapUsedDataArrays);
 
 // Calculate average CPU and GPU load
-var cpuLoadAverages = cpuLoadDataArrays.map(function(dataArray) {
-    return calculateAverage(dataArray.data);
-});
-
-var gpuLoadAverages = gpuLoadDataArrays.map(function(dataArray) {
-    return calculateAverage(dataArray.data);
-});
+const cpuLoadAverages = cpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const gpuLoadAverages = gpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
 
 // Create bar charts for average CPU and GPU load
-createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays.map(function(dataArray) { return dataArray.label; }), cpuLoadAverages, colors, 100);
-createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(function(dataArray) { return dataArray.label; }), gpuLoadAverages, colors, 100);
+createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays.map(dataArray => dataArray.label), cpuLoadAverages, colors, 100);
+createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(dataArray => dataArray.label), gpuLoadAverages, colors, 100);
 
 // Calculate and render min, max, and average FPS
-var categories = [];
-var minFPSData = [];
-var avgFPSData = [];
-var maxFPSData = [];
+const categories = [];
+const minFPSData = [];
+const avgFPSData1 = [];
+const maxFPSData = [];
 
-fpsDataArrays.forEach(function(dataArray) {
-    var minFPS = calculatePercentile(dataArray.data, 1);
-    var avgFPS = calculateAverage(dataArray.data);
-    var maxFPS = calculatePercentile(dataArray.data, 97);
-
+fpsDataArrays.forEach(dataArray => {
     categories.push(dataArray.label);
-    minFPSData.push(minFPS);
-    avgFPSData.push(avgFPS);
-    maxFPSData.push(maxFPS);
+    minFPSData.push(calculatePercentile(dataArray.data, 1));
+    avgFPSData1.push(calculateAverage(dataArray.data));
+    maxFPSData.push(calculatePercentile(dataArray.data, 97));
 });
 
 Highcharts.chart('minMaxAvgChart', {
-    chart: {
-        type: 'bar',
-        backgroundColor: null
-    },
-    title: {
-        text: 'Min/Avg/Max FPS',
-        style: {
-            color: '#FFFFFF',
-            fontSize: '16px'
-        }
-    },
-    subtitle: {
-        text: 'More is better',
-        style: {
-            color: '#FFFFFF'
-        }
-    },
-    xAxis: {
-        categories: categories,
-        title: {
-            text: null
-        },
-        labels: {
-            style: {
-                color: '#FFFFFF'
-            }
-        }
-    },
-    yAxis: {
-        min: 0,
-        title: {
-            text: 'FPS',
-            align: 'high',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        labels: {
-            overflow: 'justify',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        gridLineColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    tooltip: {
-        valueSuffix: ' FPS',
-        backgroundColor: '#1E1E1E',
-        borderColor: '#FFFFFF',
-        style: {
-            color: '#FFFFFF'
-        },
-        formatter: function() {
-            return '<b>' + this.series.name + '</b>: ' + this.y.toFixed(2) + ' FPS';
-        }
-    },
-    plotOptions: {
-        bar: {
-            dataLabels: {
-                enabled: true,
-                style: {
-                    color: '#FFFFFF'
-                },
-                formatter: function() {
-                    return this.y.toFixed(2) + ' fps';
-                }
-            }
-        }
-    },
-    legend: {
-        reversed: true,
-        itemStyle: {
-            color: '#FFFFFF'
-        }
-    },
-    credits: {
-        enabled: false
-    },
-    series: [{
-        name: '97th',
-        data: maxFPSData,
-        color: '#00FF00'
-    }, {
-        name: 'AVG',
-        data: avgFPSData,
-        color: '#0000FF'
-    }, {
-        name: '1%',
-        data: minFPSData,
-        color: '#FF0000'
-    }]
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'Min/Avg/Max FPS'},
+    subtitle: {...commonChartOptions.subtitle, text: 'More is better'},
+    xAxis: {...commonChartOptions.xAxis, categories: categories},
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'FPS', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, valueSuffix: ' FPS', formatter: function() {return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} FPS`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' fps';}}}},
+    legend: {...commonChartOptions.legend, reversed: true, enabled: true},
+    series: [{name: '97th', data: maxFPSData, color: '#00FF00'}, {name: 'AVG', data: avgFPSData1, color: '#0000FF'}, {name: '1%', data: minFPSData, color: '#FF0000'}]
 });
 
 // Calculate average FPS for each filename
-var avgFPSData = fpsDataArrays.map(function(dataArray) {
-    return calculateAverage(dataArray.data);
-});
+const avgFPSData2 = fpsDataArrays.map(dataArray => calculateAverage(dataArray.data));
 
 // Calculate FPS as a percentage of the first element
-var firstFPS = avgFPSData[0];
-var percentageFPSData = avgFPSData.map(function(fps) {
-    return (fps / firstFPS) * 100;
-});
+const firstFPS = avgFPSData2[0];
+const percentageFPSData = avgFPSData2.map(fps => (fps / firstFPS) * 100);
 
 // Create bar chart for FPS percentage
 Highcharts.chart('avgChart', {
-    chart: {
-        type: 'bar',
-        backgroundColor: null
-    },
-    title: {
-        text: 'Average FPS in %',
-        style: {
-            color: '#FFFFFF',
-            fontSize: '16px'
-        }
-    },
-    xAxis: {
-        categories: fpsDataArrays.map(function(dataArray) { return dataArray.label; }),
-        title: {
-            text: null
-        },
-        labels: {
-            style: {
-                color: '#FFFFFF'
-            }
-        }
-    },
-    yAxis: {
-        min: 0,
-        title: {
-            text: 'Percentage (%)',
-            align: 'high',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        labels: {
-            overflow: 'justify',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        gridLineColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    tooltip: {
-        valueSuffix: ' %',
-        backgroundColor: '#1E1E1E',
-        borderColor: '#FFFFFF',
-        style: {
-            color: '#FFFFFF'
-        },
-        formatter: function() {
-            return '<b>' + this.point.category + '</b>: ' + this.y.toFixed(2) + ' %';
-        }
-    },
-    plotOptions: {
-        bar: {
-            dataLabels: {
-                enabled: true,
-                style: {
-                    color: '#FFFFFF'
-                },
-                formatter: function() {
-                    return this.y.toFixed(2) + ' %';
-                }
-            }
-        }
-    },
-    legend: {
-        enabled: false
-    },
-    credits: {
-        enabled: false
-    },
-    series: [{
-        name: 'FPS Percentage',
-        data: percentageFPSData,
-        colorByPoint: true,
-        colors: colors
-    }]
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'Average FPS in %'},
+    xAxis: {...commonChartOptions.xAxis, categories: fpsDataArrays.map(dataArray => dataArray.label)},
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' %';}}}},
+    legend: {enabled: false},
+    series: [{name: 'FPS Percentage', data: percentageFPSData, colorByPoint: true, colors: colors}]
 });
 
 // Function to filter out the top and bottom 3% of FPS values
 function filterOutliers(data) {
     data.sort((a, b) => a - b);
-    var start = Math.floor(data.length * 0.01); // Ignore bottom 1%
-    var end = Math.ceil(data.length * 0.97); // Ignore top 1%
-    return data.slice(start, end);
+    return data.slice(Math.floor(data.length * 0.01), Math.ceil(data.length * 0.97));
 }
 
 // Function to count occurrences of each FPS value
 function countFPS(data) {
-    var counts = {};
-    data.forEach(function(fps) {
-        var roundedFPS = Math.round(fps);
+    const counts = {};
+    data.forEach(fps => {
+        const roundedFPS = Math.round(fps);
         counts[roundedFPS] = (counts[roundedFPS] || 0) + 1;
     });
 
-    var fpsArray = Object.keys(counts).map(function(key) {
-        return [parseInt(key), counts[key]];
-    }).sort(function(a, b) {
-        return a[0] - b[0];
-    });
+    let fpsArray = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0]);
 
-    // Combine closest FPS values until we have 100 or fewer points
     while (fpsArray.length > 100) {
-        var minDiff = Infinity;
-        var minIndex = -1;
+        let minDiff = Infinity;
+        let minIndex = -1;
 
-        // Find the pair with the smallest difference
-        for (var i = 0; i < fpsArray.length - 1; i++) {
-            var diff = fpsArray[i + 1][0] - fpsArray[i][0];
+        for (let i = 0; i < fpsArray.length - 1; i++) {
+            const diff = fpsArray[i + 1][0] - fpsArray[i][0];
             if (diff < minDiff) {
                 minDiff = diff;
                 minIndex = i;
             }
         }
 
-        // Combine the closest pair
         fpsArray[minIndex][1] += fpsArray[minIndex + 1][1];
         fpsArray[minIndex][0] = (fpsArray[minIndex][0] + fpsArray[minIndex + 1][0]) / 2;
         fpsArray.splice(minIndex + 1, 1);
@@ -507,118 +173,43 @@ function countFPS(data) {
 }
 
 // Calculate counts for each dataset after filtering outliers
-var densityData = fpsDataArrays.map(function(dataArray) {
-    var filteredData = filterOutliers(dataArray.data);
-    return {
-        name: dataArray.label,
-        data: countFPS(filteredData)
-    };
-});
+const densityData = fpsDataArrays.map(dataArray => ({name: dataArray.label, data: countFPS(filterOutliers(dataArray.data))}));
 
 // Create the chart
 Highcharts.chart('densityChart', {
-    chart: {
-        type: 'areaspline',
-        backgroundColor: null
-    },
-    title: {
-        text: 'FPS Density',
-        style: {
-            color: '#FFFFFF',
-            fontSize: '16px'
-        }
-    },
-    xAxis: {
-        title: {
-            text: 'FPS',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        labels: {
-            style: {
-                color: '#FFFFFF'
-            }
-        }
-    },
-    yAxis: {
-        title: {
-            text: 'Count',
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        labels: {
-            style: {
-                color: '#FFFFFF'
-            }
-        },
-        gridLineColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    tooltip: {
-        shared: true,
-        backgroundColor: '#1E1E1E',
-        borderColor: '#FFFFFF',
-        style: {
-            color: '#FFFFFF'
-        },
-        formatter: function() {
-            var points = this.points;
-            var tooltipText = '<b>' + points[0].series.name + '</b>: ' + points[0].y + ' points at ~' + Math.round(points[0].x) + ' FPS';
-            return tooltipText;
-        }
-    },
-    plotOptions: {
-        areaspline: {
-            fillOpacity: 0.5,
-            marker: {
-                enabled: false
-            }
-        }
-    },
-    legend: {
-        enabled: true,
-        itemStyle: {
-            color: '#FFFFFF'
-        }
-    },
-    credits: {
-        enabled: false
-    },
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'areaspline'},
+    title: {...commonChartOptions.title, text: 'FPS Density'},
+    xAxis: {...commonChartOptions.xAxis, title: {text: 'FPS', style: {color: '#FFFFFF'}}, labels: {style: {color: '#FFFFFF'}}}, // Show X-axis labels in white
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'Count', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, shared: true, formatter: function() {return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} FPS`;}},
+    plotOptions: {areaspline: {fillOpacity: 0.5, marker: {enabled: false}}},
+    legend: {...commonChartOptions.legend, enabled: true},
     series: densityData
 });
 
 function calculateSpikes(data, threshold) {
-    if (data.length < 6) {
-        throw new Error("Data length must be greater than or equal to 6.");
-    }
+    if (data.length < 6) throw new Error("Data length must be greater than or equal to 6.");
 
     let spikeCount = 0;
 
-    // Helper function to calculate the moving average with a minimum of 6 points
     function movingAverage(arr, index) {
-        const windowSize = Math.max(6, Math.ceil(arr.length * 0.05)); // 5 % of the data
+        const windowSize = Math.max(6, Math.ceil(arr.length * 0.05));
         const halfWindowSize = Math.floor(windowSize / 2);
         const start = Math.max(0, index - halfWindowSize);
         const end = Math.min(arr.length - 1, index + halfWindowSize);
         const actualWindowSize = end - start + 1;
 
         let sum = 0;
-        for (let i = start; i <= end; i++) {
-            sum += arr[i];
-        }
+        for (let i = start; i <= end; i++) sum += arr[i];
         return sum / actualWindowSize;
     }
 
     for (let i = 0; i < data.length; i++) {
         const currentPoint = data[i];
         const movingAvg = movingAverage(data, i);
-
         const change = Math.abs(currentPoint - movingAvg) / movingAvg * 100;
-
-        if (change > threshold) {
-            spikeCount++;
-        }
+        if (change > threshold) spikeCount++;
     }
 
     return (spikeCount / data.length) * 100;
@@ -627,93 +218,19 @@ function calculateSpikes(data, threshold) {
 function updateSpikesChart(threshold) {
     document.getElementById('spikeThresholdValue').innerText = threshold + '%';
 
-    var spikePercentages = fpsDataArrays.map(function(dataArray) {
-        return calculateSpikes(dataArray.data, threshold);
-    });
+    const spikePercentages = fpsDataArrays.map(dataArray => calculateSpikes(dataArray.data, threshold));
 
     Highcharts.chart('spikesChart', {
-        chart: {
-            type: 'bar',
-            backgroundColor: null
-        },
-        title: {
-            text: 'FPS Spikes',
-            style: {
-                color: '#FFFFFF',
-                fontSize: '16px'
-            }
-        },
-        subtitle: {
-            text: 'Less is better',
-            style: {
-                color: '#FFFFFF',
-                fontSize: '12px'
-            }
-        },
-        xAxis: {
-            categories: categories,
-            title: {
-                text: null
-            },
-            labels: {
-                style: {
-                    color: '#FFFFFF'
-                }
-            }
-        },
-        yAxis: {
-            min: 0,
-            title: {
-                text: 'Percentage (%)',
-                align: 'high',
-                style: {
-                    color: '#FFFFFF'
-                }
-            },
-            labels: {
-                overflow: 'justify',
-                style: {
-                    color: '#FFFFFF'
-                }
-            },
-            gridLineColor: 'rgba(255, 255, 255, 0.1)'
-        },
-        tooltip: {
-            valueSuffix: ' %',
-            backgroundColor: '#1E1E1E',
-            borderColor: '#FFFFFF',
-            style: {
-                color: '#FFFFFF'
-            },
-            formatter: function() {
-                return '<b>' + this.point.category + '</b>: ' + this.y.toFixed(2) + ' %';
-            }
-        },
-        plotOptions: {
-            bar: {
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        color: '#FFFFFF'
-                    },
-                    formatter: function() {
-                        return this.y.toFixed(2) + ' %';
-                    }
-                }
-            }
-        },
-        legend: {
-            enabled: false
-        },
-        credits: {
-            enabled: false
-        },
-        series: [{
-            name: 'Spike Percentage',
-            data: spikePercentages,
-            colorByPoint: true,
-            colors: colors
-        }]
+        ...commonChartOptions,
+        chart: {...commonChartOptions.chart, type: 'bar'},
+        title: {...commonChartOptions.title, text: 'FPS Spikes'},
+        subtitle: {...commonChartOptions.subtitle, text: 'Less is better'},
+        xAxis: {...commonChartOptions.xAxis, categories: categories},
+        yAxis: {...commonChartOptions.yAxis, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
+        tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
+        plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' %';}}}},
+        legend: {enabled: false},
+        series: [{name: 'Spike Percentage', data: spikePercentages, colorByPoint: true, colors: colors}]
     });
 }
 
