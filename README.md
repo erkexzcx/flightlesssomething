@@ -2,7 +2,7 @@
 
 [flightlessmango.com](https://flightlessmango.com/) website clone, written in Go.
 
-Ever wanted to say _holy crap, who wrote this shit?_ - well, now you can. This project is written not by web developer (or developer at all), so likelly full of vulnerabilities. 🤷
+Yes, there is a lot of crappy copypasta html/css/js code. As long as it works! 🤷
 
 # Features
 
