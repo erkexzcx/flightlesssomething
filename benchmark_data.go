@@ -46,7 +46,186 @@ type BenchmarkData struct {
 	DataSwapUsed     []float64
 }
 
-// readBenchmarkFiles reads the uploaded benchmark files and returns a slice of BenchmarkData.
+const (
+	FileTypeUnknown = iota
+	FileTypeMangoHud
+	FileTypeAfterburner
+)
+
+func parseHeader(scanner *bufio.Scanner) (map[string]int, error) {
+	if !scanner.Scan() {
+		return nil, errors.New("failed to read file (header)")
+	}
+	line := strings.TrimRight(scanner.Text(), ", ")
+	line = strings.TrimSpace(line)
+
+	headerMap := make(map[string]int)
+	for i, field := range strings.Split(line, ",") {
+		headerMap[strings.TrimSpace(field)] = i
+	}
+	return headerMap, nil
+}
+
+func parseData(scanner *bufio.Scanner, headerMap map[string]int, benchmarkData *BenchmarkData, isAfterburner bool) error {
+	var counter uint
+	for scanner.Scan() {
+		record := strings.Split(scanner.Text(), ",")
+		if len(record) < len(headerMap) {
+			return errors.New("failed to read file (data)")
+		}
+
+		// Trim all values
+		for i := 0; i < len(record); i++ {
+			record[i] = strings.TrimSpace(record[i])
+		}
+
+		for key, index := range headerMap {
+			val, err := strconv.ParseFloat(record[index], 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse %s value '%s': %v", key, record[index], err)
+			}
+
+			switch key {
+			case "fps", "Framerate":
+				benchmarkData.DataFPS = append(benchmarkData.DataFPS, val)
+			case "frametime", "Frametime":
+				benchmarkData.DataFrameTime = append(benchmarkData.DataFrameTime, val)
+			case "cpu_load", "CPU usage":
+				benchmarkData.DataCPULoad = append(benchmarkData.DataCPULoad, val)
+			case "gpu_load", "GPU usage":
+				benchmarkData.DataGPULoad = append(benchmarkData.DataGPULoad, val)
+			case "cpu_temp", "CPU temperature":
+				benchmarkData.DataCPUTemp = append(benchmarkData.DataCPUTemp, val)
+			case "gpu_temp", "GPU temperature":
+				benchmarkData.DataGPUTemp = append(benchmarkData.DataGPUTemp, val)
+			case "gpu_core_clock", "Core clock":
+				benchmarkData.DataGPUCoreClock = append(benchmarkData.DataGPUCoreClock, val)
+			case "gpu_mem_clock", "Memory clock":
+				if isAfterburner {
+					val = math.Round(val/2*100000) / 100000 // divide by 2 and round to 5 decimal places
+				}
+				benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
+			case "gpu_vram_used", "Memory usage":
+				if isAfterburner {
+					val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
+				}
+				benchmarkData.DataGPUVRAMUsed = append(benchmarkData.DataGPUVRAMUsed, val)
+			case "gpu_power", "Power":
+				benchmarkData.DataGPUPower = append(benchmarkData.DataGPUPower, val)
+			case "ram_used", "RAM usage":
+				if isAfterburner {
+					val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
+				}
+				benchmarkData.DataRAMUsed = append(benchmarkData.DataRAMUsed, val)
+			case "swap_used":
+				benchmarkData.DataSwapUsed = append(benchmarkData.DataSwapUsed, val)
+			}
+		}
+
+		counter++
+		if counter == 100000 {
+			return errors.New("file cannot have more than 100000 data lines")
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	if len(benchmarkData.DataFPS) == 0 &&
+		len(benchmarkData.DataFrameTime) == 0 &&
+		len(benchmarkData.DataCPULoad) == 0 &&
+		len(benchmarkData.DataGPULoad) == 0 &&
+		len(benchmarkData.DataCPUTemp) == 0 &&
+		len(benchmarkData.DataGPUTemp) == 0 &&
+		len(benchmarkData.DataGPUCoreClock) == 0 &&
+		len(benchmarkData.DataGPUMemClock) == 0 &&
+		len(benchmarkData.DataGPUVRAMUsed) == 0 &&
+		len(benchmarkData.DataGPUPower) == 0 &&
+		len(benchmarkData.DataRAMUsed) == 0 &&
+		len(benchmarkData.DataSwapUsed) == 0 {
+		return errors.New("empty file")
+	}
+
+	return nil
+}
+
+func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, error) {
+	benchmarkData := &BenchmarkData{}
+
+	// Second line should contain specs
+	if !scanner.Scan() {
+		return nil, errors.New("failed to read file (err 1)")
+	}
+	record := strings.Split(scanner.Text(), ",")
+	switch fileType {
+	case FileTypeAfterburner:
+		if len(record) < 3 {
+			return nil, errors.New("failed to read file (err 2)")
+		}
+		benchmarkData.SpecOS = "Windows" // Hardcode
+		benchmarkData.SpecGPU = truncateString(strings.TrimSpace(record[2]))
+	case FileTypeMangoHud:
+		for i, v := range record {
+			switch i {
+			case 0:
+				benchmarkData.SpecOS = truncateString(strings.TrimSpace(v))
+			case 1:
+				benchmarkData.SpecCPU = truncateString(strings.TrimSpace(v))
+			case 2:
+				benchmarkData.SpecGPU = truncateString(strings.TrimSpace(v))
+			case 3:
+				kilobytes := new(big.Int)
+				_, ok := kilobytes.SetString(strings.TrimSpace(v), 10)
+				if ok {
+					// Contains number that represents kilobytes
+					bytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
+					benchmarkData.SpecRAM = humanize.Bytes(bytes.Uint64())
+				} else {
+					// Contains humanized (or invalid) value, so no conversion needed
+					benchmarkData.SpecRAM = truncateString(strings.TrimSpace(v))
+				}
+			case 4:
+				benchmarkData.SpecLinuxKernel = truncateString(strings.TrimSpace(v))
+			case 6:
+				benchmarkData.SpecLinuxScheduler = truncateString(strings.TrimSpace(v))
+			}
+		}
+	}
+
+	headerMap, err := parseHeader(scanner)
+	if err != nil {
+		return nil, err
+	}
+
+	if fileType == FileTypeAfterburner {
+		// Skip len(headerMap) amount of lines as this is not needed
+		for i := 0; i < len(headerMap); i++ {
+			if !scanner.Scan() {
+				return nil, errors.New("failed to read file (err 3)")
+			}
+		}
+	}
+
+	err = parseData(scanner, headerMap, benchmarkData, fileType == FileTypeAfterburner)
+	if err != nil {
+		return nil, err
+	}
+
+	return benchmarkData, nil
+}
+
+func detectFileType(firstLine string) int {
+	switch {
+	case firstLine == "os,cpu,gpu,ram,kernel,driver,cpuscheduler":
+		return FileTypeMangoHud
+	case strings.Contains(firstLine, ", Hardware monitoring log v"):
+		return FileTypeAfterburner
+	default:
+		return FileTypeUnknown
+	}
+}
+
 func readBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error) {
 	benchmarkDatas := make([]*BenchmarkData, 0)
 
@@ -64,370 +243,32 @@ func readBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error)
 			return nil, errors.New("failed to read file (err 1)")
 		}
 		firstLine := scanner.Text()
+		firstLine = strings.TrimRight(firstLine, ", ")
+		firstLine = strings.TrimSpace(firstLine)
 
-		var benchmarkData *BenchmarkData
-		var suffix string
-		switch {
-		case firstLine == "os,cpu,gpu,ram,kernel,driver,cpuscheduler": // MangoHud
-			benchmarkData, err = readMangoHudFile(scanner)
-			suffix = ".csv"
-		case strings.Contains(firstLine, ", Hardware monitoring log v"): // Afterburner
-			benchmarkData, err = readAfterburnerFile(scanner)
-			suffix = ".hml"
-		default:
+		fileType := detectFileType(firstLine)
+		if fileType == FileTypeUnknown {
 			return nil, errors.New("unsupported file format")
 		}
 
+		benchmarkData, err := readBenchmarkFile(scanner, fileType)
 		if err != nil {
 			return nil, err
 		}
+
+		var suffix string
+		switch fileType {
+		case FileTypeMangoHud:
+			suffix = ".csv"
+		case FileTypeAfterburner:
+			suffix = ".hml"
+		}
+
 		benchmarkData.Label = strings.TrimSuffix(fileHeader.Filename, suffix)
 		benchmarkDatas = append(benchmarkDatas, benchmarkData)
 	}
 
 	return benchmarkDatas, nil
-}
-
-func readMangoHudFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
-	benchmarkData := &BenchmarkData{}
-
-	// Second line should contain values
-	if !scanner.Scan() {
-		return nil, errors.New("failed to read file (err mh1)")
-	}
-	record := strings.Split(scanner.Text(), ",")
-
-	for i, v := range record {
-		switch i {
-		case 0:
-			benchmarkData.SpecOS = truncateString(strings.TrimSpace(v))
-		case 1:
-			benchmarkData.SpecCPU = truncateString(strings.TrimSpace(v))
-		case 2:
-			benchmarkData.SpecGPU = truncateString(strings.TrimSpace(v))
-		case 3:
-			kilobytes := new(big.Int)
-			_, ok := kilobytes.SetString(strings.TrimSpace(v), 10)
-			if ok {
-				// Contains number that represents kilobytes
-				bytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
-				benchmarkData.SpecRAM = humanize.Bytes(bytes.Uint64())
-			} else {
-				// Contains humanized (or invalid) value, so no conversion needed
-				benchmarkData.SpecRAM = truncateString(strings.TrimSpace(v))
-			}
-		case 4:
-			benchmarkData.SpecLinuxKernel = truncateString(strings.TrimSpace(v))
-		case 6:
-			benchmarkData.SpecLinuxScheduler = truncateString(strings.TrimSpace(v))
-		}
-	}
-
-	// 3rd line contain headers for benchmark data
-	if !scanner.Scan() {
-		return nil, errors.New("failed to read file (err mh2)")
-	}
-	record = strings.Split(strings.TrimRight(scanner.Text(), ","), ",")
-	if len(record) == 0 {
-		return nil, errors.New("failed to read file (err mh3)")
-	}
-
-	benchmarkData.DataFPS = make([]float64, 0)
-	benchmarkData.DataFrameTime = make([]float64, 0)
-	benchmarkData.DataCPULoad = make([]float64, 0)
-	benchmarkData.DataGPULoad = make([]float64, 0)
-	benchmarkData.DataCPUTemp = make([]float64, 0)
-	benchmarkData.DataGPUTemp = make([]float64, 0)
-	benchmarkData.DataGPUCoreClock = make([]float64, 0)
-	benchmarkData.DataGPUMemClock = make([]float64, 0)
-	benchmarkData.DataGPUVRAMUsed = make([]float64, 0)
-	benchmarkData.DataGPUPower = make([]float64, 0)
-	benchmarkData.DataRAMUsed = make([]float64, 0)
-	benchmarkData.DataSwapUsed = make([]float64, 0)
-
-	var counter uint
-	for scanner.Scan() {
-		record = strings.Split(scanner.Text(), ",")
-		if len(record) < 12 { // Ignore last 2 columns as they are not needed
-			return nil, errors.New("failed to read file (err mh4)")
-		}
-
-		val, err := strconv.ParseFloat(record[0], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse FPS value '%s': %v", record[0], err)
-		}
-		benchmarkData.DataFPS = append(benchmarkData.DataFPS, val)
-
-		val, err = strconv.ParseFloat(record[1], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse frametime value '%s': %v", record[1], err)
-		}
-		benchmarkData.DataFrameTime = append(benchmarkData.DataFrameTime, val)
-
-		val, err = strconv.ParseFloat(record[2], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse CPU load value '%s': %v", record[2], err)
-		}
-		benchmarkData.DataCPULoad = append(benchmarkData.DataCPULoad, val)
-
-		val, err = strconv.ParseFloat(record[3], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU load value '%s': %v", record[3], err)
-		}
-		benchmarkData.DataGPULoad = append(benchmarkData.DataGPULoad, val)
-
-		val, err = strconv.ParseFloat(record[4], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse CPU temp value '%s': %v", record[4], err)
-		}
-		benchmarkData.DataCPUTemp = append(benchmarkData.DataCPUTemp, val)
-
-		val, err = strconv.ParseFloat(record[5], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU temp value '%s': %v", record[5], err)
-		}
-		benchmarkData.DataGPUTemp = append(benchmarkData.DataGPUTemp, val)
-
-		val, err = strconv.ParseFloat(record[6], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU core clock value '%s': %v", record[6], err)
-		}
-		benchmarkData.DataGPUCoreClock = append(benchmarkData.DataGPUCoreClock, val)
-
-		val, err = strconv.ParseFloat(record[7], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU mem clock value '%s': %v", record[7], err)
-		}
-		benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
-
-		val, err = strconv.ParseFloat(record[8], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU VRAM used value '%s': %v", record[8], err)
-		}
-		benchmarkData.DataGPUVRAMUsed = append(benchmarkData.DataGPUVRAMUsed, val)
-
-		val, err = strconv.ParseFloat(record[9], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GPU power value '%s': %v", record[9], err)
-		}
-		benchmarkData.DataGPUPower = append(benchmarkData.DataGPUPower, val)
-
-		val, err = strconv.ParseFloat(record[10], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse RAM used value '%s': %v", record[10], err)
-		}
-		benchmarkData.DataRAMUsed = append(benchmarkData.DataRAMUsed, val)
-
-		val, err = strconv.ParseFloat(record[11], 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse SWAP used value '%s': %v", record[11], err)
-		}
-		benchmarkData.DataSwapUsed = append(benchmarkData.DataSwapUsed, val)
-
-		counter++
-		if counter == 100000 {
-			return nil, errors.New("file cannot have more than 100000 data lines")
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(benchmarkData.DataFPS) == 0 &&
-		len(benchmarkData.DataFrameTime) == 0 &&
-		len(benchmarkData.DataCPULoad) == 0 &&
-		len(benchmarkData.DataGPULoad) == 0 &&
-		len(benchmarkData.DataCPUTemp) == 0 &&
-		len(benchmarkData.DataGPUTemp) == 0 &&
-		len(benchmarkData.DataGPUCoreClock) == 0 &&
-		len(benchmarkData.DataGPUMemClock) == 0 &&
-		len(benchmarkData.DataGPUVRAMUsed) == 0 &&
-		len(benchmarkData.DataGPUPower) == 0 &&
-		len(benchmarkData.DataRAMUsed) == 0 &&
-		len(benchmarkData.DataSwapUsed) == 0 {
-		return nil, errors.New("empty file")
-	}
-
-	return benchmarkData, nil
-}
-
-func readAfterburnerFile(scanner *bufio.Scanner) (*BenchmarkData, error) {
-	benchmarkData := &BenchmarkData{}
-
-	// Second line should contain CPU model
-	if !scanner.Scan() {
-		return nil, errors.New("failed to read file (err ab1)")
-	}
-	record := strings.Split(scanner.Text(), ",")
-	if len(record) < 3 {
-		return nil, errors.New("failed to read file (err ab2)")
-	}
-	benchmarkData.SpecOS = "Windows" // Hardcode
-	benchmarkData.SpecGPU = truncateString(strings.TrimSpace(record[2]))
-
-	// 3rd line contain headers for benchmark data. We need to pay attention to their order
-	if !scanner.Scan() {
-		return nil, errors.New("failed to read file (err ab3)")
-	}
-	record = strings.Split(strings.TrimRight(scanner.Text(), ","), ",")
-	if len(record) <= 2 { // If no data (only counter and timestamp)
-		return nil, errors.New("failed to read file (err ab4)")
-	}
-
-	headerMap := make(map[string]int)
-	for i := 2; i < len(record); i++ {
-		headerMap[strings.TrimSpace(record[i])] = i
-	}
-
-	// Skip len(headerMap) amount of lines as this is not needed
-	for i := 0; i < len(headerMap); i++ {
-		if !scanner.Scan() {
-			return nil, errors.New("failed to read file (err ab5)")
-		}
-	}
-
-	// Initiate data slices
-	benchmarkData.DataFPS = make([]float64, 0)
-	benchmarkData.DataFrameTime = make([]float64, 0)
-	benchmarkData.DataCPULoad = make([]float64, 0)
-	benchmarkData.DataGPULoad = make([]float64, 0)
-	benchmarkData.DataCPUTemp = make([]float64, 0)
-	benchmarkData.DataGPUTemp = make([]float64, 0)
-	benchmarkData.DataGPUCoreClock = make([]float64, 0)
-	benchmarkData.DataGPUMemClock = make([]float64, 0)
-	benchmarkData.DataGPUVRAMUsed = make([]float64, 0)
-	benchmarkData.DataGPUPower = make([]float64, 0)
-	benchmarkData.DataRAMUsed = make([]float64, 0)
-
-	var counter uint
-	for scanner.Scan() {
-		record = strings.Split(scanner.Text(), ",")
-		if len(record) <= 2 { // If no data (only counter and timestamp)
-			return nil, errors.New("failed to read file (err ab5)")
-		}
-
-		// Trim all values (ignore first 2 columns - not used)
-		for i := 2; i < len(record); i++ {
-			record[i] = strings.TrimSpace(record[i])
-		}
-
-		if index, ok := headerMap["Framerate"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Framerate value '%s': %v", record[0], err)
-			}
-			benchmarkData.DataFPS = append(benchmarkData.DataFPS, val)
-		}
-
-		if index, ok := headerMap["Frametime"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Frametime value '%s': %v", record[1], err)
-			}
-			benchmarkData.DataFrameTime = append(benchmarkData.DataFrameTime, val)
-		}
-
-		if index, ok := headerMap["CPU usage"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse CPU usage value '%s': %v", record[2], err)
-			}
-			benchmarkData.DataCPULoad = append(benchmarkData.DataCPULoad, val)
-		}
-
-		if index, ok := headerMap["GPU usage"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse GPU usage value '%s': %v", record[3], err)
-			}
-			benchmarkData.DataGPULoad = append(benchmarkData.DataGPULoad, val)
-		}
-
-		if index, ok := headerMap["CPU temperature"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse CPU temperature value '%s': %v", record[4], err)
-			}
-			benchmarkData.DataCPUTemp = append(benchmarkData.DataCPUTemp, val)
-		}
-
-		if index, ok := headerMap["GPU temperature"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse GPU temperature value '%s': %v", record[5], err)
-			}
-			benchmarkData.DataGPUTemp = append(benchmarkData.DataGPUTemp, val)
-		}
-
-		if index, ok := headerMap["Core clock"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Core clock value '%s': %v", record[6], err)
-			}
-			benchmarkData.DataGPUCoreClock = append(benchmarkData.DataGPUCoreClock, val)
-		}
-
-		if index, ok := headerMap["Memory clock"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Memory clock value '%s': %v", record[7], err)
-			}
-			val = math.Round(val/2*100000) / 100000 // divide by 2 (so it represents core clocks in a same manner as Linux) and round to 5 decimal places
-			benchmarkData.DataGPUMemClock = append(benchmarkData.DataGPUMemClock, val)
-		}
-
-		if index, ok := headerMap["Memory usage"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Memory usage value '%s': %v", record[8], err)
-			}
-			val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
-			benchmarkData.DataGPUVRAMUsed = append(benchmarkData.DataGPUVRAMUsed, val)
-		}
-
-		if index, ok := headerMap["Power"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse Power value '%s': %v", record[9], err)
-			}
-			benchmarkData.DataGPUPower = append(benchmarkData.DataGPUPower, val)
-		}
-
-		if index, ok := headerMap["RAM usage"]; ok {
-			val, err := strconv.ParseFloat(record[index], 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse RAM usage value '%s': %v", record[10], err)
-			}
-			val = math.Round(val/1024*100000) / 100000 // divide by 1024 and round to 5 decimal places
-			benchmarkData.DataRAMUsed = append(benchmarkData.DataRAMUsed, val)
-		}
-
-		counter++
-		if counter == 100000 {
-			return nil, errors.New("file cannot have more than 100000 data lines")
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(benchmarkData.DataFPS) == 0 &&
-		len(benchmarkData.DataFrameTime) == 0 &&
-		len(benchmarkData.DataCPULoad) == 0 &&
-		len(benchmarkData.DataGPULoad) == 0 &&
-		len(benchmarkData.DataCPUTemp) == 0 &&
-		len(benchmarkData.DataGPUTemp) == 0 &&
-		len(benchmarkData.DataGPUCoreClock) == 0 &&
-		len(benchmarkData.DataGPUMemClock) == 0 &&
-		len(benchmarkData.DataGPUVRAMUsed) == 0 &&
-		len(benchmarkData.DataGPUPower) == 0 &&
-		len(benchmarkData.DataRAMUsed) == 0 {
-		return nil, errors.New("empty file")
-	}
-
-	return benchmarkData, nil
 }
 
 // truncateString truncates the input string to a maximum of 100 characters and appends "..." if it exceeds that length.

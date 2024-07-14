@@ -75,13 +75,20 @@ func Start(c *Config, version string) {
 
 	// Setup gin //
 
-	gin.SetMode(gin.ReleaseMode)
+	if version == "" {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r := gin.Default()
 	r.Use(sessions.Sessions("mysession", store))
 
 	// Create a new FuncMap and add the version function
 	funcMap := template.FuncMap{
 		"version": func() string {
+			if version == "" {
+				return "dev"
+			}
 			return version
 		},
 	}
