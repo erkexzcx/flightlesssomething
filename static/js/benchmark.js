@@ -123,17 +123,34 @@ const avgFPSData2 = fpsDataArrays.map(dataArray => calculateAverage(dataArray.da
 const firstFPS = avgFPSData2[0];
 const percentageFPSData = avgFPSData2.map(fps => (fps / firstFPS) * 100);
 
+// Ensure the minimum FPS percentage is 100%
+const minPercentage = Math.min(...percentageFPSData);
+const normalizedPercentageFPSData = percentageFPSData.map(percentage => percentage - minPercentage + 100);
+
+// Create an array of objects to sort both categories and data together
+const sortedData = fpsDataArrays.map((dataArray, index) => ({
+    label: dataArray.label,
+    percentage: normalizedPercentageFPSData[index]
+}));
+
+// Sort the array by percentage
+sortedData.sort((a, b) => a.percentage - b.percentage);
+
+// Extract sorted categories and data
+const sortedCategories = sortedData.map(item => item.label);
+const sortedPercentageFPSData = sortedData.map(item => item.percentage);
+
 // Create bar chart for FPS percentage
 Highcharts.chart('avgChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'bar'},
     title: {...commonChartOptions.title, text: 'Average FPS in %'},
-    xAxis: {...commonChartOptions.xAxis, categories: fpsDataArrays.map(dataArray => dataArray.label)},
-    yAxis: {...commonChartOptions.yAxis, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
+    xAxis: {...commonChartOptions.xAxis, categories: sortedCategories},
+    yAxis: {...commonChartOptions.yAxis, min: 95, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
     tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
     plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' %';}}}},
     legend: {enabled: false},
-    series: [{name: 'FPS Percentage', data: percentageFPSData, colorByPoint: true, colors: colors}]
+    series: [{name: 'FPS Percentage', data: sortedPercentageFPSData, colorByPoint: true, colors: colors}]
 });
 
 // Function to filter out the top and bottom 3% of FPS values
