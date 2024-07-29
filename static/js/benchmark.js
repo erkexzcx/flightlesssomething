@@ -206,51 +206,35 @@ Highcharts.chart('densityChart', {
     series: densityData
 });
 
-function calculateSpikes(data, threshold) {
-    if (data.length < 6) throw new Error("Data length must be greater than or equal to 6.");
-
-    let spikeCount = 0;
-
-    function movingAverage(arr, index) {
-        const windowSize = Math.max(6, Math.ceil(arr.length * 0.05));
-        const halfWindowSize = Math.floor(windowSize / 2);
-        const start = Math.max(0, index - halfWindowSize);
-        const end = Math.min(arr.length - 1, index + halfWindowSize);
-        const actualWindowSize = end - start + 1;
-
-        let sum = 0;
-        for (let i = start; i <= end; i++) sum += arr[i];
-        return sum / actualWindowSize;
-    }
-
-    for (let i = 0; i < data.length; i++) {
-        const currentPoint = data[i];
-        const movingAvg = movingAverage(data, i);
-        const change = Math.abs(currentPoint - movingAvg) / movingAvg * 100;
-        if (change > threshold) spikeCount++;
-    }
-
-    return (spikeCount / data.length) * 100;
+function calculateStandardDeviation(data) {
+    const mean = calculateAverage(data);
+    const squaredDiffs = data.map(value => Math.pow(value - mean, 2));
+    const avgSquaredDiff = calculateAverage(squaredDiffs);
+    return Math.sqrt(avgSquaredDiff);
 }
 
-function updateSpikesChart(threshold) {
-    document.getElementById('spikeThresholdValue').innerText = threshold + '%';
-
-    const spikePercentages = fpsDataArrays.map(dataArray => calculateSpikes(dataArray.data, threshold));
-
-    Highcharts.chart('spikesChart', {
-        ...commonChartOptions,
-        chart: {...commonChartOptions.chart, type: 'bar'},
-        title: {...commonChartOptions.title, text: 'FPS Spikes'},
-        subtitle: {...commonChartOptions.subtitle, text: 'Less is better'},
-        xAxis: {...commonChartOptions.xAxis, categories: categories},
-        yAxis: {...commonChartOptions.yAxis, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
-        tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
-        plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' %';}}}},
-        legend: {enabled: false},
-        series: [{name: 'Spike Percentage', data: spikePercentages, colorByPoint: true, colors: colors}]
-    });
+function calculateVariance(data) {
+    const mean = calculateAverage(data);
+    const squaredDiffs = data.map(value => Math.pow(value - mean, 2));
+    return calculateAverage(squaredDiffs);
 }
 
-// Initial render of spikes chart
-updateSpikesChart(document.getElementById('spikeThreshold').value);
+const sdvCategories = fpsDataArrays.map(dataArray => dataArray.label);
+const standardDeviations = fpsDataArrays.map(dataArray => calculateStandardDeviation(dataArray.data));
+const variances = fpsDataArrays.map(dataArray => calculateVariance(dataArray.data));
+
+Highcharts.chart('sdvChart', {
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'FPS Stability'},
+    subtitle: {...commonChartOptions.subtitle, text: 'Measures of FPS consistency (std. dev.) and spread (variance). Less is better.'},
+    xAxis: {...commonChartOptions.xAxis, categories: sdvCategories},
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'Value', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, formatter: function() {return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2);}}}},
+    legend: {...commonChartOptions.legend, enabled: true},
+    series: [
+        {name: 'Std. Dev.', data: standardDeviations, color: '#FF5733'},
+        {name: 'Variance', data: variances, color: '#33FF57'}
+    ]
+});
