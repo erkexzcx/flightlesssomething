@@ -33,6 +33,8 @@
   </li>
   <li>You can upload at max 50 log files for a single benchmark.
   </li>
+  <li>You can upload files that contains at maximum 100'000 lines of data.
+  </li>
   <li>Only MangoHUD (*.csv) and Afterburner (*.hml) formats are supported.
   </li>
 </ul>
@@ -102,7 +104,8 @@ log_duration=90
 autostart_log=0
 
 # Set this to interval of how frequently logs are collected (in milliseconds). '100' is what I use, 50 provides
-# more data and is suitable for short benchmarks, while 200-500 is suitable for (very) long benchmarks.
+# more data and is suitable for short benchmarks, while 200-500 is suitable for (very) long benchmarks. You can
+# also use '0' to capture every frame for maximum details.
 # 
 # NOTE - If you are comparing Linux and Windows, then make sure this value is identical in both!
 # 
