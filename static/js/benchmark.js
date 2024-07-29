@@ -144,7 +144,8 @@ const sortedPercentageFPSData = sortedData.map(item => item.percentage);
 Highcharts.chart('avgChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'bar'},
-    title: {...commonChartOptions.title, text: 'Average FPS in %'},
+    title: {...commonChartOptions.title, text: 'Avg FPS comparison in %'},
+    subtitle: {...commonChartOptions.subtitle, text: 'More is better'},
     xAxis: {...commonChartOptions.xAxis, categories: sortedCategories},
     yAxis: {...commonChartOptions.yAxis, min: 95, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
     tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
