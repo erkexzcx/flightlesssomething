@@ -276,3 +276,135 @@ Highcharts.chart('fpsStddevVarianceChart', {
         {name: 'Variance', data: variances, color: '#33FF57'}
     ]
 });
+
+// ===========================================================================================
+// Frametime-related charts
+
+// Calculate and render min, max, and average Frametime
+const frametimeCategories = [];
+const minFrametimeData = [];
+const avgFrametimeData1 = [];
+const maxFrametimeData = [];
+
+frameTimeDataArrays.forEach(dataArray => {
+    frametimeCategories.push(dataArray.label);
+    minFrametimeData.push(calculatePercentile(dataArray.data, 1));
+    avgFrametimeData1.push(calculateAverage(dataArray.data));
+    maxFrametimeData.push(calculatePercentile(dataArray.data, 97));
+});
+
+Highcharts.chart('frametimeMinMaxAvgChart', {
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'Min/Avg/Max Frametime'},
+    subtitle: {...commonChartOptions.subtitle, text: 'Less is better'},
+    xAxis: {...commonChartOptions.xAxis, categories: frametimeCategories},
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'Frametime (ms)', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, valueSuffix: ' ms', formatter: function() {return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} ms`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' ms';}}}},
+    legend: {...commonChartOptions.legend, reversed: true, enabled: true},
+    series: [{name: '97th', data: maxFrametimeData, color: '#00FF00'}, {name: 'AVG', data: avgFrametimeData1, color: '#0000FF'}, {name: '1%', data: minFrametimeData, color: '#FF0000'}]
+});
+
+// Calculate average Frametime for each filename
+const avgFrametimeData2 = frameTimeDataArrays.map(dataArray => calculateAverage(dataArray.data));
+
+// Calculate Frametime as a percentage of the first element
+const firstFrametime = avgFrametimeData2[0];
+const percentageFrametimeData = avgFrametimeData2.map(frametime => (frametime / firstFrametime) * 100);
+
+// Ensure the minimum Frametime percentage is 100%
+const minFrametimePercentage = Math.min(...percentageFrametimeData);
+const normalizedPercentageFrametimeData = percentageFrametimeData.map(percentage => percentage - minFrametimePercentage + 100);
+
+// Create an array of objects to sort both categories and data together
+const sortedFrametimeData = frameTimeDataArrays.map((dataArray, index) => ({
+    label: dataArray.label,
+    percentage: normalizedPercentageFrametimeData[index]
+}));
+
+// Sort the array by percentage
+sortedFrametimeData.sort((a, b) => a.percentage - b.percentage);
+
+// Extract sorted categories and data
+const sortedFrametimeCategories = sortedFrametimeData.map(item => item.label);
+const sortedPercentageFrametimeData = sortedFrametimeData.map(item => item.percentage);
+
+// Create bar chart for Frametime percentage
+Highcharts.chart('frametimeAvgChart', {
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'Avg Frametime comparison in %'},
+    subtitle: {...commonChartOptions.subtitle, text: 'Less is better'},
+    xAxis: {...commonChartOptions.xAxis, categories: sortedFrametimeCategories},
+    yAxis: {...commonChartOptions.yAxis, min: 95, title: {text: 'Percentage (%)', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() {return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2) + ' %';}}}},
+    legend: {enabled: false},
+    series: [{name: 'Frametime Percentage', data: sortedPercentageFrametimeData, colorByPoint: true, colors: colors}]
+});
+
+// Function to count occurrences of each Frametime value
+function countFrametime(data) {
+    const counts = {};
+    data.forEach(frametime => {
+        const roundedFrametime = Math.round(frametime);
+        counts[roundedFrametime] = (counts[roundedFrametime] || 0) + 1;
+    });
+
+    let frametimeArray = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0]);
+
+    while (frametimeArray.length > 100) {
+        let minDiff = Infinity;
+        let minIndex = -1;
+
+        for (let i = 0; i < frametimeArray.length - 1; i++) {
+            const diff = frametimeArray[i + 1][0] - frametimeArray[i][0];
+            if (diff < minDiff) {
+                minDiff = diff;
+                minIndex = i;
+            }
+        }
+
+        frametimeArray[minIndex][1] += frametimeArray[minIndex + 1][1];
+        frametimeArray[minIndex][0] = (frametimeArray[minIndex][0] + frametimeArray[minIndex + 1][0]) / 2;
+        frametimeArray.splice(minIndex + 1, 1);
+    }
+
+    return frametimeArray;
+}
+
+// Calculate counts for each dataset after filtering outliers
+const frametimeDensityData = frameTimeDataArrays.map(dataArray => ({name: dataArray.label, data: countFrametime(filterOutliers(dataArray.data))}));
+
+// Create the chart
+Highcharts.chart('frametimeDensityChart', {
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'areaspline'},
+    title: {...commonChartOptions.title, text: 'Frametime Density'},
+    xAxis: {...commonChartOptions.xAxis, title: {text: 'Frametime (ms)', style: {color: '#FFFFFF'}}, labels: {style: {color: '#FFFFFF'}}}, // Show X-axis labels in white
+    tooltip: {...commonChartOptions.tooltip, shared: true, formatter: function() {return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} ms`;}},
+    plotOptions: {areaspline: {fillOpacity: 0.5, marker: {enabled: false}}},
+    legend: {...commonChartOptions.legend, enabled: true},
+    series: frametimeDensityData
+});
+
+const frametimeSdvCategories = frameTimeDataArrays.map(dataArray => dataArray.label);
+const frametimeStandardDeviations = frameTimeDataArrays.map(dataArray => calculateStandardDeviation(dataArray.data));
+const frametimeVariances = frameTimeDataArrays.map(dataArray => calculateVariance(dataArray.data));
+
+Highcharts.chart('frametimeStddevVarianceChart', {
+    ...commonChartOptions,
+    chart: {...commonChartOptions.chart, type: 'bar'},
+    title: {...commonChartOptions.title, text: 'Frametime Stability'},
+    subtitle: {...commonChartOptions.subtitle, text: 'Measures of Frametime consistency (std. dev.) and spread (variance). Less is better.'},
+    xAxis: {...commonChartOptions.xAxis, categories: frametimeSdvCategories},
+    yAxis: {...commonChartOptions.yAxis, title: {text: 'Value', align: 'high', style: {color: '#FFFFFF'}}},
+    tooltip: {...commonChartOptions.tooltip, formatter: function() {return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}`;}},
+    plotOptions: {bar: {dataLabels: {enabled: true, style: {color: '#FFFFFF'}, formatter: function() {return this.y.toFixed(2);}}}},
+    legend: {...commonChartOptions.legend, enabled: true},
+    series: [
+        {name: 'Std. Dev.', data: frametimeStandardDeviations, color: '#FF5733'},
+        {name: 'Variance', data: frametimeVariances, color: '#33FF57'}
+    ]
+});
