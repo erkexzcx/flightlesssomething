@@ -4,7 +4,7 @@ const commonChartOptions = {
     title: {style: {color: '#FFFFFF', fontSize: '16px'}},
     subtitle: {style: {color: '#FFFFFF', fontSize: '12px'}},
     xAxis: {labels: {style: {color: '#FFFFFF'}}, lineColor: '#FFFFFF', tickColor: '#FFFFFF'},
-    yAxis: {labels: {style: {color: '#FFFFFF'}}, gridLineColor: 'rgba(255, 255, 255, 0.1)'},
+    yAxis: {labels: {style: {color: '#FFFFFF'}}, gridLineColor: 'rgba(255, 255, 255, 0.1)', title: {text: false}},
     tooltip: {backgroundColor: '#1E1E1E', borderColor: '#FFFFFF', style: {color: '#FFFFFF'}},
     legend: {itemStyle: {color: '#FFFFFF'}},
     credits: {enabled: false},
@@ -199,7 +199,6 @@ Highcharts.chart('densityChart', {
     chart: {...commonChartOptions.chart, type: 'areaspline'},
     title: {...commonChartOptions.title, text: 'FPS Density'},
     xAxis: {...commonChartOptions.xAxis, title: {text: 'FPS', style: {color: '#FFFFFF'}}, labels: {style: {color: '#FFFFFF'}}}, // Show X-axis labels in white
-    yAxis: {...commonChartOptions.yAxis, title: {text: 'Count', style: {color: '#FFFFFF'}}},
     tooltip: {...commonChartOptions.tooltip, shared: true, formatter: function() {return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} FPS`;}},
     plotOptions: {areaspline: {fillOpacity: 0.5, marker: {enabled: false}}},
     legend: {...commonChartOptions.legend, enabled: true},
