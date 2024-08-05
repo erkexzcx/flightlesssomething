@@ -50,18 +50,76 @@
     </div>
 </div>
 
-<div id="fpsChart" style="height:250pt;"></div>
-<div id="frameTimeChart" style="height:250pt;"></div>
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="fps-tab" data-bs-toggle="tab" data-bs-target="#fps" type="button" role="tab" aria-controls="fps" aria-selected="false"><i class="fas fa-tachometer-alt"></i> FPS</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="frametime-tab" data-bs-toggle="tab" data-bs-target="#frametime" type="button" role="tab" aria-controls="frametime" aria-selected="false"><i class="fas fa-clock"></i> Frametime</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab" aria-controls="summary" aria-selected="true"><i class="fas fa-chart-bar"></i> Summary</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="more-metrics-tab" data-bs-toggle="tab" data-bs-target="#more-metrics" type="button" role="tab" aria-controls="more-metrics" aria-selected="true"><i class="fas fa-chart-line"></i> All data</button>
+  </li>
+</ul>
+<div class="tab-content" id="myTabContent">
 
-<div class="accordion" id="accordionFlushExample">
-  <div class="accordion-item">
-    <h2 class="accordion-header" id="flush-headingTwo">
-      <button id="hideAdditionalMetricsBtn" class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseTwo" aria-expanded="false" aria-controls="flush-collapseTwo">
-        Additional metrics
-      </button>
-    </h2>
-    <div id="flush-collapseTwo" class="accordion-collapse collapse" aria-labelledby="flush-headingTwo" data-bs-parent="#accordionFlushExample">
+  <!-- FPS tab -->
+  <div class="tab-pane fade show active" id="fps" role="tabpanel" aria-labelledby="fps-tab">
+    <div id="fpsChart2" style="height:250pt;"></div>
+    <div id="fpsMinMaxAvgChart" style="height:500pt;"></div>
+    <div id="fpsDensityChart" style="height:250pt;"></div>
+    <div id="fpsAvgChart" style="height:250pt;"></div>
+    <div id="fpsStddevVarianceChart" style="height:400pt;"></div>
+  </div>
 
+  <!-- Frametime tab -->
+  <div class="tab-pane fade" id="frametime" role="tabpanel" aria-labelledby="frametime-tab">
+    <div id="frameTimeChart2" style="height:250pt;"></div>
+  </div>
+
+  <!-- Summary tab -->
+  <div class="tab-pane" id="summary" role="tabpanel" aria-labelledby="summary-tab">
+        <div class="row">
+            <div class="col-md-12 text-center" id="aiSummaryMarkdown">
+                <!-- TODO: markdown placeholder for AI summary -->
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div id="fpsSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="frametimeSummaryChart" style="height:250pt;"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div id="cpuLoadSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="gpuLoadSummaryChart" style="height:250pt;"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div id="gpuCoreClockSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="gpuMemClockSummaryChart" style="height:250pt;"></div>
+            </div>
+        </div>
+  </div>
+
+  <!-- More metrics tab -->
+  <div class="tab-pane" id="more-metrics" role="tabpanel" aria-labelledby="more-metrics-tab">
+        <div id="fpsChart" style="height:250pt;"></div>
+        <div id="frameTimeChart" style="height:250pt;"></div>
         <div id="cpuLoadChart" style="height:250pt;"></div>
         <div id="gpuLoadChart" style="height:250pt;"></div>
         <div id="cpuTempChart" style="height:250pt;"></div>
@@ -72,33 +130,16 @@
         <div id="gpuPowerChart" style="height:250pt;"></div>
         <div id="ramUsedChart" style="height:250pt;"></div>
         <div id="swapUsedChart" style="height:250pt;"></div>
-
-    </div>
   </div>
+
 </div>
-
-<div class="row">
-    <div class="col-md-6">
-        <div id="cpuLoadSummaryChart" style="height:250pt;"></div>
-    </div>
-    <div class="col-md-6">
-        <div id="gpuLoadSummaryChart" style="height:250pt;"></div>
-    </div>
-</div>
-
-<div id="minMaxAvgChart" style="height:500pt;"></div>
-
-<div id="avgChart" style="height:250pt;"></div>
-
-<div id="densityChart" style="height:250pt;"></div>
-
-<div id="sdvChart" style="height:400pt;"></div>
 
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
 <script src="https://code.highcharts.com/modules/export-data.js"></script>
 <script src="https://code.highcharts.com/modules/full-screen.js"></script>
 <script src="https://code.highcharts.com/modules/boost.js"></script>
+<script src="https://unpkg.com/showdown/dist/showdown.min.js"></script>
 
 <script>
     var fpsDataArrays = [

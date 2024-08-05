@@ -1,3 +1,26 @@
+document.addEventListener('DOMContentLoaded', function () {
+    var converter = new showdown.Converter();
+    var aiSummaryHTMLElement = document.getElementById('aiSummaryMarkdown');
+
+    // Create an Intersection Observer
+    var observer = new IntersectionObserver(function (entries, observer) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+                // Element is visible, render the Markdown
+                var htmlContents = converter.makeHtml(aiSummaryHTMLElement.innerText);
+                aiSummaryHTMLElement.innerHTML = htmlContents;
+                // Stop observing after rendering
+                observer.unobserve(aiSummaryHTMLElement);
+            }
+        });
+    }, { threshold: 1.0 });
+
+    // Start observing the element
+    observer.observe(aiSummaryHTMLElement);
+});
+
+// ===========================================================================================
+
 // Common chart options
 const commonChartOptions = {
     chart: {backgroundColor: null, style: {color: '#FFFFFF'}, animation: false},
@@ -16,6 +39,8 @@ Highcharts.setOptions({chart: {animation: false}, plotOptions: {series: {animati
 
 const colors = Highcharts.getOptions().colors;
 
+// ===========================================================================================
+
 function getLineChartOptions(title, description, unit, maxY = null) {
     return {
         ...commonChartOptions,
@@ -32,6 +57,42 @@ function getLineChartOptions(title, description, unit, maxY = null) {
     };
 }
 
+function createChart(chartId, title, description, unit, dataArrays, maxY = null) {
+    const options = getLineChartOptions(title, description, unit, maxY);
+    options.series = dataArrays.map((dataArray, index) => ({name: dataArray.label, data: dataArray.data, color: colors[index % colors.length]}));
+    Highcharts.chart(chartId, options);
+}
+
+// Create line charts
+createChart('fpsChart', 'FPS', 'More is better', 'fps', fpsDataArrays);
+createChart('fpsChart2', 'FPS', 'More is better', 'fps', fpsDataArrays);
+createChart('frameTimeChart', 'Frametime', 'Less is better', 'ms', frameTimeDataArrays);
+createChart('frameTimeChart2', 'Frametime', 'Less is better', 'ms', frameTimeDataArrays);
+createChart('cpuLoadChart', 'CPU Load', '', '%', cpuLoadDataArrays, 100);
+createChart('gpuLoadChart', 'GPU Load', '', '%', gpuLoadDataArrays, 100);
+createChart('cpuTempChart', 'CPU Temperature', '', '°C', cpuTempDataArrays);
+createChart('gpuTempChart', 'GPU Temperature', '', '°C', gpuTempDataArrays);
+createChart('gpuCoreClockChart', 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays);
+createChart('gpuMemClockChart', 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays);
+createChart('gpuVRAMUsedChart', 'GPU VRAM Usage', '', 'GB', gpuVRAMUsedDataArrays);
+createChart('gpuPowerChart', 'GPU Power', '', 'W', gpuPowerDataArrays);
+createChart('ramUsedChart', 'RAM Usage', '', 'GB', ramUsedDataArrays);
+createChart('swapUsedChart', 'SWAP Usage', '', 'GB', swapUsedDataArrays);
+
+// ===========================================================================================
+
+function calculateAverage(data) {
+    return data.reduce((acc, value) => acc + value, 0) / data.length;
+}
+
+// Calculate average CPU, GPU, GPU Core clock and GPU memory clock load
+const fpsAverages = fpsDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const frametimeAverages = frameTimeDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const cpuLoadAverages = cpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const gpuLoadAverages = gpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const gpuCoreClockAverages = gpuCoreClockDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const gpuMemClockAverages = gpuMemClockDataArrays.map(dataArray => calculateAverage(dataArray.data));
+
 function getBarChartOptions(title, unit, maxY = null) {
     return {
         ...commonChartOptions,
@@ -46,12 +107,6 @@ function getBarChartOptions(title, unit, maxY = null) {
     };
 }
 
-function createChart(chartId, title, description, unit, dataArrays, maxY = null) {
-    const options = getLineChartOptions(title, description, unit, maxY);
-    options.series = dataArrays.map((dataArray, index) => ({name: dataArray.label, data: dataArray.data, color: colors[index % colors.length]}));
-    Highcharts.chart(chartId, options);
-}
-
 function createBarChart(chartId, title, unit, categories, data, colors, maxY = null) {
     const options = getBarChartOptions(title, unit, maxY);
     options.xAxis.categories = categories;
@@ -59,36 +114,20 @@ function createBarChart(chartId, title, unit, categories, data, colors, maxY = n
     Highcharts.chart(chartId, options);
 }
 
-function calculateAverage(data) {
-    return data.reduce((acc, value) => acc + value, 0) / data.length;
-}
+// Create bar charts for average CPU, GPU, GPU Core clock and GPU memory clock load
+createBarChart('fpsSummaryChart', 'Average FPS', 'fps', fpsDataArrays.map(dataArray => dataArray.label), fpsAverages, colors, 100);
+createBarChart('frametimeSummaryChart', 'Average Frametime', 'ms', frameTimeDataArrays.map(dataArray => dataArray.label), frametimeAverages, colors, 100);
+createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays.map(dataArray => dataArray.label), cpuLoadAverages, colors, 100);
+createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(dataArray => dataArray.label), gpuLoadAverages, colors, 100);
+createBarChart('gpuCoreClockSummaryChart', 'Average GPU Core Clock', 'Hz', gpuCoreClockDataArrays.map(dataArray => dataArray.label), gpuCoreClockAverages, colors);
+createBarChart('gpuMemClockSummaryChart', 'Average GPU Memory Clock', 'Hz', gpuMemClockDataArrays.map(dataArray => dataArray.label), gpuMemClockAverages, colors);
+
+// ===========================================================================================
 
 function calculatePercentile(data, percentile) {
     data.sort((a, b) => a - b);
     return data[Math.ceil(percentile / 100 * data.length) - 1];
 }
-
-// Create line charts
-createChart('fpsChart', 'FPS', 'More is better', 'fps', fpsDataArrays);
-createChart('frameTimeChart', 'Frametime', 'Less is better', 'ms', frameTimeDataArrays);
-createChart('cpuLoadChart', 'CPU Load', '', '%', cpuLoadDataArrays, 100);
-createChart('gpuLoadChart', 'GPU Load', '', '%', gpuLoadDataArrays, 100);
-createChart('cpuTempChart', 'CPU Temperature', '', '°C', cpuTempDataArrays);
-createChart('gpuTempChart', 'GPU Temperature', '', '°C', gpuTempDataArrays);
-createChart('gpuCoreClockChart', 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays);
-createChart('gpuMemClockChart', 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays);
-createChart('gpuVRAMUsedChart', 'GPU VRAM Usage', '', 'GB', gpuVRAMUsedDataArrays);
-createChart('gpuPowerChart', 'GPU Power', '', 'W', gpuPowerDataArrays);
-createChart('ramUsedChart', 'RAM Usage', '', 'GB', ramUsedDataArrays);
-createChart('swapUsedChart', 'SWAP Usage', '', 'GB', swapUsedDataArrays);
-
-// Calculate average CPU and GPU load
-const cpuLoadAverages = cpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
-const gpuLoadAverages = gpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
-
-// Create bar charts for average CPU and GPU load
-createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays.map(dataArray => dataArray.label), cpuLoadAverages, colors, 100);
-createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(dataArray => dataArray.label), gpuLoadAverages, colors, 100);
 
 // Calculate and render min, max, and average FPS
 const categories = [];
@@ -103,7 +142,7 @@ fpsDataArrays.forEach(dataArray => {
     maxFPSData.push(calculatePercentile(dataArray.data, 97));
 });
 
-Highcharts.chart('minMaxAvgChart', {
+Highcharts.chart('fpsMinMaxAvgChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'bar'},
     title: {...commonChartOptions.title, text: 'Min/Avg/Max FPS'},
@@ -141,7 +180,7 @@ const sortedCategories = sortedData.map(item => item.label);
 const sortedPercentageFPSData = sortedData.map(item => item.percentage);
 
 // Create bar chart for FPS percentage
-Highcharts.chart('avgChart', {
+Highcharts.chart('fpsAvgChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'bar'},
     title: {...commonChartOptions.title, text: 'Avg FPS comparison in %'},
@@ -194,7 +233,7 @@ function countFPS(data) {
 const densityData = fpsDataArrays.map(dataArray => ({name: dataArray.label, data: countFPS(filterOutliers(dataArray.data))}));
 
 // Create the chart
-Highcharts.chart('densityChart', {
+Highcharts.chart('fpsDensityChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'areaspline'},
     title: {...commonChartOptions.title, text: 'FPS Density'},
@@ -222,7 +261,7 @@ const sdvCategories = fpsDataArrays.map(dataArray => dataArray.label);
 const standardDeviations = fpsDataArrays.map(dataArray => calculateStandardDeviation(dataArray.data));
 const variances = fpsDataArrays.map(dataArray => calculateVariance(dataArray.data));
 
-Highcharts.chart('sdvChart', {
+Highcharts.chart('fpsStddevVarianceChart', {
     ...commonChartOptions,
     chart: {...commonChartOptions.chart, type: 'bar'},
     title: {...commonChartOptions.title, text: 'FPS Stability'},
