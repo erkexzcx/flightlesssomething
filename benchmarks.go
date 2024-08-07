@@ -366,6 +366,8 @@ func getBenchmark(c *gin.Context) {
 		return
 	}
 
+	getAISummary(benchmarkDatas, benchmark.Title, benchmark.Description, "", "")
+
 	c.HTML(http.StatusOK, "benchmark.tmpl", gin.H{
 		"activePage": "benchmark",
 		"username":   session.Get("Username"),
