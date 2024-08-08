@@ -22,7 +22,7 @@ Yes, there is a lot of crappy copypasta html/css/js code. As long as it works! ð
 To run this code locally, setup `go`, open this project and run this:
 
 ```bash
-go run cmd/flightlesssomething/main.go -data-dir data -discord-client-id xxxxxxxxxxxxxxxxxxx -discord-client-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -discord-redirect-url 'http://127.0.0.1:8080/login/callback' -session-secret xxxxxxxxxxxxxxxxxxxxxxxx
+go run cmd/flightlesssomething/main.go -data-dir data -discord-client-id xxxxxxxxxxxxxxxxxxx -discord-client-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -discord-redirect-url 'http://127.0.0.1:8080/login/callback' -session-secret xxxxxxxxxxxxxxxxxxxxxxxx -openai-api-key xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Then open in browser: http://127.0.0.1:8080/
