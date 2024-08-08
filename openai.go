@@ -2,56 +2,77 @@ package flightlesssomething
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	openai "github.com/sashabaranov/go-openai"
 )
 
 const systemMessage = `
-You are given a summary of PC benchmark data. Your task is to provide conclusion and overview of the given data:
+You are given PC benchmark data of several runs. All this data is visible in the website in a form of charts and your goal is to provide insights.
 
-0. Your summary must consist of max 3 segments - "Highest and Smoothest FPS", "Anomalies" and "Summary".
-1. Provide which run has the highest (average) fps and which has the smoothest fps (based on fps/frametime std.dev. and variance). Do not hesitate to mention multiple runs if they are incredibly similar. Also provide overall the best run. Try to understand which one has the best sweet "average" in terms of being smoothest and highest FPS.
-2. Anomalies in the data (if any). For example, if all benchmarks uses the same hardware/software? Or of certain run has lower/higher FPS that correlates to higher/lower VRAM usage, core clock, mem clock, etc. Try to figure out why is it so, by looking ONLY at the provided data. Do NOT mention anything if it's not an anomaly.
-3. If certain run had much worse FPS/Frametime than others, then exclude it from consideration in point 1. In point 2, try to figure out why it is so (first consider GPU VRAM, core clock, mem clock, then RAM/SWAP and other factors, while lastly CPU and GPU usage). If you can't figure out why, then just say so.
-4. Point 3 must be your TOP priority. Do NOT provide any other information than requested.
-5. You can mention labels in a natural way. E.g. you can call "lavd-defaults" just "LAVD" (if this makes sense).
-6. Use bullet points for point 1 and 2. Use paragraph for point 3.
-7. NEVER provide actual number or "higher/lower than". Instead, ALWAYS provide exact/approximate percentage in comparison to others.
-8. NEVER guess the issue outside of the provided data. If you can't figure out why, then just say so.
-9. ALWAYS mention in "anomalies" if certain run has correlation of higher/lower FPS with certain metrics (e.g. VRAM usage, core clock, mem clock, ram, swap, cpu, gpu). Only mention if there is significant correlation, at least 5 percent.
-10. Provide an extended summary overview of all runs, but avoid repeating yourself of what you mentioned in point 1 and 2.
-
-Do not provide numbers or visualize anything - user can already see charts.
+You MUST:
+1. Write at max 3 sections (headers) - "Top runs", "Issues" (optional) and "Summary".
+2. In Issues section, Figure out if any of the run is significantly worse then others in the same benchmark. You MUST use ONLY the data provided to explain the difference, and your points must be based only on the data provided. If there are no issues - do not write this section. Do not make any guesses. Additional requirements: (a) validate if the same hardware/software was used (by using provided text fields, NOT the data), (b) do not speculate, but use numbers to back up your claims, (c) only write if it's an actual issue with FPS (everything else is just additional information).
+3. In Top runs section, provide which run has the (average) "Highest FPS", which has the "Smoothest FPS" (LOWEST std.dev. and variance of FPS value - LOWEST, NOT HIGHEST) and which is the best "Best overall" (preferrably lower std.dev./variance than higher FPS, but if slight decrease in stability gives significantly higher FPS - pick that one). NEVER consider runs that have significantly lower FPS or has other significant issues. Exclude runs from consideration if they are significantly worse than the rest (as it would be mentioned in issues section). Note that your goal is to pick winners and not do a comparison in this section. Include numbers to justify your claims.
+4. In Summary section, provide an overview of all runs. Mention which runs are similar and which are different. Mention which runs are better in terms of FPS and which are better in terms of stability. Mention if there are any issues and what could be the reason for them. In short - summarize whole benchmark.
+5. First 2 sections should be bullet points, no subpoints, only 1 bullet point per point, while summary should be a single paragraph.
+6. NEVER use actual numbers. Instead, use percentage in comparison to other runs.
+7. Use markdown, use code syntax for labels.
 `
 
-func getAISummary(bds []*BenchmarkData, bdTitle, bdDescription, openaiApiKey, openaiModel string) (string, error) {
-	userPrompt := writeAIPrompt(bds, bdTitle, bdDescription)
-	fmt.Println(userPrompt)
+var (
+	inProgressSummaries    = map[uint]struct{}{}
+	inProgressSummariesMux = &sync.Mutex{}
+)
 
-	return "", nil
+func generateSummary(b *Benchmark, bds []*BenchmarkData) {
+	// Check if OpenAI integration is not enabled
+	if openaiClient == nil {
+		return
+	}
 
-	client := openai.NewClient(openaiApiKey)
-	resp, err := client.CreateChatCompletion(
+	// Lock mutex, as integration is enabled and might be already in progress
+	inProgressSummariesMux.Lock()
+
+	// Check if generation is already in progress
+	if _, ok := inProgressSummaries[b.ID]; ok {
+		inProgressSummariesMux.Unlock()
+		return
+	}
+	inProgressSummaries[b.ID] = struct{}{}
+	inProgressSummariesMux.Unlock()
+
+	// Create user prompt
+	userPrompt := writeAIPrompt(bds, b.Title, b.Description)
+
+	// Retrieve AI response
+	resp, err := openaiClient.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: openaiModel,
+			Model:       openaiModel,
+			Temperature: 0.0,
 			Messages: []openai.ChatCompletionMessage{
 				{Role: openai.ChatMessageRoleSystem, Content: systemMessage},
 				{Role: openai.ChatMessageRoleUser, Content: userPrompt},
 			},
 		},
 	)
-
 	if err != nil {
-		return "", err
+		log.Println("Failed to generate AI summary:", err)
+		return
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	db.Model(&Benchmark{}).Where("id = ?", b.ID).Update("AiSummary", resp.Choices[0].Message.Content)
+
+	// Update status
+	inProgressSummariesMux.Lock()
+	delete(inProgressSummaries, b.ID)
+	inProgressSummariesMux.Unlock()
 }
 
 func writeAIPrompt(bds []*BenchmarkData, bdTitle, bdDescription string) string {

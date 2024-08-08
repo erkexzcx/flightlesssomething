@@ -225,6 +225,10 @@ func postBenchmarkCreate(c *gin.Context) {
 		return
 	}
 
+	if openaiClient != nil {
+		go generateSummary(&benchmark, csvFiles)
+	}
+
 	// Redirect to the newly created benchmark using GET request
 	c.Redirect(http.StatusSeeOther, fmt.Sprintf("/benchmark/%d", benchmark.ID))
 }
@@ -366,7 +370,10 @@ func getBenchmark(c *gin.Context) {
 		return
 	}
 
-	getAISummary(benchmarkDatas, benchmark.Title, benchmark.Description, "", "")
+	if benchmark.AiSummary == "" && openaiClient != nil {
+		go generateSummary(&benchmark, benchmarkDatas)
+		benchmark.AiSummary = "AI summary is being generated... Refresh the page later."
+	}
 
 	c.HTML(http.StatusOK, "benchmark.tmpl", gin.H{
 		"activePage": "benchmark",

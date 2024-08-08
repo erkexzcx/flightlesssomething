@@ -1,22 +1,7 @@
-document.addEventListener('DOMContentLoaded', function () {
-    var converter = new showdown.Converter();
-    var aiSummaryHTMLElement = document.getElementById('aiSummaryMarkdown');
-
-    // Create an Intersection Observer
-    var observer = new IntersectionObserver(function (entries, observer) {
-        entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-                // Element is visible, render the Markdown
-                var htmlContents = converter.makeHtml(aiSummaryHTMLElement.innerText);
-                aiSummaryHTMLElement.innerHTML = htmlContents;
-                // Stop observing after rendering
-                observer.unobserve(aiSummaryHTMLElement);
-            }
-        });
-    }, { threshold: 1.0 });
-
-    // Start observing the element
-    observer.observe(aiSummaryHTMLElement);
+document.addEventListener('DOMContentLoaded', () => {
+    const converter = new showdown.Converter();
+    const element = document.getElementById('aiSummaryMarkdown');
+    element.innerHTML = converter.makeHtml(element.innerHTML);
 });
 
 // ===========================================================================================

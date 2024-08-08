@@ -18,6 +18,7 @@ type Benchmark struct {
 	UserID      uint
 	Title       string
 	Description string
+	AiSummary   string
 
 	CreatedAtHumanized string `gorm:"-"` // Human readable "X h/m/s ago" version of CreatedAt (filled automatically)
 
