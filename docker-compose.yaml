@@ -10,8 +10,11 @@ services:
     environment:
       - FS_BIND=0.0.0.0:8080
       - FS_DATA_DIR=/data
+      - FS_SESSION_SECRET=xxxxxxxxxxxxxxxxxx
       - FS_DISCORD_CLIENT_ID=xxxxxxxxxxxxxxxxxx
       - FS_DISCORD_CLIENT_SECRET=xxxxxxxxxxxxxxxxxx
       - FS_DISCORD_REDIRECT_URL=<scheme>://<domain>/login/callback
-      - FS_SESSION_SECRET=xxxxxxxxxxxxxxxxxx
+      - FS_OPENAI_API_KEY=xxxxxxxxxxxxxxxxxx
+      # - FS_OPENAI_MODEL=gpt-4o
+      # - FS_OPENAI_URL=https://api.openai.com/v1
     restart: unless-stopped

@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/ravener/discord-oauth2"
+	openai "github.com/sashabaranov/go-openai"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
@@ -28,9 +29,22 @@ var (
 
 	// Benchmarks directory
 	benchmarksDir string
+
+	// OpenAI
+	openaiClient *openai.Client
+	openaiModel  string
 )
 
 func Start(c *Config, version string) {
+	// Setup OpenAI client //
+
+	if c.OpenAIApiKey != "" {
+		openaiClientConf := openai.DefaultConfig(c.OpenAIApiKey)
+		openaiClientConf.BaseURL = c.OpenAIURL
+		openaiClient = openai.NewClientWithConfig(openaiClientConf)
+		openaiModel = c.OpenAIModel
+	}
+
 	// Setup data dir //
 
 	_, err := os.Stat(c.DataDir)
