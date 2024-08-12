@@ -15,14 +15,39 @@ import (
 const systemMessage = `
 You are given PC benchmark data of several runs. All this data is visible in the website in a form of charts and your goal is to provide insights.
 
+Required format MUST be like this:
+# Top runs:
+* **Highest FPS**: Run 1 and comment
+* **Smoothest FPS**: Run 2 and comment
+* **Best overall**: Run 3 and comment
+# Issues:
+* ...
+* ...
+* ...
+# Summary
+...
+
 You MUST:
-1. Write at max 3 sections (headers) - "Top runs", "Issues" (optional) and "Summary".
-2. In Issues section, Figure out if any of the run is significantly worse then others in the same benchmark. You MUST use ONLY the data provided to explain the difference, and your points must be based only on the data provided. If there are no issues - do not write this section. Do not make any guesses. Additional requirements: (a) validate if the same hardware/software was used (by using provided text fields, NOT the data), (b) do not speculate, but use numbers to back up your claims, (c) only write if it's an actual issue with FPS (everything else is just additional information).
-3. In Top runs section, provide which run has the (average) "Highest FPS", which has the "Smoothest FPS" (LOWEST std.dev. and variance of FPS value - LOWEST, NOT HIGHEST) and which is the best "Best overall" (preferrably lower std.dev./variance than higher FPS, but if slight decrease in stability gives significantly higher FPS - pick that one). NEVER consider runs that have significantly lower FPS or has other significant issues. Exclude runs from consideration if they are significantly worse than the rest (as it would be mentioned in issues section). Note that your goal is to pick winners and not do a comparison in this section. Include numbers to justify your claims.
-4. In Summary section, provide an overview of all runs. Mention which runs are similar and which are different. Mention which runs are better in terms of FPS and which are better in terms of stability. Mention if there are any issues and what could be the reason for them. In short - summarize whole benchmark.
-5. First 2 sections should be bullet points, no subpoints, only 1 bullet point per point, while summary should be a single paragraph.
-6. NEVER use actual numbers. Instead, use percentage in comparison to other runs.
-7. Use markdown, use code syntax for labels.
+* "Top runs" section is needed ONLY if there are 2 runs or more.
+* In "Top runs" sections, label names must use in-line code syntax.
+* In Issues section, Figure out if any of the run is significantly worse then others in the same benchmark. You MUST use ONLY the data provided to explain the difference, and your points must be based only on the data provided. If there are no issues - do NOT write this section. Do not make any guesses. Additional requirements: (a) validate if the same hardware/software was used (by using provided text fields, NOT the data), (b) do not speculate, but use numbers to back up your claims, (c) only write if it's an actual issue with FPS (everything else is just additional information).
+* In Top runs section, provide which run has the (average) "Highest FPS", which has the "Smoothest FPS" (LOWEST std.dev. and variance of FPS value - LOWEST, NOT HIGHEST) and which is the best "Best overall" (preferrably lower std.dev./variance than higher FPS, but if slight decrease in stability gives significantly higher FPS - pick that one). NEVER consider runs that have significantly lower FPS or has other significant issues. Exclude runs from consideration if they are significantly worse than the rest (as it would be mentioned in issues section). Note that your goal is to pick winners and not do a comparison in this section. Include numbers to justify your claims.
+* In Summary section, provide an overview/summary of this benchmark in only one paragraph and in natural language. In this section, use your deep understanding of context of what is actually being compared (driver versions? Different configurations? Different settings? different schedulers? Different OS? Focus on that) and comment on that.
+* First 2 sections should be bullet points, no subpoints, only 1 bullet point per point, while summary should be a single paragraph.
+* NEVER use actual numbers. Instead, use percentage in comparison to other runs.
+
+Your data does not contain anything about scx schedulers, but some benchmarks might compare these:
+* sched_ext is a Linux kernel feature which enables implementing kernel thread schedulers in BPF and dynamically loading them. This repository contains various scheduler implementations and support utilities.
+* sched_ext enables safe and rapid iterations of scheduler implementations, thus radically widening the scope of scheduling strategies that can be experimented with and deployed; even in massive and complex production environments.
+* Available scx schedulers (at the time of writting): scx_asdf scx_bpfland scx_central scx_lavd scx_layered scx_nest scx_qmap scx_rlfifo scx_rustland scx_rusty scx_simple scx_userland
+
+Additional RULES THAT YOU MUST STRICTLY FOLLOW:
+1. In summary and issues sections, you are STRICTLY FORBIDDEN TO REFER TO ANY RUN BY IT'S LABEL NAME. Instead, you must use context and deep understand what what is being compared, and refer to each run by it's context, rather than title.
+2. In summary section, any technical terms or codes are easier to read when encapsulated with in-code syntax.
+3. In summary section, never refer to runs as "first run" or "second run". Refer to them by their context.
+4. In issues section, NEVER write "has no issues" kind of statements.
+5. In issues section, NEVER write anything that is not DIRECTLY related to issue with either FPS or Frametime.
+6. In issues section, additionally point out if configuration is different that isn't directly part of benchmark comparison (e.g. comparing schedulers, but cpu or OS is different)
 `
 
 var (
@@ -189,12 +214,10 @@ func writeAIPrompt(bds []*BenchmarkData, bdTitle, bdDescription string) string {
 
 type AIPromptArrayStats struct {
 	Count        int
-	Lowest       float64
 	Low1Percent  float64
 	Mean         float64
 	Median       float64
 	Top97Percent float64
-	Highest      float64
 	StdDev       float64
 	Variance     float64
 }
@@ -206,8 +229,6 @@ func calculateAIPromptArrayStats(data []float64) AIPromptArrayStats {
 
 	sort.Float64s(data)
 	count := len(data)
-	lowest := data[0]
-	highest := data[count-1]
 
 	low1PercentIndex := int(math.Ceil(0.01*float64(count))) - 1
 	if low1PercentIndex < 0 {
@@ -244,12 +265,10 @@ func calculateAIPromptArrayStats(data []float64) AIPromptArrayStats {
 
 	return AIPromptArrayStats{
 		Count:        count,
-		Lowest:       lowest,
 		Low1Percent:  low1Percent,
 		Mean:         mean,
 		Median:       median,
 		Top97Percent: top97Percent,
-		Highest:      highest,
 		StdDev:       stdDev,
 		Variance:     variance,
 	}
@@ -257,14 +276,12 @@ func calculateAIPromptArrayStats(data []float64) AIPromptArrayStats {
 
 func (as AIPromptArrayStats) String() string {
 	return strings.Join([]string{
-		"Count: " + strconv.Itoa(as.Count),
-		"Lowest: " + strconv.FormatFloat(as.Lowest, 'f', -1, 64),
-		"Low1Percent: " + strconv.FormatFloat(as.Low1Percent, 'f', -1, 64),
-		"Mean: " + strconv.FormatFloat(as.Mean, 'f', -1, 64),
-		"Median: " + strconv.FormatFloat(as.Median, 'f', -1, 64),
-		"Top97Percent: " + strconv.FormatFloat(as.Top97Percent, 'f', -1, 64),
-		"Highest: " + strconv.FormatFloat(as.Highest, 'f', -1, 64),
-		"StdDev: " + strconv.FormatFloat(as.StdDev, 'f', -1, 64),
-		"Variance: " + strconv.FormatFloat(as.Variance, 'f', -1, 64),
+		"Count:" + strconv.Itoa(as.Count),
+		"Low1Percent:" + strconv.FormatFloat(as.Low1Percent, 'f', -1, 64),
+		"Mean:" + strconv.FormatFloat(as.Mean, 'f', -1, 64),
+		"Median:" + strconv.FormatFloat(as.Median, 'f', -1, 64),
+		"Top97Percent:" + strconv.FormatFloat(as.Top97Percent, 'f', -1, 64),
+		"StdDev:" + strconv.FormatFloat(as.StdDev, 'f', -1, 64),
+		"Variance:" + strconv.FormatFloat(as.Variance, 'f', -1, 64),
 	}, ", ")
 }
