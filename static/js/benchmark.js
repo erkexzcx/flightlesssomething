@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Common chart options
 const commonChartOptions = {
-    chart: {backgroundColor: null, style: {color: '#FFFFFF'}, animation: false},
+    chart: {backgroundColor: null, style: {color: '#FFFFFF'}, animation: false, boost: {useGPUTranslations: true, usePreallocated: true}},
     title: {style: {color: '#FFFFFF', fontSize: '16px'}},
     subtitle: {style: {color: '#FFFFFF', fontSize: '12px'}},
     xAxis: {labels: {style: {color: '#FFFFFF'}}, lineColor: '#FFFFFF', tickColor: '#FFFFFF'},
