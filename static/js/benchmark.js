@@ -100,7 +100,7 @@ function createBarChart(chartId, title, unit, categories, data, colors, maxY = n
 }
 
 // Create bar charts for average CPU, GPU, GPU Core clock and GPU memory clock load
-createBarChart('fpsSummaryChart', 'Average FPS', 'fps', fpsDataArrays.map(dataArray => dataArray.label), fpsAverages, colors, 100);
+createBarChart('fpsSummaryChart', 'Average FPS', 'fps', fpsDataArrays.map(dataArray => dataArray.label), fpsAverages, colors);
 createBarChart('frametimeSummaryChart', 'Average Frametime', 'ms', frameTimeDataArrays.map(dataArray => dataArray.label), frametimeAverages, colors);
 createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays.map(dataArray => dataArray.label), cpuLoadAverages, colors, 100);
 createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(dataArray => dataArray.label), gpuLoadAverages, colors, 100);
