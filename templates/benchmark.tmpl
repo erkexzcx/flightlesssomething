@@ -118,6 +118,15 @@
                 <div id="gpuMemClockSummaryChart" style="height:250pt;"></div>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div id="cpuPowerSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="gpuPowerSummaryChart" style="height:250pt;"></div>
+            </div>
+        </div>
   </div>
 
   <!-- More metrics tab -->
@@ -127,6 +136,7 @@
         <div id="cpuLoadChart" style="height:250pt;"></div>
         <div id="gpuLoadChart" style="height:250pt;"></div>
         <div id="cpuTempChart" style="height:250pt;"></div>
+        <div id="cpuPowerChart" style="height:250pt;"></div>
         <div id="gpuTempChart" style="height:250pt;"></div>
         <div id="gpuCoreClockChart" style="height:250pt;"></div>
         <div id="gpuMemClockChart" style="height:250pt;"></div>
@@ -173,6 +183,12 @@
     var cpuTempDataArrays = [
         {{- range .benchmarkData }}
         { label: '{{ .Label }}', data: {{ .DataCPUTemp }} },
+        {{- end }}
+    ];
+
+    var cpuPowerDataArrays = [
+        {{- range .benchmarkData }}
+        { label: '{{ .Label }}', data: {{ .DataCPUPower }} },
         {{- end }}
     ];
 

@@ -56,6 +56,7 @@ createChart('frameTimeChart2', 'Frametime', 'Less is better', 'ms', frameTimeDat
 createChart('cpuLoadChart', 'CPU Load', '', '%', cpuLoadDataArrays, 100);
 createChart('gpuLoadChart', 'GPU Load', '', '%', gpuLoadDataArrays, 100);
 createChart('cpuTempChart', 'CPU Temperature', '', '°C', cpuTempDataArrays);
+createChart('cpuPowerChart', 'CPU Power', '', 'W', cpuPowerDataArrays);
 createChart('gpuTempChart', 'GPU Temperature', '', '°C', gpuTempDataArrays);
 createChart('gpuCoreClockChart', 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays);
 createChart('gpuMemClockChart', 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays);
@@ -75,6 +76,8 @@ const fpsAverages = fpsDataArrays.map(dataArray => calculateAverage(dataArray.da
 const frametimeAverages = frameTimeDataArrays.map(dataArray => calculateAverage(dataArray.data));
 const cpuLoadAverages = cpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
 const gpuLoadAverages = gpuLoadDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const cpuPowerAverages = cpuPowerDataArrays.map(dataArray => calculateAverage(dataArray.data));
+const gpuPowerAverages = gpuPowerDataArrays.map(dataArray => calculateAverage(dataArray.data));
 const gpuCoreClockAverages = gpuCoreClockDataArrays.map(dataArray => calculateAverage(dataArray.data));
 const gpuMemClockAverages = gpuMemClockDataArrays.map(dataArray => calculateAverage(dataArray.data));
 
@@ -106,6 +109,8 @@ createBarChart('cpuLoadSummaryChart', 'Average CPU Load', '%', cpuLoadDataArrays
 createBarChart('gpuLoadSummaryChart', 'Average GPU Load', '%', gpuLoadDataArrays.map(dataArray => dataArray.label), gpuLoadAverages, colors, 100);
 createBarChart('gpuCoreClockSummaryChart', 'Average GPU Core Clock', 'Hz', gpuCoreClockDataArrays.map(dataArray => dataArray.label), gpuCoreClockAverages, colors);
 createBarChart('gpuMemClockSummaryChart', 'Average GPU Memory Clock', 'Hz', gpuMemClockDataArrays.map(dataArray => dataArray.label), gpuMemClockAverages, colors);
+createBarChart('cpuPowerSummaryChart', 'Average CPU Power', 'W', cpuPowerDataArrays.map(dataArray => dataArray.label), cpuPowerAverages, colors);
+createBarChart('gpuPowerSummaryChart', 'Average GPU Power', 'W', gpuPowerDataArrays.map(dataArray => dataArray.label), gpuPowerAverages, colors);
 
 // ===========================================================================================
 

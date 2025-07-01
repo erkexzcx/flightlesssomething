@@ -38,6 +38,7 @@ type BenchmarkData struct {
 	DataGPULoad      []float64
 	DataCPUTemp      []float64
 	DataGPUTemp      []float64
+	DataCPUPower     []float64
 	DataGPUCoreClock []float64
 	DataGPUMemClock  []float64
 	DataGPUVRAMUsed  []float64
@@ -101,6 +102,8 @@ func parseData(scanner *bufio.Scanner, headerMap map[string]int, benchmarkData *
 				benchmarkData.DataGPULoad = append(benchmarkData.DataGPULoad, val)
 			case "cpu_temp", "CPU temperature":
 				benchmarkData.DataCPUTemp = append(benchmarkData.DataCPUTemp, val)
+			case "cpu_power":
+				benchmarkData.DataCPUPower = append(benchmarkData.DataCPUPower, val)
 			case "gpu_temp", "GPU temperature":
 				benchmarkData.DataGPUTemp = append(benchmarkData.DataGPUTemp, val)
 			case "gpu_core_clock", "Core clock":
@@ -143,6 +146,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[string]int, benchmarkData *
 		len(benchmarkData.DataGPULoad) == 0 &&
 		len(benchmarkData.DataCPUTemp) == 0 &&
 		len(benchmarkData.DataGPUTemp) == 0 &&
+		len(benchmarkData.DataCPUPower) == 0 &&
 		len(benchmarkData.DataGPUCoreClock) == 0 &&
 		len(benchmarkData.DataGPUMemClock) == 0 &&
 		len(benchmarkData.DataGPUVRAMUsed) == 0 &&
@@ -387,6 +391,7 @@ func createZipFromBenchmarkData(benchmarkData []*BenchmarkData) (*bytes.Buffer, 
 		addColumn("cpu_load", data.DataCPULoad)
 		addColumn("gpu_load", data.DataGPULoad)
 		addColumn("cpu_temp", data.DataCPUTemp)
+		addColumn("cpu_power", data.DataCPUPower)
 		addColumn("gpu_temp", data.DataGPUTemp)
 		addColumn("gpu_core_clock", data.DataGPUCoreClock)
 		addColumn("gpu_mem_clock", data.DataGPUMemClock)

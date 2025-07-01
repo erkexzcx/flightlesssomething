@@ -166,6 +166,12 @@ func writeAIPrompt(bds []*BenchmarkData, bdTitle, bdDescription string) string {
 		sb.WriteString(stats.String())
 		sb.WriteString("\n")
 
+		// CPU power
+		stats = calculateAIPromptArrayStats(benchmarkRun.DataCPUPower)
+		sb.WriteString("CPU power: ")
+		sb.WriteString(stats.String())
+		sb.WriteString("\n")
+
 		// GPU temp
 		stats = calculateAIPromptArrayStats(benchmarkRun.DataGPUTemp)
 		sb.WriteString("GPU temp: ")
