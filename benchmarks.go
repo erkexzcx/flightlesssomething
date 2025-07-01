@@ -385,6 +385,191 @@ func getBenchmark(c *gin.Context) {
 	})
 }
 
+func getBenchmarkEdit(c *gin.Context) {
+	session := sessions.Default(c)
+	if session.Get("Username") == "" {
+		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Please authenticate to edit a benchmark",
+		})
+		return
+	}
+
+	// Get benchmark ID from the path
+	id := c.Param("id")
+
+	// Check if user owns the benchmark
+	var benchmark Benchmark
+	result := db.First(&benchmark, id)
+	if result.Error != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Internal server error occurred: " + result.Error.Error(),
+		})
+		return
+	}
+	if benchmark.UserID != session.Get("ID") {
+		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "You do not own this benchmark",
+		})
+		return
+	}
+
+	// Get benchmark data to show current labels
+	benchmarkDatas, err := retrieveBenchmarkData(benchmark.ID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Error occurred while retrieving benchmark data: " + err.Error(),
+		})
+		return
+	}
+
+	c.HTML(http.StatusOK, "benchmark_edit.tmpl", gin.H{
+		"activePage":     "benchmark",
+		"username":       session.Get("Username"),
+		"userID":         session.Get("ID"),
+		"benchmark":      benchmark,
+		"benchmarkData":  benchmarkDatas,
+	})
+}
+
+func postBenchmarkEdit(c *gin.Context) {
+	session := sessions.Default(c)
+	if session.Get("Username") == "" {
+		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Please authenticate to edit a benchmark",
+		})
+		return
+	}
+
+	// Get benchmark ID from the path
+	id := c.Param("id")
+
+	// Check if user owns the benchmark
+	var benchmark Benchmark
+	result := db.First(&benchmark, id)
+	if result.Error != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Internal server error occurred: " + result.Error.Error(),
+		})
+		return
+	}
+	if benchmark.UserID != session.Get("ID") {
+		c.HTML(http.StatusUnauthorized, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "You do not own this benchmark",
+		})
+		return
+	}
+
+	// Validate title
+	title := strings.TrimSpace(c.PostForm("title"))
+	if len(title) > 100 || title == "" {
+		c.HTML(http.StatusBadRequest, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Title must not be empty or exceed 100 characters",
+		})
+		return
+	}
+
+	// Validate description
+	description := strings.TrimSpace(c.PostForm("description"))
+	if len(description) > 500 {
+		c.HTML(http.StatusBadRequest, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Description must not exceed 500 characters",
+		})
+		return
+	}
+
+	// Update benchmark in database
+	benchmark.Title = title
+	benchmark.Description = description
+	result = db.Save(&benchmark)
+	if result.Error != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Error occurred while updating benchmark: " + result.Error.Error(),
+		})
+		return
+	}
+
+	// Handle label updates
+	benchmarkDatas, err := retrieveBenchmarkData(benchmark.ID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+			"activePage": "error",
+			"username":   session.Get("Username"),
+			"userID":     session.Get("ID"),
+
+			"errorMessage": "Error occurred while retrieving benchmark data: " + err.Error(),
+		})
+		return
+	}
+
+	// Check if any labels were updated
+	labelsUpdated := false
+	for i, data := range benchmarkDatas {
+		newLabel := strings.TrimSpace(c.PostForm(fmt.Sprintf("label_%d", i)))
+		if newLabel != "" && newLabel != data.Label {
+			data.Label = newLabel
+			labelsUpdated = true
+		}
+	}
+
+	// Re-store benchmark data if labels were updated
+	if labelsUpdated {
+		err = storeBenchmarkData(benchmarkDatas, benchmark.ID)
+		if err != nil {
+			c.HTML(http.StatusInternalServerError, "error.tmpl", gin.H{
+				"activePage": "error",
+				"username":   session.Get("Username"),
+				"userID":     session.Get("ID"),
+
+				"errorMessage": "Error occurred while updating benchmark data: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// Redirect to the updated benchmark
+	c.Redirect(http.StatusSeeOther, fmt.Sprintf("/benchmark/%d", benchmark.ID))
+}
+
 func getBenchmarkDownload(c *gin.Context) {
 	session := sessions.Default(c)
 

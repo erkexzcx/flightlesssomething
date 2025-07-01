@@ -1,0 +1,35 @@
+{{template "header.tmpl" .}}
+
+<div class="d-flex justify-content-between align-items-center">
+    <h2>Edit benchmark #{{ .benchmark.ID }}</h2>
+</div>
+
+<form action="/benchmark/{{ .benchmark.ID }}/edit" method="post">
+  <div class="mb-3">
+    <label for="title" class="form-label">Title</label>
+    <input type="text" class="form-control" id="title" placeholder="Title of your benchmark" required name="title" maxlength="100" value="{{ .benchmark.Title }}">
+    <div class="form-text"><small>For example: <code><i>Forza Horizon 5: BORE vs SCX schedulers</i></code></small></div>
+  </div>
+  <div class="mb-3">
+    <label for="description" class="form-label">Description <small>(optional)</small></label>
+    <textarea id="description" class="form-control" rows="4" placeholder="Description of your benchmark" name="description" maxlength="500">{{ .benchmark.Description }}</textarea>
+  </div>
+  
+  <div class="mb-3">
+    <label class="form-label">File Labels</label>
+    <div class="form-text mb-2"><small>You can rename the labels for your uploaded files below:</small></div>
+    {{- range $index, $data := .benchmarkData }}
+    <div class="mb-2">
+      <label for="label_{{ $index }}" class="form-label">File {{ $index }} ({{ $data.Label }}):</label>
+      <input type="text" class="form-control" id="label_{{ $index }}" name="label_{{ $index }}" value="{{ $data.Label }}" placeholder="Enter new label">
+    </div>
+    {{- end }}
+  </div>
+  
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Update benchmark</button>
+    <a href="/benchmark/{{ .benchmark.ID }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+
+{{template "footer.tmpl" .}}
