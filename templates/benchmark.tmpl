@@ -6,7 +6,7 @@
     <h2>Benchmark #{{ .benchmark.ID }}</h2>
     <div>
         {{if eq .benchmark.UserID .userID }}
-            <a class="btn btn-primary me-2" href="/benchmark/{{ .benchmark.ID }}/edit"><i class="fa-solid fa-edit"></i> Edit</a>
+            <a class="btn btn-primary me-2" href="/benchmark/{{ .benchmark.ID }}/edit"><i class="fa-solid fa-pen"></i> Edit</a>
             <a class="btn btn-danger me-2" data-bs-toggle="modal" data-bs-target="#exampleModal"><i class="fa-solid fa-trash"></i> Delete</a>
         {{end}}
         <a class="btn btn-secondary" href="/benchmark/{{ .benchmark.ID }}/download" target="_blank" title="Reconstruct MangoHud-like CSV files"><i class="fa-solid fa-download"></i> Download</a>

@@ -18,11 +18,15 @@
   <div class="mb-3">
     <label class="form-label">File Labels</label>
     <div class="form-text mb-2"><small>You can rename the labels for your uploaded files below:</small></div>
+    {{- if .benchmarkData }}
     {{- range $index, $data := .benchmarkData }}
     <div class="mb-2">
-      <label for="label_{{ $index }}" class="form-label">File {{ $index }} ({{ $data.Label }}):</label>
+      <label for="label_{{ $index }}" class="form-label">File "{{ $data.Label }}":</label>
       <input type="text" class="form-control" id="label_{{ $index }}" name="label_{{ $index }}" value="{{ $data.Label }}" placeholder="Enter new label">
     </div>
+    {{- end }}
+    {{- else }}
+    <div class="alert alert-warning">No files found for this benchmark.</div>
     {{- end }}
   </div>
   
