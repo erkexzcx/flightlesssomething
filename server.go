@@ -85,7 +85,7 @@ func Start(c *Config, version string) {
 		panic(err)
 	}
 	store := gormsessions.NewStore(db, true, []byte(c.SessionSecret))
-	db.AutoMigrate(&Benchmark{})
+	db.AutoMigrate(&User{}, &Benchmark{})
 
 	// Setup gin //
 

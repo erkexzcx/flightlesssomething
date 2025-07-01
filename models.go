@@ -7,8 +7,8 @@ import (
 
 type User struct {
 	gorm.Model
-	DiscordID string
-	Username  string
+	DiscordID string `gorm:"size:20"`
+	Username  string `gorm:"size:32"`
 
 	Benchmarks []Benchmark `gorm:"constraint:OnDelete:CASCADE;"`
 }
@@ -16,8 +16,8 @@ type User struct {
 type Benchmark struct {
 	gorm.Model
 	UserID      uint
-	Title       string
-	Description string
+	Title       string `gorm:"size:100"`
+	Description string `gorm:"size:500"`
 	AiSummary   string
 
 	CreatedAtHumanized string `gorm:"-"` // Human readable "X h/m/s ago" version of CreatedAt (filled automatically)
