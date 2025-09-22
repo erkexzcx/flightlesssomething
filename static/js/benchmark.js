@@ -143,18 +143,14 @@ Highcharts.chart('fpsMinMaxAvgChart', {
 // Calculate average FPS for each filename
 const avgFPSData2 = fpsDataArrays.map(dataArray => calculateAverage(dataArray.data));
 
-// Calculate FPS as a percentage of the first element
-const firstFPS = avgFPSData2[0];
-const percentageFPSData = avgFPSData2.map(fps => (fps / firstFPS) * 100);
-
-// Ensure the minimum FPS percentage is 100%
-const minPercentage = Math.min(...percentageFPSData);
-const normalizedPercentageFPSData = percentageFPSData.map(percentage => percentage - minPercentage + 100);
+// Calculate FPS as a percentage of the lowest baseline
+const baselineFPS = Math.min(...avgFPSData2);
+const percentageFPSData = avgFPSData2.map((fps) => (fps / baselineFPS) * 100);
 
 // Create an array of objects to sort both categories and data together
 const sortedData = fpsDataArrays.map((dataArray, index) => ({
     label: dataArray.label,
-    percentage: normalizedPercentageFPSData[index]
+    percentage: percentageFPSData[index]
 }));
 
 // Sort the array by percentage
@@ -294,18 +290,16 @@ Highcharts.chart('frametimeMinMaxAvgChart', {
 // Calculate average Frametime for each filename
 const avgFrametimeData2 = frameTimeDataArrays.map(dataArray => calculateAverage(dataArray.data));
 
-// Calculate Frametime as a percentage of the first element
-const firstFrametime = avgFrametimeData2[0];
-const percentageFrametimeData = avgFrametimeData2.map(frametime => (frametime / firstFrametime) * 100);
-
-// Ensure the minimum Frametime percentage is 100%
-const minFrametimePercentage = Math.min(...percentageFrametimeData);
-const normalizedPercentageFrametimeData = percentageFrametimeData.map(percentage => percentage - minFrametimePercentage + 100);
+// Calculate Frametime as a percentage of the lowest baseline
+const baselineFrametime = Math.min(...avgFrametimeData2);
+const percentageFrametimeData = avgFrametimeData2.map(
+    (frametime) => (frametime / baselineFrametime) * 100
+);
 
 // Create an array of objects to sort both categories and data together
 const sortedFrametimeData = frameTimeDataArrays.map((dataArray, index) => ({
     label: dataArray.label,
-    percentage: normalizedPercentageFrametimeData[index]
+    percentage: percentageFrametimeData[index]
 }));
 
 // Sort the array by percentage
