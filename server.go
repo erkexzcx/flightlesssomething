@@ -33,6 +33,10 @@ var (
 	// OpenAI
 	openaiClient *openai.Client
 	openaiModel  string
+
+	// Admin credentials
+	adminUsername string
+	adminPassword string
 )
 
 func Start(c *Config, version string) {
@@ -44,6 +48,11 @@ func Start(c *Config, version string) {
 		openaiClient = openai.NewClientWithConfig(openaiClientConf)
 		openaiModel = c.OpenAIModel
 	}
+
+	// Setup admin credentials //
+
+	adminUsername = c.AdminUsername
+	adminPassword = c.AdminPassword
 
 	// Setup data dir //
 
@@ -171,6 +180,8 @@ func Start(c *Config, version string) {
 
 	r.GET("/login", getLogin)
 	r.GET("/login/callback", getLoginCallback)
+	r.GET("/login/admin", getAdminLogin)
+	r.POST("/login/admin", postAdminLogin)
 	r.GET("/logout", getLogout)
 
 	r.Run(c.Bind)

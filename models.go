@@ -9,6 +9,7 @@ type User struct {
 	gorm.Model
 	DiscordID string `gorm:"size:20"`
 	Username  string `gorm:"size:32"`
+	IsAdmin   bool   `gorm:"default:false"`
 
 	Benchmarks []Benchmark `gorm:"constraint:OnDelete:CASCADE;"`
 }

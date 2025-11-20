@@ -142,3 +142,64 @@ func getRandomString() (string, error) {
 	}
 	return hex.EncodeToString(bytes), nil
 }
+
+func getAdminLogin(c *gin.Context) {
+	session := sessions.Default(c)
+
+	if session.Get("ID") != nil {
+		c.Redirect(http.StatusTemporaryRedirect, "/")
+		return
+	}
+
+	c.HTML(http.StatusOK, "admin_login.tmpl", gin.H{
+		"activePage": "login",
+		"error":      c.Query("error"),
+	})
+}
+
+func postAdminLogin(c *gin.Context) {
+	session := sessions.Default(c)
+
+	if session.Get("ID") != nil {
+		c.Redirect(http.StatusTemporaryRedirect, "/")
+		return
+	}
+
+	username := c.PostForm("username")
+	password := c.PostForm("password")
+
+	// Check if admin credentials are configured
+	if adminUsername == "" || adminPassword == "" {
+		c.Redirect(http.StatusSeeOther, "/login/admin?error=Admin+login+not+configured")
+		return
+	}
+
+	// Verify credentials
+	if username != adminUsername || password != adminPassword {
+		c.Redirect(http.StatusSeeOther, "/login/admin?error=Invalid+credentials")
+		return
+	}
+
+	// Check if admin user exists, create if not
+	var user User
+	result := db.Where("username = ? AND is_admin = ?", adminUsername, true).First(&user)
+	if result.Error != nil {
+		// Create admin user
+		user = User{
+			Username: adminUsername,
+			IsAdmin:  true,
+		}
+		result = db.Create(&user)
+		if result.Error != nil {
+			c.Redirect(http.StatusSeeOther, "/login/admin?error=Failed+to+create+admin+user")
+			return
+		}
+	}
+
+	// Set session
+	session.Set("ID", user.ID)
+	session.Set("Username", user.Username)
+	session.Save()
+
+	c.Redirect(http.StatusSeeOther, "/")
+}

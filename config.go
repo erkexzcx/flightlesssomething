@@ -20,6 +20,9 @@ type Config struct {
 	OpenAIApiKey string
 	OpenAIModel  string
 
+	AdminUsername string
+	AdminPassword string
+
 	Version bool
 }
 
@@ -37,6 +40,9 @@ func NewConfig() (*Config, error) {
 	flag.StringVar(&config.OpenAIURL, "openai-url", "https://api.openai.com/v1", "OpenAI API URL")
 	flag.StringVar(&config.OpenAIModel, "openai-model", "gpt-4o", "OpenAI model ID")
 	flag.StringVar(&config.OpenAIApiKey, "openai-api-key", "", "OpenAI API Key (leave empty to disable OpenAI integration)")
+
+	flag.StringVar(&config.AdminUsername, "admin-username", "", "Admin username for testing login (optional)")
+	flag.StringVar(&config.AdminPassword, "admin-password", "", "Admin password for testing login (optional)")
 
 	flag.BoolVar(&config.Version, "version", false, "prints version of the application")
 
