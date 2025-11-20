@@ -26,3 +26,13 @@ go run cmd/flightlesssomething/main.go -data-dir data -discord-client-id xxxxxxx
 ```
 
 Then open in browser: http://127.0.0.1:8080/
+
+## Admin Login for Testing
+
+For testing purposes, you can enable a simple admin login that bypasses Discord OAuth:
+
+```bash
+go run cmd/flightlesssomething/main.go -data-dir data -discord-client-id xxxxxxxxxxxxxxxxxxx -discord-client-secret xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -discord-redirect-url 'http://127.0.0.1:8080/login/callback' -session-secret xxxxxxxxxxxxxxxxxxxxxxxx -openai-api-key xxxxxxxxxxxxxxxxxxxxxxxx -admin-username admin -admin-password your-secure-password
+```
+
+Then navigate to http://127.0.0.1:8080/login/admin or click the "Admin" link in the navigation bar.
