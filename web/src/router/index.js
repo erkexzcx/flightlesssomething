@@ -35,6 +35,12 @@ const routes = [
     component: BenchmarkDetail
   },
   {
+    path: '/benchmark/:id',
+    redirect: to => {
+      return { path: `/benchmarks/${to.params.id}` }
+    }
+  },
+  {
     path: '/login',
     name: 'login',
     component: Login
