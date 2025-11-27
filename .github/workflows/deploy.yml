@@ -64,33 +64,21 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
-          DOMAIN_SUFFIX: ${{ secrets.DOMAIN_SUFFIX }}
+          DOCKER_NETWORK: ${{ secrets.DOCKER_NETWORK }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_SECRET: ${{ secrets.DISCORD_SECRET }}
+          DISCORD_REDIRECT_URL: ${{ secrets.DISCORD_REDIRECT_URL }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
-          APP_DIR="fs-dev"
+          APP_DIR="flightlesssomething-dev"
           CONTAINER_NAME="flightlesssomething-dev"
-          DOMAIN="fs-dev${DOMAIN_SUFFIX}"
           IMAGE_TAG="${GITHUB_SHA}"
 
           # Create directory on remote server
           ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data"
-
-          # Copy data from prod if prod exists
-          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
-            if [ -d ~/fs-prod/data ] && [ \"\$(ls -A ~/fs-prod/data 2>/dev/null)\" ]; then
-              echo 'Copying data from prod to dev...'
-              rm -rf ~/${APP_DIR}/data/* 2>/dev/null || true
-              cp -r ~/fs-prod/data/* ~/${APP_DIR}/data/ 2>/dev/null || true
-              echo 'Data copied successfully'
-            else
-              echo 'No prod data to copy'
-            fi
-          "
 
           # Transfer Docker image
           scp -P ${SSH_PORT} image.tar.gz ${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/
@@ -110,7 +98,7 @@ jobs:
             # Start new container
             docker run -d \
               --name ${CONTAINER_NAME} \
-              --network docker_default \
+              --network ${DOCKER_NETWORK} \
               --restart unless-stopped \
               -v ~/${APP_DIR}/data:/data \
               -e FS_BIND=0.0.0.0:5000 \
@@ -118,7 +106,7 @@ jobs:
               -e FS_SESSION_SECRET=${SESSION_SECRET} \
               -e FS_DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID} \
               -e FS_DISCORD_CLIENT_SECRET=${DISCORD_SECRET} \
-              -e FS_DISCORD_REDIRECT_URL=https://${DOMAIN}/auth/login/callback \
+              -e FS_DISCORD_REDIRECT_URL=${DISCORD_REDIRECT_URL} \
               -e FS_ADMIN_USERNAME=${ADMIN_USERNAME} \
               -e FS_ADMIN_PASSWORD=${ADMIN_PASSWORD} \
               flightlesssomething:dev-latest
@@ -129,23 +117,3 @@ jobs:
             # Prune old images
             docker image prune -af --filter 'until=24h' || true
           "
-
-      - name: Wait for service to be ready
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-        run: |
-          CONTAINER_NAME="flightlesssomething-dev"
-
-          echo "Waiting for container to be ready..."
-          for i in {1..30}; do
-            if ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "docker exec ${CONTAINER_NAME} wget -q -O- http://localhost:5000/health" > /dev/null 2>&1; then
-              echo "Service is ready!"
-              exit 0
-            fi
-            echo "Attempt $i/30 - Service not ready yet..."
-            sleep 2
-          done
-          echo "Service failed to become ready"
-          exit 1
