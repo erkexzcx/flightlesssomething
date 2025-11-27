@@ -85,3 +85,25 @@ test.describe('API Endpoints', () => {
     expect(data.status).toBe('ok');
   });
 });
+
+test.describe('URL Redirects', () => {
+  test('old singular /benchmark/:id URL redirects to /benchmarks/:id', async ({ page }) => {
+    // Navigate to the old singular URL format
+    await page.goto('/benchmark/1923');
+    
+    // Wait for redirect to complete
+    await page.waitForLoadState('networkidle');
+    
+    // Check that we were redirected to the new plural URL
+    expect(page.url()).toContain('/benchmarks/1923');
+  });
+  
+  test('old singular /benchmark/:id with different ID redirects correctly', async ({ page }) => {
+    // Test with a different benchmark ID to ensure the parameter is preserved
+    await page.goto('/benchmark/42');
+    await page.waitForLoadState('networkidle');
+    
+    // Verify the ID parameter is correctly passed to the new URL
+    expect(page.url()).toContain('/benchmarks/42');
+  });
+});
