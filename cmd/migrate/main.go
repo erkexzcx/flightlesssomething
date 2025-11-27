@@ -174,14 +174,13 @@ func main() {
 	}
 	log.Printf("Found %d users to migrate", len(oldUsers))
 
-	userIDMap := make(map[uint]uint) // Map old user ID to new user ID
-
 	for _, oldUser := range oldUsers {
 		log.Printf("  Migrating user: %s (ID: %d, Discord: %s)", oldUser.Username, oldUser.ID, oldUser.DiscordID)
 
 		if !*dryRun {
 			newUser := NewUser{
 				Model: gorm.Model{
+					ID:        oldUser.ID, // Preserve original ID
 					CreatedAt: oldUser.CreatedAt,
 					UpdatedAt: oldUser.UpdatedAt,
 				},
@@ -193,8 +192,7 @@ func main() {
 			if err := newDB.Create(&newUser).Error; err != nil {
 				log.Fatalf("Failed to create user %s: %v", oldUser.Username, err)
 			}
-			userIDMap[oldUser.ID] = newUser.ID
-			log.Printf("    Created with new ID: %d", newUser.ID)
+			log.Printf("    Created with ID: %d", newUser.ID)
 		}
 	}
 
@@ -220,19 +218,26 @@ func main() {
 		}
 
 		if !*dryRun {
-			newUserID := userIDMap[oldBenchmark.UserID]
-			if newUserID == 0 {
-				log.Printf("    WARNING: User ID %d not found in mapping, skipping", oldBenchmark.UserID)
+			// Verify the user exists in the new database (since we preserve user IDs)
+			var userExists bool
+			if err := newDB.Model(&NewUser{}).Select("count(*) > 0").Where("id = ?", oldBenchmark.UserID).Find(&userExists).Error; err != nil {
+				log.Printf("    ERROR: Database error checking user ID %d: %v", oldBenchmark.UserID, err)
+				errorCount++
+				continue
+			}
+			if !userExists {
+				log.Printf("    WARNING: User ID %d not found in new database, skipping", oldBenchmark.UserID)
 				errorCount++
 				continue
 			}
 
 			newBenchmark := NewBenchmark{
 				Model: gorm.Model{
+					ID:        oldBenchmark.ID, // Preserve original ID
 					CreatedAt: oldBenchmark.CreatedAt,
 					UpdatedAt: oldBenchmark.UpdatedAt,
 				},
-				UserID:      newUserID,
+				UserID:      oldBenchmark.UserID, // Use original user ID (preserved)
 				Title:       oldBenchmark.Title,
 				Description: description,
 			}
@@ -242,9 +247,9 @@ func main() {
 				continue
 			}
 
-			// Copy benchmark data file
+			// Copy benchmark data file (using old ID since we preserve IDs)
 			oldDataFile := filepath.Join(oldBenchmarksDir, fmt.Sprintf("%d.bin", oldBenchmark.ID))
-			newDataFile := filepath.Join(*newDataDir, "benchmarks", fmt.Sprintf("%d.bin", newBenchmark.ID))
+			newDataFile := filepath.Join(*newDataDir, "benchmarks", fmt.Sprintf("%d.bin", oldBenchmark.ID))
 
 			if _, err := os.Stat(oldDataFile); os.IsNotExist(err) {
 				log.Printf("    WARNING: Data file not found: %s", oldDataFile)
@@ -268,13 +273,13 @@ func main() {
 			}
 
 			// Create metadata file for new system
-			if err := createMetadataFile(*newDataDir, newBenchmark.ID, benchmarkData); err != nil {
+			if err := createMetadataFile(*newDataDir, oldBenchmark.ID, benchmarkData); err != nil {
 				log.Printf("    ERROR: Failed to create metadata file: %v", err)
 				errorCount++
 				continue
 			}
 
-			log.Printf("    Successfully migrated (new ID: %d, %d runs)", newBenchmark.ID, len(benchmarkData))
+			log.Printf("    Successfully migrated (ID: %d, %d runs)", oldBenchmark.ID, len(benchmarkData))
 			successCount++
 		}
 	}
