@@ -182,6 +182,7 @@ func main() {
 		if !*dryRun {
 			newUser := NewUser{
 				Model: gorm.Model{
+					ID:        oldUser.ID, // Preserve original ID
 					CreatedAt: oldUser.CreatedAt,
 					UpdatedAt: oldUser.UpdatedAt,
 				},
@@ -229,6 +230,7 @@ func main() {
 
 			newBenchmark := NewBenchmark{
 				Model: gorm.Model{
+					ID:        oldBenchmark.ID, // Preserve original ID
 					CreatedAt: oldBenchmark.CreatedAt,
 					UpdatedAt: oldBenchmark.UpdatedAt,
 				},
@@ -242,9 +244,9 @@ func main() {
 				continue
 			}
 
-			// Copy benchmark data file
+			// Copy benchmark data file (using old ID since we preserve IDs)
 			oldDataFile := filepath.Join(oldBenchmarksDir, fmt.Sprintf("%d.bin", oldBenchmark.ID))
-			newDataFile := filepath.Join(*newDataDir, "benchmarks", fmt.Sprintf("%d.bin", newBenchmark.ID))
+			newDataFile := filepath.Join(*newDataDir, "benchmarks", fmt.Sprintf("%d.bin", oldBenchmark.ID))
 
 			if _, err := os.Stat(oldDataFile); os.IsNotExist(err) {
 				log.Printf("    WARNING: Data file not found: %s", oldDataFile)
