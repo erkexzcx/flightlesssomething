@@ -1,0 +1,151 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!main'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --load \
+            -t flightlesssomething:${{ github.sha }} .
+
+      - name: Move cache
+        run: |
+          if [ -d /tmp/.buildx-cache-new ]; then
+            rm -rf /tmp/.buildx-cache
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+            echo "Cache moved successfully"
+          else
+            echo "Warning: No new cache directory found, skipping cache move"
+          fi
+
+      - name: Save Docker image
+        run: |
+          docker save flightlesssomething:${{ github.sha }} | gzip > image.tar.gz
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to dev server
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DOMAIN_SUFFIX: ${{ secrets.DOMAIN_SUFFIX }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_SECRET: ${{ secrets.DISCORD_SECRET }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          APP_DIR="fs-dev"
+          CONTAINER_NAME="flightlesssomething-dev"
+          DOMAIN="fs-dev${DOMAIN_SUFFIX}"
+          IMAGE_TAG="${GITHUB_SHA}"
+
+          # Create directory on remote server
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data"
+
+          # Copy data from prod if prod exists
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
+            if [ -d ~/fs-prod/data ] && [ \"\$(ls -A ~/fs-prod/data 2>/dev/null)\" ]; then
+              echo 'Copying data from prod to dev...'
+              rm -rf ~/${APP_DIR}/data/* 2>/dev/null || true
+              cp -r ~/fs-prod/data/* ~/${APP_DIR}/data/ 2>/dev/null || true
+              echo 'Data copied successfully'
+            else
+              echo 'No prod data to copy'
+            fi
+          "
+
+          # Transfer Docker image
+          scp -P ${SSH_PORT} image.tar.gz ${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/
+
+          # Deploy on remote server
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
+            cd ~/${APP_DIR}
+            
+            # Load Docker image
+            docker load < image.tar.gz
+            docker tag flightlesssomething:${IMAGE_TAG} flightlesssomething:dev-latest
+            
+            # Stop and remove old container
+            docker stop ${CONTAINER_NAME} || true
+            docker rm ${CONTAINER_NAME} || true
+            
+            # Start new container
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              --network docker_default \
+              --restart unless-stopped \
+              -v ~/${APP_DIR}/data:/data \
+              -e FS_BIND=0.0.0.0:5000 \
+              -e FS_DATA_DIR=/data \
+              -e FS_SESSION_SECRET=${SESSION_SECRET} \
+              -e FS_DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID} \
+              -e FS_DISCORD_CLIENT_SECRET=${DISCORD_SECRET} \
+              -e FS_DISCORD_REDIRECT_URL=https://${DOMAIN}/auth/login/callback \
+              -e FS_ADMIN_USERNAME=${ADMIN_USERNAME} \
+              -e FS_ADMIN_PASSWORD=${ADMIN_PASSWORD} \
+              flightlesssomething:dev-latest
+            
+            # Cleanup
+            rm -f image.tar.gz
+            
+            # Prune old images
+            docker image prune -af --filter 'until=24h' || true
+          "
+
+      - name: Wait for service to be ready
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          CONTAINER_NAME="flightlesssomething-dev"
+
+          echo "Waiting for container to be ready..."
+          for i in {1..30}; do
+            if ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "docker exec ${CONTAINER_NAME} wget -q -O- http://localhost:5000/health" > /dev/null 2>&1; then
+              echo "Service is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 - Service not ready yet..."
+            sleep 2
+          done
+          echo "Service failed to become ready"
+          exit 1

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  flightlesssomething:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+    environment:
+      - FS_BIND=0.0.0.0:5000
+      - FS_DATA_DIR=/data
+      - FS_SESSION_SECRET=${SESSION_SECRET}
+      - FS_DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - FS_DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - FS_DISCORD_REDIRECT_URL=${DISCORD_REDIRECT_URL}
+      - FS_ADMIN_USERNAME=${ADMIN_USERNAME}
+      - FS_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    restart: unless-stopped

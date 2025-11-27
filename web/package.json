@@ -1,0 +1,34 @@
+{
+  "name": "flightlesssomething-web",
+  "version": "1.0.0",
+  "description": "FlightlessSomething Web UI",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:unit": "node tests/dateFormatter.test.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.19",
+    "dompurify": "^3.3.0",
+    "highcharts": "^11.4.8",
+    "marked": "^17.0.1",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.49.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-vue": "^10.6.1",
+    "vite": "^6.0.7"
+  }
+}
