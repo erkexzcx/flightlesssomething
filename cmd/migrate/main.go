@@ -220,7 +220,12 @@ func main() {
 		if !*dryRun {
 			// Verify the user exists in the new database (since we preserve user IDs)
 			var userExists bool
-			if err := newDB.Model(&NewUser{}).Select("count(*) > 0").Where("id = ?", oldBenchmark.UserID).Find(&userExists).Error; err != nil || !userExists {
+			if err := newDB.Model(&NewUser{}).Select("count(*) > 0").Where("id = ?", oldBenchmark.UserID).Find(&userExists).Error; err != nil {
+				log.Printf("    ERROR: Database error checking user ID %d: %v", oldBenchmark.UserID, err)
+				errorCount++
+				continue
+			}
+			if !userExists {
 				log.Printf("    WARNING: User ID %d not found in new database, skipping", oldBenchmark.UserID)
 				errorCount++
 				continue
