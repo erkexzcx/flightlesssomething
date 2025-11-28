@@ -35,16 +35,21 @@
           </p>
         </div>
         
-        <!-- Action buttons for owner -->
-        <div v-if="isOwner" class="btn-group" role="group">
-          <button
-            type="button"
-            class="btn btn-outline-primary"
-            @click="toggleEditMode"
-            :disabled="deleting"
-          >
-            <i class="fa-solid fa-edit"></i> {{ editMode ? 'Cancel' : 'Edit' }}
-          </button>
+        <!-- Action buttons -->
+        <div class="btn-group" role="group">
+          <!-- Owner-only buttons -->
+          <template v-if="isOwner">
+            <button
+              type="button"
+              class="btn btn-outline-primary"
+              @click="toggleEditMode"
+              :disabled="deleting"
+            >
+              <i class="fa-solid fa-edit"></i> {{ editMode ? 'Cancel' : 'Edit' }}
+            </button>
+          </template>
+          
+          <!-- Download button - available for everyone -->
           <button
             type="button"
             class="btn btn-outline-success"
@@ -53,14 +58,18 @@
           >
             <i class="fa-solid fa-download"></i> Download
           </button>
-          <button
-            type="button"
-            class="btn btn-outline-danger"
-            @click="confirmDelete"
-            :disabled="deleting"
-          >
-            <i class="fa-solid fa-trash"></i> {{ deleting ? 'Deleting...' : 'Delete' }}
-          </button>
+          
+          <!-- Owner-only delete button -->
+          <template v-if="isOwner">
+            <button
+              type="button"
+              class="btn btn-outline-danger"
+              @click="confirmDelete"
+              :disabled="deleting"
+            >
+              <i class="fa-solid fa-trash"></i> {{ deleting ? 'Deleting...' : 'Delete' }}
+            </button>
+          </template>
         </div>
       </div>
 
