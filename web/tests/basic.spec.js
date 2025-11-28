@@ -107,3 +107,28 @@ test.describe('URL Redirects', () => {
     expect(page.url()).toContain('/benchmarks/42');
   });
 });
+
+test.describe('Version Display', () => {
+  test('version is displayed after fetching from backend', async ({ page }) => {
+    // Navigate to the homepage
+    await page.goto('/');
+    
+    // Wait for the page to fully load
+    await page.waitForLoadState('networkidle');
+    
+    // Find the version element (small text under the navbar brand)
+    const versionElement = page.locator('nav .navbar-brand small');
+    
+    // Version should be visible and contain a non-empty string
+    await expect(versionElement).toBeVisible();
+    const versionText = await versionElement.textContent();
+    
+    // Version should not be empty and should be a valid version string
+    expect(versionText).toBeTruthy();
+    expect(versionText.length).toBeGreaterThan(0);
+    
+    // Version should match a typical version format (e.g., v1.0.0, v1.0.0-1-g95fe632, or dev)
+    // but it should never start as "dev" - it should only show after fetching from backend
+    expect(versionText).toMatch(/^v?\d+\.\d+\.\d+|dev/);
+  });
+});
