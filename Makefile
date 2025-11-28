@@ -26,8 +26,9 @@ build-server: build-web
 	@echo 'func init() {' >> internal/app/webfs_embed.go
 	@echo '	WebFS = webFSEmbed' >> internal/app/webfs_embed.go
 	@echo '}' >> internal/app/webfs_embed.go
-	@# Build the server
-	go build -o server ./cmd/server
+	@# Build the server with version from git
+	@VERSION=$$(git describe --tags --always 2>/dev/null || echo "dev"); \
+	go build -ldflags="-X main.version=$$VERSION" -o server ./cmd/server
 	@# Clean up copied files
 	@rm -rf internal/app/web internal/app/webfs_embed.go
 
