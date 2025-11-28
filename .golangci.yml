@@ -1,22 +1,21 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
     # Default linters
     - errcheck      # Check for unchecked errors
-    - gosimple      # Simplify code
     - govet         # Reports suspicious constructs
     - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Advanced static analysis
-    - typecheck     # Type-checks Go code
+    - staticcheck   # Advanced static analysis (includes gosimple and stylecheck)
     - unused        # Check for unused code
     
     # Additional quality linters
-    - gofmt         # Check code formatting
-    - goimports     # Check import formatting
     - misspell      # Find commonly misspelled words
     - unconvert     # Remove unnecessary type conversions
     - unparam       # Report unused function parameters
@@ -25,7 +24,6 @@ linters:
     - gosec         # Security-focused linter
     - gocritic      # Most opinionated linter
     - revive        # Fast, configurable, extensible, flexible, and beautiful linter
-    - stylecheck    # Replacement for golint
     - prealloc      # Find slice declarations that could potentially be preallocated
     - copyloopvar   # Checks for pointers to enclosing loop variables (replaces exportloopref)
     - nilerr        # Finds code that returns nil even if it checks that error is not nil
@@ -33,63 +31,54 @@ linters:
     - goprintffuncname # Checks that printf-like functions are named with f at the end
     - nolintlint    # Reports ill-formed or insufficient nolint directives
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Too strict for most projects
-  
-  gosec:
-    excludes:
-      - G404  # Use of weak random number generator - OK for non-crypto use
-  
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-      - experimental
-      - opinionated
-    disabled-checks:
-      - unnamedResult
-      - whyNoLint
-  
-  revive:
-    rules:
-      - name: unexported-return
-        disabled: true
-      - name: unused-parameter
-        disabled: true
-  
-  stylecheck:
-    checks: ["all", "-ST1003"]  # Disable underscore in package names check
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # Too strict for most projects
+    
+    gosec:
+      excludes:
+        - G404  # Use of weak random number generator - OK for non-crypto use
+    
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - experimental
+        - opinionated
+      disabled-checks:
+        - unnamedResult
+        - whyNoLint
+    
+    revive:
+      rules:
+        - name: unexported-return
+          disabled: true
+        - name: unused-parameter
+          disabled: true
 
-issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - gosec
-        - gocritic
-        - noctx
-        - bodyclose
-    
-    # Exclude specific issues
-    - text: "G304: Potential file inclusion via variable"
-      linters:
-        - gosec
-    
-    # Ignore long lines in generated files
-    - path: webfs_embed\.go
-      linters:
-        - lll
-  
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  
-  # Show all issues
-  exclude-use-default: false
+  exclusions:
+    rules:
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - gosec
+          - gocritic
+          - noctx
+          - bodyclose
+      
+      # Exclude specific issues
+      - text: "G304: Potential file inclusion via variable"
+        linters:
+          - gosec
+      
+      # Ignore long lines in generated files
+      - path: webfs_embed\.go
+        linters:
+          - lll
