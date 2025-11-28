@@ -151,7 +151,7 @@ For the complete security analysis including:
 - Middleware analysis
 - Code references and line numbers
 
-See: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md)
+See: [`security_audit.md`](./security_audit.md)
 
 ---
 
