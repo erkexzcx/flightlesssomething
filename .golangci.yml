@@ -1,3 +1,5 @@
+version: 2
+
 run:
   timeout: 5m
   tests: true
@@ -7,16 +9,12 @@ linters:
   enable:
     # Default linters
     - errcheck      # Check for unchecked errors
-    - gosimple      # Simplify code
     - govet         # Reports suspicious constructs
     - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Advanced static analysis
-    - typecheck     # Type-checks Go code
+    - staticcheck   # Advanced static analysis (includes gosimple and stylecheck)
     - unused        # Check for unused code
     
     # Additional quality linters
-    - gofmt         # Check code formatting
-    - goimports     # Check import formatting
     - misspell      # Find commonly misspelled words
     - unconvert     # Remove unnecessary type conversions
     - unparam       # Report unused function parameters
@@ -25,7 +23,6 @@ linters:
     - gosec         # Security-focused linter
     - gocritic      # Most opinionated linter
     - revive        # Fast, configurable, extensible, flexible, and beautiful linter
-    - stylecheck    # Replacement for golint
     - prealloc      # Find slice declarations that could potentially be preallocated
     - copyloopvar   # Checks for pointers to enclosing loop variables (replaces exportloopref)
     - nilerr        # Finds code that returns nil even if it checks that error is not nil
@@ -64,9 +61,6 @@ linters-settings:
         disabled: true
       - name: unused-parameter
         disabled: true
-  
-  stylecheck:
-    checks: ["all", "-ST1003"]  # Disable underscore in package names check
 
 issues:
   exclude-rules:
