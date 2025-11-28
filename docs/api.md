@@ -10,10 +10,7 @@ http://your-server:5000
 
 ## Authentication
 
-The API supports two authentication methods:
-
-### API Tokens (Recommended for Programmatic Access)
-API tokens are the recommended way to authenticate programmatically. They provide secure, revocable access without exposing credentials.
+The API uses API tokens for programmatic access. API tokens provide secure, revocable access without exposing credentials.
 
 **Token Format**: Include token in `Authorization` header as `Bearer <token>`
 
@@ -22,6 +19,12 @@ curl http://localhost:5000/api/benchmarks \
   -H "Authorization: Bearer your_api_token_here"
 ```
 
+**Token Management**:
+1. Log in to the web interface (Discord OAuth or admin credentials)
+2. Navigate to API Tokens page
+3. Create a new token with a descriptive name
+4. Copy the token immediately - you can reveal it later by clicking the eye icon
+
 **Benefits**:
 - Designed for automated tools and scripts
 - Can be revoked individually without affecting other tokens
@@ -29,20 +32,17 @@ curl http://localhost:5000/api/benchmarks \
 - Set descriptive names for organization
 - Maximum 10 tokens per user
 
-See [API Token Management](#api-token-management) for creating and managing tokens.
+---
 
-### Session Authentication (Web UI)
-Users authenticate via Discord OAuth flow for web interface access. Sessions are stored in cookies.
+## User Endpoints
 
-Admin users can also use username/password authentication for web access.
-
-## Endpoints
+These endpoints are available for all authenticated users.
 
 ### Health Check
 
 **GET** `/health`
 
-Check server status.
+Check server status (no authentication required).
 
 ```bash
 curl http://localhost:5000/health
@@ -55,28 +55,11 @@ Response:
 
 ---
 
-### Authentication
-
-**GET** `/auth/login` - Initiate Discord OAuth login
-
-**GET** `/auth/login/callback` - Discord OAuth callback
-
-**POST** `/auth/admin/login` - Admin login
-
-Request:
-```json
-{"username": "admin", "password": "password"}
-```
-
-**POST** `/auth/logout` - Logout current user
-
----
-
 ### List Benchmarks
 
 **GET** `/api/benchmarks`
 
-List all benchmarks with pagination and search.
+List all benchmarks with pagination and search (no authentication required).
 
 Query parameters:
 - `page` (integer) - Page number (default: 1)
@@ -120,7 +103,7 @@ Response:
 
 **GET** `/api/benchmarks/:id`
 
-Get benchmark details.
+Get benchmark details (no authentication required).
 
 Example:
 ```bash
@@ -133,7 +116,7 @@ curl http://localhost:5000/api/benchmarks/1
 
 **GET** `/api/benchmarks/:id/data`
 
-Download benchmark data (compressed binary).
+Download benchmark data (compressed binary, no authentication required).
 
 Example:
 ```bash
@@ -146,7 +129,7 @@ curl http://localhost:5000/api/benchmarks/1/data -o benchmark.dat
 
 **GET** `/api/benchmarks/:id/download`
 
-Download benchmark as ZIP with CSV files (MangoHud format).
+Download benchmark as ZIP with CSV files in MangoHud format (no authentication required).
 
 Example:
 ```bash
@@ -159,7 +142,7 @@ curl http://localhost:5000/api/benchmarks/1/download -o benchmark.zip
 
 **POST** `/api/benchmarks`
 
-**Authentication required** - See [API Token Management](#api-token-management) for creating tokens.
+**Authentication required** - Use API token.
 
 Upload benchmark with CSV/HML files.
 
@@ -182,13 +165,15 @@ Supported formats:
 - MangoHud CSV
 - MSI Afterburner HML
 
+**Rate Limiting**: 5 uploads per 10 minutes per user (admins exempt)
+
 ---
 
 ### Update Benchmark
 
 **PUT** `/api/benchmarks/:id`
 
-**Authentication required** (owner or admin) - See [API Token Management](#api-token-management) for creating tokens.
+**Authentication required** - Use API token. Only owner or admin can update.
 
 Update benchmark metadata and run labels.
 
@@ -218,7 +203,7 @@ curl -X PUT http://localhost:5000/api/benchmarks/1 \
 
 **DELETE** `/api/benchmarks/:id`
 
-**Authentication required** (owner or admin) - See [API Token Management](#api-token-management) for creating tokens.
+**Authentication required** - Use API token. Only owner or admin can delete.
 
 Delete benchmark and all associated data.
 
@@ -230,13 +215,59 @@ curl -X DELETE http://localhost:5000/api/benchmarks/1 \
 
 ---
 
-### List Users (Admin)
+### Delete Benchmark Run
+
+**DELETE** `/api/benchmarks/:id/runs/:run_index`
+
+**Authentication required** - Use API token. Only owner or admin can delete.
+
+Delete a specific run from a benchmark. Cannot delete the last remaining run.
+
+Example:
+```bash
+curl -X DELETE http://localhost:5000/api/benchmarks/1/runs/0 \
+  -H "Authorization: Bearer your_api_token_here"
+```
+
+---
+
+### Add Benchmark Runs
+
+**POST** `/api/benchmarks/:id/runs`
+
+**Authentication required** - Use API token. Only owner or admin can add runs.
+
+Add new runs to an existing benchmark.
+
+Request: `multipart/form-data`
+- `files` (file[], required) - Benchmark CSV/HML files
+
+Example:
+```bash
+curl -X POST http://localhost:5000/api/benchmarks/1/runs \
+  -H "Authorization: Bearer your_api_token_here" \
+  -F "files=@benchmark3.csv" \
+  -F "files=@benchmark4.csv"
+```
+
+---
+
+## Admin Endpoints
+
+These endpoints are restricted to admin users only.
+
+### List Users
 
 **GET** `/api/admin/users`
 
-**Admin authentication required** - See [API Token Management](#api-token-management) for creating tokens.
+**Admin authentication required** - Use admin API token.
 
-List all registered users.
+List all registered users with statistics.
+
+Query parameters:
+- `page` (integer) - Page number (default: 1)
+- `per_page` (integer) - Results per page (default: 10, max: 100)
+- `search` (string) - Search in username
 
 Example:
 ```bash
@@ -246,11 +277,11 @@ curl http://localhost:5000/api/admin/users \
 
 ---
 
-### Delete User (Admin)
+### Delete User
 
 **DELETE** `/api/admin/users/:id`
 
-**Admin authentication required** - See [API Token Management](#api-token-management) for creating tokens.
+**Admin authentication required** - Use admin API token.
 
 Delete user and optionally their benchmarks.
 
@@ -270,95 +301,105 @@ curl -X DELETE "http://localhost:5000/api/admin/users/1?delete_data=true" \
 
 ---
 
-## API Token Management
+### Delete User's Benchmarks
 
-API tokens provide secure, programmatic access to the API. Tokens must be created through the web interface after authenticating.
+**DELETE** `/api/admin/users/:id/benchmarks`
 
-### List API Tokens
+**Admin authentication required** - Use admin API token.
 
-**GET** `/api/tokens`
-
-**Authentication required** (session-based)
-
-List all API tokens for the current user.
+Delete all benchmarks for a specific user.
 
 Example:
 ```bash
-# Must be authenticated via web session
-curl http://localhost:5000/api/tokens -b cookies.txt
-```
-
-Response:
-```json
-[
-  {
-    "id": 1,
-    "name": "CI/CD Pipeline",
-    "token": "abcdef1234567890...",
-    "created_at": "2025-11-20T10:00:00Z",
-    "last_used_at": "2025-11-27T08:30:00Z"
-  }
-]
+curl -X DELETE http://localhost:5000/api/admin/users/1/benchmarks \
+  -H "Authorization: Bearer your_admin_api_token_here"
 ```
 
 ---
 
-### Create API Token
+### Ban/Unban User
 
-**POST** `/api/tokens`
+**PUT** `/api/admin/users/:id/ban`
 
-**Authentication required** (session-based)
+**Admin authentication required** - Use admin API token.
 
-Create a new API token. Maximum 10 tokens per user.
+Ban or unban a user. Banned users cannot log in or create/modify content.
 
 Request:
 ```json
 {
-  "name": "Automation Script"
+  "banned": true
 }
 ```
 
 Example:
 ```bash
-# Must be authenticated via web session
-curl -X POST http://localhost:5000/api/tokens \
-  -b cookies.txt \
+# Ban user
+curl -X PUT http://localhost:5000/api/admin/users/1/ban \
+  -H "Authorization: Bearer your_admin_api_token_here" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Automation Script"}'
-```
+  -d '{"banned":true}'
 
-Response:
-```json
-{
-  "id": 1,
-  "name": "Automation Script",
-  "token": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "created_at": "2025-11-27T08:35:00Z",
-  "last_used_at": null
-}
+# Unban user
+curl -X PUT http://localhost:5000/api/admin/users/1/ban \
+  -H "Authorization: Bearer your_admin_api_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"banned":false}'
 ```
-
-**Important**: Save the token value immediately. It cannot be retrieved later. The token shown above is an example placeholder only.
 
 ---
 
-### Delete API Token
+### Grant/Revoke Admin
 
-**DELETE** `/api/tokens/:id`
+**PUT** `/api/admin/users/:id/admin`
 
-**Authentication required** (session-based)
+**Admin authentication required** - Use admin API token.
 
-Delete an API token. This immediately revokes access for that token.
+Grant or revoke admin privileges for a user.
+
+Request:
+```json
+{
+  "is_admin": true
+}
+```
 
 Example:
 ```bash
-# Must be authenticated via web session
-curl -X DELETE http://localhost:5000/api/tokens/1 -b cookies.txt
+# Grant admin privileges
+curl -X PUT http://localhost:5000/api/admin/users/1/admin \
+  -H "Authorization: Bearer your_admin_api_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"is_admin":true}'
+
+# Revoke admin privileges
+curl -X PUT http://localhost:5000/api/admin/users/1/admin \
+  -H "Authorization: Bearer your_admin_api_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"is_admin":false}'
 ```
 
-Response:
-```json
-{"message": "token deleted"}
+---
+
+### View Audit Logs
+
+**GET** `/api/admin/logs`
+
+**Admin authentication required** - Use admin API token.
+
+View audit logs for admin actions.
+
+Query parameters:
+- `page` (integer) - Page number (default: 1)
+- `per_page` (integer) - Results per page (default: 50, max: 100)
+- `user_id` (integer) - Filter by user ID
+- `action` (string) - Filter by action type
+- `target_type` (string) - Filter by target type
+
+Example:
+```bash
+curl http://localhost:5000/api/admin/logs \
+  -H "Authorization: Bearer your_admin_api_token_here"
 ```
 
 ---
@@ -368,6 +409,7 @@ Response:
 ### Benchmark Uploads
 - **Limit**: 5 uploads per 10 minutes per user
 - **Response**: HTTP 429 with `retry_after_secs`
+- **Admin Exemption**: Admins are exempt from rate limiting
 
 ### Admin Login
 - **Limit**: 3 failed attempts in 10 minutes (global)
@@ -395,12 +437,10 @@ HTTP status codes:
 
 ## Complete Workflow Example
 
-### Using API Tokens (Recommended)
-
 ```bash
 # 1. Create API token via web interface first
 # - Login to web UI (Discord OAuth or admin login)
-# - Navigate to Settings/Profile
+# - Navigate to API Tokens page
 # - Create a new API token and copy it
 
 # 2. Upload benchmark
@@ -424,25 +464,4 @@ curl -X PUT http://localhost:5000/api/benchmarks/1 \
 # 6. Delete benchmark
 curl -X DELETE http://localhost:5000/api/benchmarks/1 \
   -H "Authorization: Bearer your_api_token_here"
-```
-
-### Using Session Authentication (Web UI)
-
-For interactive web UI usage, session cookies are used automatically:
-
-```bash
-# 1. Admin login
-curl -X POST http://localhost:5000/auth/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin"}' \
-  -c cookies.txt
-
-# 2. Create API token for programmatic access
-curl -X POST http://localhost:5000/api/tokens \
-  -b cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Automation Script"}'
-
-# 3. Logout
-curl -X POST http://localhost:5000/auth/logout -b cookies.txt
 ```

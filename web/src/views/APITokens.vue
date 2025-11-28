@@ -2,14 +2,9 @@
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h2>API Tokens</h2>
-      <div>
-        <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/api.md#api-token-management" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary me-2">
-          <i class="fa-solid fa-book"></i> API Docs
-        </a>
-        <button class="btn btn-primary" @click="showCreateModal = true" :disabled="tokens.length >= 10">
-          <i class="fa-solid fa-plus"></i> Create Token
-        </button>
-      </div>
+      <button class="btn btn-primary" @click="showCreateModal = true" :disabled="tokens.length >= 10">
+        <i class="fa-solid fa-plus"></i> Create Token
+      </button>
     </div>
 
     <div v-if="tokens.length >= 10" class="alert alert-warning" role="alert">
@@ -30,7 +25,7 @@
       <i class="fa-solid fa-key fa-3x mb-3"></i>
       <p>No API tokens yet. Create one to get started with automated benchmark uploads.</p>
       <p>
-        <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/api.md#api-token-management" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/api.md" target="_blank" rel="noopener noreferrer">
           <i class="fa-solid fa-book"></i> View API Documentation
         </a>
       </p>
