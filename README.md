@@ -4,10 +4,15 @@
 
 A web application for storing and managing gaming benchmark data with Discord OAuth authentication and a modern Vue.js interface.
 
+## Live Environments
+
+- **Main**: [flightlesssomething.ambrosia.one](https://flightlesssomething.ambrosia.one/) - The main instance for general use
+- **Development**: [flightlesssomething-dev.ambrosia.one](https://flightlesssomething-dev.ambrosia.one/) - Development and testing environment for experimenting with features, scripts, and automations
+
 ## Tech Stack
 
 ### Backend
-- **Go 1.24** - Programming language
+- **Go** - Programming language
 - **Gin** - HTTP web framework
 - **GORM** - Database ORM
 - **SQLite** - Database
@@ -15,19 +20,19 @@ A web application for storing and managing gaming benchmark data with Discord OA
 - **zstd** - Data compression
 
 ### Frontend
-- **Vue.js 3** - JavaScript framework
+- **Vue.js** - JavaScript framework
 - **Vite** - Build tool
 - **Vue Router** - Client-side routing
 - **Pinia** - State management
-- **Bootstrap 5** - CSS framework
+- **Bootstrap** - CSS framework
 - **Highcharts** - Data visualization
 - **dayjs** - Date formatting
 
 ## Quick Start
 
 ### Prerequisites
-- Go 1.21 or higher
-- Node.js 18 or higher
+- Go (recent version)
+- Node.js (recent version)
 
 ### Build & Run
 
