@@ -57,7 +57,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          ssh-keyscan -p "${SSH_PORT:-22}" ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to dev server
         env:
