@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { api } from '../api/client'
 
 export const useAppStore = defineStore('app', () => {
-  const version = ref('dev')
+  const version = ref('')
   const loading = ref(false)
 
   // Fetch version from backend
@@ -16,7 +16,7 @@ export const useAppStore = defineStore('app', () => {
       }
     } catch (err) {
       console.error('Failed to fetch version:', err)
-      // Keep default 'dev' version on error
+      // Keep version empty on error
     } finally {
       loading.value = false
     }
