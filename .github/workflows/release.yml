@@ -49,16 +49,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}
-
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: build
     environment: prod
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -73,67 +72,20 @@ jobs:
           docker tag ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }} flightlesssomething:prod-release
           docker save flightlesssomething:prod-release | gzip > image.tar.gz
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
       - name: Deploy to prod server
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          DOCKER_NETWORK: ${{ secrets.DOCKER_NETWORK }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-          DISCORD_SECRET: ${{ secrets.DISCORD_SECRET }}
-          DISCORD_REDIRECT_URL: ${{ secrets.DISCORD_REDIRECT_URL }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          APP_DIR="flightlesssomething-prod"
-          CONTAINER_NAME="flightlesssomething-prod"
-
-          # Create directory on remote server
-          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data"
-
-          # Transfer Docker image
-          scp -P ${SSH_PORT} image.tar.gz ${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/
-
-          # Deploy on remote server
-          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
-            cd ~/${APP_DIR}
-            
-            # Load Docker image
-            docker load < image.tar.gz
-            docker tag flightlesssomething:prod-release flightlesssomething:prod-latest
-            
-            # Stop and remove old container
-            docker stop ${CONTAINER_NAME} || true
-            docker rm ${CONTAINER_NAME} || true
-            
-            # Start new container
-            docker run -d \
-              --name ${CONTAINER_NAME} \
-              --network ${DOCKER_NETWORK} \
-              --restart unless-stopped \
-              -v ~/${APP_DIR}/data:/data \
-              -e FS_BIND=0.0.0.0:5000 \
-              -e FS_DATA_DIR=/data \
-              -e FS_SESSION_SECRET=${SESSION_SECRET} \
-              -e FS_DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID} \
-              -e FS_DISCORD_CLIENT_SECRET=${DISCORD_SECRET} \
-              -e FS_DISCORD_REDIRECT_URL=${DISCORD_REDIRECT_URL} \
-              -e FS_ADMIN_USERNAME=${ADMIN_USERNAME} \
-              -e FS_ADMIN_PASSWORD=${ADMIN_PASSWORD} \
-              flightlesssomething:prod-latest
-            
-            # Cleanup
-            rm -f image.tar.gz
-            
-            # Prune old images
-            docker image prune -af --filter 'until=24h' || true
-          "
+        uses: ./.github/actions/deploy-via-ssh
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-user: ${{ secrets.SSH_USER }}
+          ssh-host: ${{ secrets.SSH_HOST }}
+          ssh-port: ${{ secrets.SSH_PORT }}
+          docker-network: ${{ secrets.DOCKER_NETWORK }}
+          session-secret: ${{ secrets.SESSION_SECRET }}
+          discord-client-id: ${{ secrets.DISCORD_CLIENT_ID }}
+          discord-secret: ${{ secrets.DISCORD_SECRET }}
+          discord-redirect-url: ${{ secrets.DISCORD_REDIRECT_URL }}
+          admin-username: ${{ secrets.ADMIN_USERNAME }}
+          admin-password: ${{ secrets.ADMIN_PASSWORD }}
+          environment: prod
+          image-tag: prod-release
+          image-archive: image.tar.gz
