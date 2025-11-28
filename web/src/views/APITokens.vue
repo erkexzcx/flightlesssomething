@@ -25,7 +25,7 @@
       <i class="fa-solid fa-key fa-3x mb-3"></i>
       <p>No API tokens yet. Create one to get started with automated benchmark uploads.</p>
       <p>
-        <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/api.md#api-token-management" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/api.md" target="_blank" rel="noopener noreferrer">
           <i class="fa-solid fa-book"></i> View API Documentation
         </a>
       </p>
