@@ -170,8 +170,8 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, er
 				kilobytes := new(big.Int)
 				_, ok := kilobytes.SetString(strings.TrimSpace(v), 10)
 				if ok {
-					bytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
-					benchmarkData.SpecRAM = humanize.Bytes(bytes.Uint64())
+					ramBytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
+					benchmarkData.SpecRAM = humanize.Bytes(ramBytes.Uint64())
 				} else {
 					benchmarkData.SpecRAM = truncateString(strings.TrimSpace(v))
 				}
