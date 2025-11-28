@@ -1,0 +1,117 @@
+name: 'Deploy via SSH'
+description: 'Reusable action to deploy Docker image via SSH'
+inputs:
+  ssh-private-key:
+    description: 'SSH private key'
+    required: true
+  ssh-user:
+    description: 'SSH user'
+    required: true
+  ssh-host:
+    description: 'SSH host'
+    required: true
+  ssh-port:
+    description: 'SSH port'
+    required: true
+  docker-network:
+    description: 'Docker network name'
+    required: true
+  session-secret:
+    description: 'Session secret'
+    required: true
+  discord-client-id:
+    description: 'Discord client ID'
+    required: true
+  discord-secret:
+    description: 'Discord client secret'
+    required: true
+  discord-redirect-url:
+    description: 'Discord redirect URL'
+    required: true
+  admin-username:
+    description: 'Admin username'
+    required: true
+  admin-password:
+    description: 'Admin password'
+    required: true
+  environment:
+    description: 'Environment name (dev/prod)'
+    required: true
+  image-tag:
+    description: 'Docker image tag to deploy'
+    required: true
+  image-archive:
+    description: 'Path to Docker image archive file'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup SSH key
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh-private-key }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -p ${{ inputs.ssh-port }} ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts
+
+    - name: Deploy to server
+      shell: bash
+      env:
+        SSH_USER: ${{ inputs.ssh-user }}
+        SSH_HOST: ${{ inputs.ssh-host }}
+        SSH_PORT: ${{ inputs.ssh-port }}
+        DOCKER_NETWORK: ${{ inputs.docker-network }}
+        SESSION_SECRET: ${{ inputs.session-secret }}
+        DISCORD_CLIENT_ID: ${{ inputs.discord-client-id }}
+        DISCORD_SECRET: ${{ inputs.discord-secret }}
+        DISCORD_REDIRECT_URL: ${{ inputs.discord-redirect-url }}
+        ADMIN_USERNAME: ${{ inputs.admin-username }}
+        ADMIN_PASSWORD: ${{ inputs.admin-password }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        IMAGE_ARCHIVE: ${{ inputs.image-archive }}
+      run: |
+        APP_DIR="flightlesssomething-${ENVIRONMENT}"
+        CONTAINER_NAME="flightlesssomething-${ENVIRONMENT}"
+
+        # Create directory on remote server
+        ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data"
+
+        # Transfer Docker image
+        scp -P ${SSH_PORT} ${IMAGE_ARCHIVE} ${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/
+
+        # Deploy on remote server
+        ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
+          cd ~/${APP_DIR}
+          
+          # Load Docker image
+          docker load < $(basename ${IMAGE_ARCHIVE})
+          docker tag flightlesssomething:${IMAGE_TAG} flightlesssomething:${ENVIRONMENT}-latest
+          
+          # Stop and remove old container
+          docker stop ${CONTAINER_NAME} || true
+          docker rm ${CONTAINER_NAME} || true
+          
+          # Start new container
+          docker run -d \
+            --name ${CONTAINER_NAME} \
+            --network ${DOCKER_NETWORK} \
+            --restart unless-stopped \
+            -v ~/${APP_DIR}/data:/data \
+            -e FS_BIND=0.0.0.0:5000 \
+            -e FS_DATA_DIR=/data \
+            -e FS_SESSION_SECRET=${SESSION_SECRET} \
+            -e FS_DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID} \
+            -e FS_DISCORD_CLIENT_SECRET=${DISCORD_SECRET} \
+            -e FS_DISCORD_REDIRECT_URL=${DISCORD_REDIRECT_URL} \
+            -e FS_ADMIN_USERNAME=${ADMIN_USERNAME} \
+            -e FS_ADMIN_PASSWORD=${ADMIN_PASSWORD} \
+            flightlesssomething:${ENVIRONMENT}-latest
+          
+          # Cleanup
+          rm -f $(basename ${IMAGE_ARCHIVE})
+          
+          # Prune old images
+          docker image prune -af --filter 'until=24h' || true
+        "
