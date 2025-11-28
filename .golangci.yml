@@ -1,4 +1,4 @@
-version: 2
+version: "2"
 
 run:
   timeout: 5m
@@ -6,6 +6,7 @@ run:
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
     # Default linters
     - errcheck      # Check for unchecked errors
@@ -30,60 +31,54 @@ linters:
     - goprintffuncname # Checks that printf-like functions are named with f at the end
     - nolintlint    # Reports ill-formed or insufficient nolint directives
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Too strict for most projects
-  
-  gosec:
-    excludes:
-      - G404  # Use of weak random number generator - OK for non-crypto use
-  
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-      - experimental
-      - opinionated
-    disabled-checks:
-      - unnamedResult
-      - whyNoLint
-  
-  revive:
-    rules:
-      - name: unexported-return
-        disabled: true
-      - name: unused-parameter
-        disabled: true
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # Too strict for most projects
+    
+    gosec:
+      excludes:
+        - G404  # Use of weak random number generator - OK for non-crypto use
+    
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - experimental
+        - opinionated
+      disabled-checks:
+        - unnamedResult
+        - whyNoLint
+    
+    revive:
+      rules:
+        - name: unexported-return
+          disabled: true
+        - name: unused-parameter
+          disabled: true
 
-issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - gosec
-        - gocritic
-        - noctx
-        - bodyclose
-    
-    # Exclude specific issues
-    - text: "G304: Potential file inclusion via variable"
-      linters:
-        - gosec
-    
-    # Ignore long lines in generated files
-    - path: webfs_embed\.go
-      linters:
-        - lll
-  
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  
-  # Show all issues
-  exclude-use-default: false
+  exclusions:
+    rules:
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - gosec
+          - gocritic
+          - noctx
+          - bodyclose
+      
+      # Exclude specific issues
+      - text: "G304: Potential file inclusion via variable"
+        linters:
+          - gosec
+      
+      # Ignore long lines in generated files
+      - path: webfs_embed\.go
+        linters:
+          - lll
