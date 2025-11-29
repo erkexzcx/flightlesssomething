@@ -270,3 +270,153 @@ fps,frametime,cpu_load,gpu_load
 	// In a real scenario, you'd use httptest to create proper file uploads
 	t.Skip("Skipping file parsing test - requires complex multipart setup")
 }
+
+func TestSampleBenchmarkData(t *testing.T) {
+	t.Run("returns nil for nil input", func(t *testing.T) {
+		result := SampleBenchmarkData(nil, 100)
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("returns original data when data is smaller than target", func(t *testing.T) {
+		data := &BenchmarkData{
+			Label:    "Test",
+			DataFPS:  []float64{60.0, 61.0, 59.0, 62.0, 58.0},
+			SpecOS:   "Linux",
+			SpecCPU:  "Test CPU",
+		}
+
+		result := SampleBenchmarkData(data, 100)
+
+		if len(result.DataFPS) != len(data.DataFPS) {
+			t.Errorf("Expected %d points, got %d", len(data.DataFPS), len(result.DataFPS))
+		}
+
+		if result.Label != data.Label {
+			t.Errorf("Label not preserved: got %s, want %s", result.Label, data.Label)
+		}
+
+		if result.SpecOS != data.SpecOS {
+			t.Errorf("SpecOS not preserved: got %s, want %s", result.SpecOS, data.SpecOS)
+		}
+	})
+
+	t.Run("downsamples large dataset to target size", func(t *testing.T) {
+		// Create a dataset with 1000 points
+		dataPoints := make([]float64, 1000)
+		for i := range dataPoints {
+			dataPoints[i] = float64(i)
+		}
+
+		data := &BenchmarkData{
+			Label:   "Test",
+			DataFPS: dataPoints,
+		}
+
+		targetSize := 100
+		result := SampleBenchmarkData(data, targetSize)
+
+		if len(result.DataFPS) != targetSize {
+			t.Errorf("Expected %d points after sampling, got %d", targetSize, len(result.DataFPS))
+		}
+
+		// First and last points should be preserved (LTTB algorithm)
+		if result.DataFPS[0] != dataPoints[0] {
+			t.Errorf("First point not preserved: got %f, want %f", result.DataFPS[0], dataPoints[0])
+		}
+
+		if result.DataFPS[len(result.DataFPS)-1] != dataPoints[len(dataPoints)-1] {
+			t.Errorf("Last point not preserved: got %f, want %f", result.DataFPS[len(result.DataFPS)-1], dataPoints[len(dataPoints)-1])
+		}
+	})
+
+	t.Run("samples all data arrays", func(t *testing.T) {
+		// Create a dataset with multiple arrays
+		dataPoints := make([]float64, 500)
+		for i := range dataPoints {
+			dataPoints[i] = float64(i)
+		}
+
+		data := &BenchmarkData{
+			Label:            "Test",
+			DataFPS:          dataPoints,
+			DataFrameTime:    dataPoints,
+			DataCPULoad:      dataPoints,
+			DataGPULoad:      dataPoints,
+			DataCPUTemp:      dataPoints,
+			DataGPUTemp:      dataPoints,
+			DataGPUCoreClock: dataPoints,
+		}
+
+		targetSize := 50
+		result := SampleBenchmarkData(data, targetSize)
+
+		// Check that all arrays were sampled
+		if len(result.DataFPS) != targetSize {
+			t.Errorf("DataFPS not sampled correctly: got %d, want %d", len(result.DataFPS), targetSize)
+		}
+		if len(result.DataFrameTime) != targetSize {
+			t.Errorf("DataFrameTime not sampled correctly: got %d, want %d", len(result.DataFrameTime), targetSize)
+		}
+		if len(result.DataCPULoad) != targetSize {
+			t.Errorf("DataCPULoad not sampled correctly: got %d, want %d", len(result.DataCPULoad), targetSize)
+		}
+	})
+
+	t.Run("handles empty arrays", func(t *testing.T) {
+		data := &BenchmarkData{
+			Label:   "Test",
+			DataFPS: []float64{},
+		}
+
+		result := SampleBenchmarkData(data, 100)
+
+		if len(result.DataFPS) != 0 {
+			t.Errorf("Expected empty array, got %d points", len(result.DataFPS))
+		}
+	})
+}
+
+func TestSampleFloatArray(t *testing.T) {
+	t.Run("returns original for small arrays", func(t *testing.T) {
+		data := []float64{1.0, 2.0, 3.0}
+		result := sampleFloatArray(data, 10)
+
+		if len(result) != len(data) {
+			t.Errorf("Expected %d points, got %d", len(data), len(result))
+		}
+	})
+
+	t.Run("downsamples correctly", func(t *testing.T) {
+		// Create a simple increasing sequence
+		data := make([]float64, 100)
+		for i := range data {
+			data[i] = float64(i)
+		}
+
+		result := sampleFloatArray(data, 10)
+
+		if len(result) != 10 {
+			t.Errorf("Expected 10 points, got %d", len(result))
+		}
+
+		// Check first and last are preserved
+		if result[0] != 0 {
+			t.Errorf("First point should be 0, got %f", result[0])
+		}
+
+		if result[len(result)-1] != 99 {
+			t.Errorf("Last point should be 99, got %f", result[len(result)-1])
+		}
+	})
+
+	t.Run("handles empty array", func(t *testing.T) {
+		data := []float64{}
+		result := sampleFloatArray(data, 10)
+
+		if len(result) != 0 {
+			t.Errorf("Expected empty array, got %d points", len(result))
+		}
+	})
+}

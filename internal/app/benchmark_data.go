@@ -650,7 +650,7 @@ func convertRAMToKB(ramStr string) string {
 // that preserves visual characteristics of the data
 func SampleBenchmarkData(data *BenchmarkData, targetSize int) *BenchmarkData {
 	if data == nil {
-		return data
+		return nil
 	}
 
 	// Create a new BenchmarkData with sampled arrays
