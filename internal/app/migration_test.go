@@ -344,6 +344,11 @@ func TestInitDBWithMigration(t *testing.T) {
 			}
 		}
 
+		// Verify old database.db exists before migration
+		if _, statErr := os.Stat(oldDBPath); os.IsNotExist(statErr) {
+			t.Fatalf("Old database.db should exist before migration")
+		}
+
 		// Now initialize with InitDB - should detect and migrate from database.db
 		db, err := InitDB(tmpDir)
 		if err != nil {
@@ -355,6 +360,13 @@ func TestInitDBWithMigration(t *testing.T) {
 		newDBPath := filepath.Join(tmpDir, "flightlesssomething.db")
 		if _, err := os.Stat(newDBPath); os.IsNotExist(err) {
 			t.Fatalf("New database file not created")
+		}
+
+		// Verify old database.db was removed after successful migration
+		if _, err := os.Stat(oldDBPath); err == nil {
+			t.Errorf("Old database.db should have been removed after migration")
+		} else if !os.IsNotExist(err) {
+			t.Errorf("Error checking if old database was removed: %v", err)
 		}
 
 		// Verify user was migrated

@@ -90,17 +90,19 @@ The new application automatically detects and migrates old databases on startup.
    Benchmarks failed: 0
    =========================
    Migration from old database file completed successfully!
+   Successfully removed old database.db file
    ```
 
 4. **Verify Migration**
    
-   After migration, you'll see both database files:
+   After migration, only the new database file will remain:
    ```bash
    ls -la /path/to/data/
-   # database.db              <- Old database (kept as backup)
    # flightlesssomething.db   <- New database with migrated data
    # benchmarks/              <- Benchmark data files (unchanged)
    ```
+   
+   The old `database.db` file is automatically removed after successful migration.
    
    Check your data:
    ```bash
@@ -113,35 +115,56 @@ The new application automatically detects and migrates old databases on startup.
 
 ## How It Works
 
-1. **File Detection**: On startup, checks if `database.db` exists in the data directory
-2. **File Migration**: If `database.db` found and `flightlesssomething.db` doesn't exist, migrates from old file
-3. **Schema Detection**: Otherwise, checks for `schema_versions` table in `flightlesssomething.db`
-4. **Schema Migration**: If old schema detected (no version table + `ai_summary` column), performs in-place upgrade
-5. **Version Tracking**: Sets schema version to prevent re-migration
-6. **Normal Startup**: After migration, server starts normally
+The migration system is designed to be future-proof with three distinct database formats:
 
-### Migration Paths
+### Format Detection
 
-**Path 1: File-based migration (v0.20 or earlier)**
+1. **Format 1 (v0.20 and earlier)**: `database.db` file with old schema
+   - **Detected by**: File named `database.db` exists in data directory
+   - **Action**: Migrate data from `database.db` to `flightlesssomething.db`, then delete `database.db`
+   - **Result**: Clean transition to Format 3
+
+2. **Format 2 (intermediate)**: `flightlesssomething.db` with old schema
+   - **Detected by**: No `schema_versions` table but has `ai_summary` column in benchmarks
+   - **Action**: In-place schema upgrade, add `schema_versions` table with version 1
+   - **Result**: Upgrade to Format 3
+
+3. **Format 3+ (current and future)**: `flightlesssomething.db` with version tracking
+   - **Detected by**: `schema_versions` table exists with version number
+   - **Action**: Apply incremental migrations if version < currentSchemaVersion
+   - **Current version**: 1
+   - **Future**: Add migration logic for versions 2, 3, etc.
+
+### Migration Flow
+
 ```
-database.db exists + flightlesssomething.db missing
-→ Migrate from database.db to flightlesssomething.db
-→ Set schema version to 1
+database.db exists?
+  ├─ Yes → Format 1 migration
+  │   ├─ Migrate to flightlesssomething.db
+  │   ├─ Set schema_versions to version 1
+  │   └─ Delete database.db
+  │
+  └─ No → Check flightlesssomething.db
+      ├─ schema_versions table exists?
+      │   ├─ Yes → Format 3+
+      │   │   ├─ Version = 1? → No migration needed
+      │   │   └─ Version < 1? → Apply incremental migrations
+      │   │
+      │   └─ No → Check for old schema
+      │       ├─ Has ai_summary column? → Format 2
+      │       │   └─ In-place upgrade to Format 3
+      │       │
+      │       └─ No tables? → New database
+      │           └─ Initialize with Format 3
 ```
 
-**Path 2: In-place schema migration**
-```
-flightlesssomething.db exists with old schema (no schema_versions table)
-→ Upgrade schema in place
-→ Set schema version to 1
-```
+### Safety Features
 
-**Path 3: New database**
-```
-No existing database
-→ Create flightlesssomething.db with current schema
-→ Set schema version to 1
-```
+- Old `database.db` is only deleted after successful migration
+- If deletion fails, a warning is logged (data is already migrated)
+- Schema version tracking prevents re-migration
+- Migration is idempotent - safe to re-run
+- Original IDs preserved for relationships and file associations
 
 ## Post-Migration
 
@@ -163,10 +186,12 @@ The system creates an admin account with `discord_id='admin'` on first startup. 
 
 ## Safety
 
-- Migration **never modifies** old data structure (only adds columns)
+- Migration system is designed to be future-proof with clear format versioning
+- Old `database.db` file is automatically removed after successful migration
+- If file deletion fails, migration still succeeds (with warning logged)
 - Schema version prevents accidental re-migration
-- Migration is idempotent - safe to run multiple times
-- Original IDs are preserved for users and benchmarks
+- Migration is idempotent - checks for existing records before insertion
+- Original IDs preserved for users and benchmarks
 - Existing benchmark data files remain in place
 
 ## Troubleshooting

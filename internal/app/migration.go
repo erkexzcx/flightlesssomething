@@ -16,6 +16,10 @@ import (
 
 const (
 	// currentSchemaVersion is the current schema version
+	// Version history:
+	// - 0: Old schema (Format 1 and Format 2) - no schema_versions table, has ai_summary column
+	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
+	// Future versions should increment this and add migration logic in InitDB
 	currentSchemaVersion = 1
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
@@ -55,9 +59,16 @@ func (OldBenchmark) TableName() string {
 
 // detectSchemaVersion detects the schema version of the database
 // Returns:
-//   - 0 if this is an old database (no schema_versions table, old structure)
-//   - currentSchemaVersion if this is a current database
+//   - 0 if this is an old database (Format 2: no schema_versions table, old structure)
+//   - currentSchemaVersion if this is a current database (Format 3+: has schema_versions table)
 //   - error if unable to determine
+//
+// Detection logic:
+// 1. If schema_versions table exists → read version from it (Format 3+)
+// 2. If users/benchmarks tables exist with ai_summary column → version 0 (Format 2)
+// 3. If no tables exist → new database, return currentSchemaVersion
+//
+// Note: Format 1 (database.db) is detected at file level before calling this function
 func detectSchemaVersion(db *gorm.DB) (int, error) {
 	// Check if schema_versions table exists
 	if db.Migrator().HasTable(&SchemaVersion{}) {
