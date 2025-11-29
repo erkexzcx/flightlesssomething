@@ -300,6 +300,32 @@ function formatOSSpecific(data) {
   return parts.length > 0 ? parts.join(' ') : '-'
 }
 
+// Simple decimation function for line charts to improve rendering performance
+// This keeps every Nth point to reduce the number of points rendered
+function decimateForLineChart(data, targetPoints = 2000) {
+  if (!data || data.length <= targetPoints) {
+    return data
+  }
+  
+  const step = Math.ceil(data.length / targetPoints)
+  const decimated = []
+  
+  // Always include first point
+  decimated.push(data[0])
+  
+  // Include every Nth point
+  for (let i = step; i < data.length - 1; i += step) {
+    decimated.push(data[i])
+  }
+  
+  // Always include last point
+  if (data.length > 1) {
+    decimated.push(data[data.length - 1])
+  }
+  
+  return decimated
+}
+
 function calculateAverage(data) {
   if (!data || data.length === 0) return 0
   return data.reduce((acc, value) => acc + value, 0) / data.length
@@ -398,9 +424,11 @@ function createChart(element, title, description, unit, dataArrays, maxY = null)
   if (!element || !dataArrays || dataArrays.length === 0) return
   
   const options = getLineChartOptions(title, description, unit, maxY)
+  // Decimate data only for line chart rendering to improve performance
+  // Statistics are calculated from full data before this function is called
   options.series = dataArrays.map((dataArray, index) => ({
     name: dataArray.label,
-    data: dataArray.data || [],
+    data: decimateForLineChart(dataArray.data || [], 2000),
     color: colors[index % colors.length]
   }))
   
