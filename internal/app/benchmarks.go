@@ -114,17 +114,6 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Check if data sampling is requested
-		if sampleStr := c.Query("sample"); sampleStr != "" {
-			sampleSize, err := strconv.Atoi(sampleStr)
-			if err == nil && sampleSize > 0 && sampleSize < maxSampleSize {
-				// Apply sampling to all runs
-				for i := range data {
-					data[i] = SampleBenchmarkData(data[i], sampleSize)
-				}
-			}
-		}
-
 		c.JSON(http.StatusOK, data)
 	}
 }
