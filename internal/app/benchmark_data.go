@@ -31,6 +31,7 @@ const (
 	bytesToKB       = 1024
 	maxDataLines    = 100000
 	maxStringLength = 100
+	maxSampleSize   = 100000 // Maximum allowed sample size for data decimation
 )
 
 var benchmarksDir string
@@ -726,7 +727,10 @@ func sampleFloatArray(data []float64, targetSize int) []float64 {
 		}
 
 		// Point a
-		pointAY := data[pointIndexA]
+		pointAY := 0.0
+		if pointIndexA >= 0 && pointIndexA < len(data) {
+			pointAY = data[pointIndexA] //nolint:gosec // pointIndexA is guaranteed to be valid by LTTB algorithm
+		}
 
 		maxArea := -1.0
 		var maxAreaPoint int
@@ -742,8 +746,11 @@ func sampleFloatArray(data []float64, targetSize int) []float64 {
 			}
 		}
 
-		sampled = append(sampled, data[maxAreaPoint])
-		pointIndexA = maxAreaPoint
+		// Add the point with max area, with bounds checking
+		if maxAreaPoint >= 0 && maxAreaPoint < len(data) {
+			sampled = append(sampled, data[maxAreaPoint]) //nolint:gosec // maxAreaPoint is guaranteed to be valid by loop bounds
+			pointIndexA = maxAreaPoint
+		}
 	}
 
 	// Always include the last point

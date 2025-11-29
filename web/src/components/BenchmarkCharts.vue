@@ -738,6 +738,9 @@ function handleTabClick(tabName) {
       case 'more-metrics':
         renderMoreMetricsTab()
         break
+      default:
+        console.warn(`Unknown tab name: ${tabName}`)
+        return
     }
     renderedTabs.value[tabName] = true
   })
