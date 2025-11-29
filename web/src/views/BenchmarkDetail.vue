@@ -408,6 +408,8 @@ async function loadBenchmarkData(id) {
     loadingData.value = true
     dataError.value = null
     
+    // Load full data for accurate statistics (averages, percentiles, percentages)
+    // The frontend chart component will downsample line charts as needed
     benchmarkData.value = await api.benchmarks.getData(id)
     
     // Initialize edit labels from loaded data

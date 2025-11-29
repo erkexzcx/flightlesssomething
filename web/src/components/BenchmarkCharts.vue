@@ -34,22 +34,54 @@
     <!-- Tabs for different chart categories -->
     <ul class="nav nav-tabs" id="chartTabs" role="tablist">
       <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="fps-tab" data-bs-toggle="tab" data-bs-target="#fps" type="button" role="tab">
+        <button 
+          class="nav-link active" 
+          id="fps-tab" 
+          data-bs-toggle="tab" 
+          data-bs-target="#fps" 
+          type="button" 
+          role="tab"
+          @click="handleTabClick('fps')"
+        >
           <i class="fas fa-tachometer-alt"></i> FPS
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="frametime-tab" data-bs-toggle="tab" data-bs-target="#frametime" type="button" role="tab">
+        <button 
+          class="nav-link" 
+          id="frametime-tab" 
+          data-bs-toggle="tab" 
+          data-bs-target="#frametime" 
+          type="button" 
+          role="tab"
+          @click="handleTabClick('frametime')"
+        >
           <i class="fas fa-clock"></i> Frametime
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">
+        <button 
+          class="nav-link" 
+          id="summary-tab" 
+          data-bs-toggle="tab" 
+          data-bs-target="#summary" 
+          type="button" 
+          role="tab"
+          @click="handleTabClick('summary')"
+        >
           <i class="fas fa-chart-bar"></i> Summary
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="more-metrics-tab" data-bs-toggle="tab" data-bs-target="#more-metrics" type="button" role="tab">
+        <button 
+          class="nav-link" 
+          id="more-metrics-tab" 
+          data-bs-toggle="tab" 
+          data-bs-target="#more-metrics" 
+          type="button" 
+          role="tab"
+          @click="handleTabClick('more-metrics')"
+        >
           <i class="fas fa-chart-line"></i> All data
         </button>
       </li>
@@ -58,80 +90,112 @@
     <div class="tab-content" id="chartTabsContent">
       <!-- FPS Tab -->
       <div class="tab-pane fade show active" id="fps" role="tabpanel">
-        <div ref="fpsChart2" style="height:250pt;"></div>
-        <div ref="fpsMinMaxAvgChart" style="height:500pt;"></div>
-        <div ref="fpsDensityChart" style="height:250pt;"></div>
-        <div ref="fpsAvgChart" style="height:250pt;"></div>
-        <div ref="fpsStddevVarianceChart" style="height:400pt;"></div>
+        <div v-if="!renderedTabs.fps" class="text-center my-5">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Rendering charts...</span>
+          </div>
+          <p class="text-muted mt-2">Rendering FPS charts...</p>
+        </div>
+        <div v-show="renderedTabs.fps">
+          <div ref="fpsChart2" style="height:250pt;"></div>
+          <div ref="fpsMinMaxAvgChart" style="height:500pt;"></div>
+          <div ref="fpsDensityChart" style="height:250pt;"></div>
+          <div ref="fpsAvgChart" style="height:250pt;"></div>
+          <div ref="fpsStddevVarianceChart" style="height:400pt;"></div>
+        </div>
       </div>
 
       <!-- Frametime Tab -->
       <div class="tab-pane fade" id="frametime" role="tabpanel">
-        <div ref="frameTimeChart2" style="height:250pt;"></div>
-        <div ref="frametimeMinMaxAvgChart" style="height:500pt;"></div>
-        <div ref="frametimeDensityChart" style="height:250pt;"></div>
-        <div ref="frametimeAvgChart" style="height:250pt;"></div>
-        <div ref="frametimeStddevVarianceChart" style="height:400pt;"></div>
+        <div v-if="!renderedTabs.frametime" class="text-center my-5">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Rendering charts...</span>
+          </div>
+          <p class="text-muted mt-2">Rendering Frametime charts...</p>
+        </div>
+        <div v-show="renderedTabs.frametime">
+          <div ref="frameTimeChart2" style="height:250pt;"></div>
+          <div ref="frametimeMinMaxAvgChart" style="height:500pt;"></div>
+          <div ref="frametimeDensityChart" style="height:250pt;"></div>
+          <div ref="frametimeAvgChart" style="height:250pt;"></div>
+          <div ref="frametimeStddevVarianceChart" style="height:400pt;"></div>
+        </div>
       </div>
 
       <!-- Summary Tab -->
       <div class="tab-pane fade" id="summary" role="tabpanel">
-        <div class="row">
-          <div class="col-md-6">
-            <div ref="fpsSummaryChart" style="height:250pt;"></div>
+        <div v-if="!renderedTabs.summary" class="text-center my-5">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Rendering charts...</span>
           </div>
-          <div class="col-md-6">
-            <div ref="frametimeSummaryChart" style="height:250pt;"></div>
-          </div>
+          <p class="text-muted mt-2">Rendering Summary charts...</p>
         </div>
-        <div class="row">
-          <div class="col-md-6">
-            <div ref="cpuLoadSummaryChart" style="height:250pt;"></div>
+        <div v-show="renderedTabs.summary">
+          <div class="row">
+            <div class="col-md-6">
+              <div ref="fpsSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+              <div ref="frametimeSummaryChart" style="height:250pt;"></div>
+            </div>
           </div>
-          <div class="col-md-6">
-            <div ref="gpuLoadSummaryChart" style="height:250pt;"></div>
+          <div class="row">
+            <div class="col-md-6">
+              <div ref="cpuLoadSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+              <div ref="gpuLoadSummaryChart" style="height:250pt;"></div>
+            </div>
           </div>
-        </div>
-        <div class="row">
-          <div class="col-md-6">
-            <div ref="gpuCoreClockSummaryChart" style="height:250pt;"></div>
+          <div class="row">
+            <div class="col-md-6">
+              <div ref="gpuCoreClockSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+              <div ref="gpuMemClockSummaryChart" style="height:250pt;"></div>
+            </div>
           </div>
-          <div class="col-md-6">
-            <div ref="gpuMemClockSummaryChart" style="height:250pt;"></div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-md-6">
-            <div ref="cpuPowerSummaryChart" style="height:250pt;"></div>
-          </div>
-          <div class="col-md-6">
-            <div ref="gpuPowerSummaryChart" style="height:250pt;"></div>
+          <div class="row">
+            <div class="col-md-6">
+              <div ref="cpuPowerSummaryChart" style="height:250pt;"></div>
+            </div>
+            <div class="col-md-6">
+              <div ref="gpuPowerSummaryChart" style="height:250pt;"></div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- More Metrics Tab -->
       <div class="tab-pane fade" id="more-metrics" role="tabpanel">
-        <div ref="fpsChart" style="height:250pt;"></div>
-        <div ref="frameTimeChart" style="height:250pt;"></div>
-        <div ref="cpuLoadChart" style="height:250pt;"></div>
-        <div ref="gpuLoadChart" style="height:250pt;"></div>
-        <div ref="cpuTempChart" style="height:250pt;"></div>
-        <div ref="cpuPowerChart" style="height:250pt;"></div>
-        <div ref="gpuTempChart" style="height:250pt;"></div>
-        <div ref="gpuCoreClockChart" style="height:250pt;"></div>
-        <div ref="gpuMemClockChart" style="height:250pt;"></div>
-        <div ref="gpuVRAMUsedChart" style="height:250pt;"></div>
-        <div ref="gpuPowerChart" style="height:250pt;"></div>
-        <div ref="ramUsedChart" style="height:250pt;"></div>
-        <div ref="swapUsedChart" style="height:250pt;"></div>
+        <div v-if="!renderedTabs['more-metrics']" class="text-center my-5">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Rendering charts...</span>
+          </div>
+          <p class="text-muted mt-2">Rendering All Data charts...</p>
+        </div>
+        <div v-show="renderedTabs['more-metrics']">
+          <div ref="fpsChart" style="height:250pt;"></div>
+          <div ref="frameTimeChart" style="height:250pt;"></div>
+          <div ref="cpuLoadChart" style="height:250pt;"></div>
+          <div ref="gpuLoadChart" style="height:250pt;"></div>
+          <div ref="cpuTempChart" style="height:250pt;"></div>
+          <div ref="cpuPowerChart" style="height:250pt;"></div>
+          <div ref="gpuTempChart" style="height:250pt;"></div>
+          <div ref="gpuCoreClockChart" style="height:250pt;"></div>
+          <div ref="gpuMemClockChart" style="height:250pt;"></div>
+          <div ref="gpuVRAMUsedChart" style="height:250pt;"></div>
+          <div ref="gpuPowerChart" style="height:250pt;"></div>
+          <div ref="ramUsedChart" style="height:250pt;"></div>
+          <div ref="swapUsedChart" style="height:250pt;"></div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import Highcharts from 'highcharts'
 import HighchartsBoost from 'highcharts/modules/boost'
 import HighchartsExporting from 'highcharts/modules/exporting'
@@ -154,6 +218,14 @@ const props = defineProps({
     type: Array,
     default: () => []
   }
+})
+
+// Track which tabs have been rendered
+const renderedTabs = ref({
+  fps: false,
+  frametime: false,
+  summary: false,
+  'more-metrics': false
 })
 
 // Refs for chart containers
@@ -226,6 +298,32 @@ function formatOSSpecific(data) {
   if (data.SpecLinuxKernel) parts.push(data.SpecLinuxKernel)
   if (data.SpecLinuxScheduler) parts.push(data.SpecLinuxScheduler)
   return parts.length > 0 ? parts.join(' ') : '-'
+}
+
+// Simple decimation function for line charts to improve rendering performance
+// This keeps every Nth point to reduce the number of points rendered
+function decimateForLineChart(data, targetPoints = 2000) {
+  if (!data || data.length <= targetPoints) {
+    return data
+  }
+  
+  const step = Math.ceil(data.length / targetPoints)
+  const decimated = []
+  
+  // Always include first point
+  decimated.push(data[0])
+  
+  // Include every Nth point
+  for (let i = step; i < data.length - 1; i += step) {
+    decimated.push(data[i])
+  }
+  
+  // Always include last point
+  if (data.length > 1) {
+    decimated.push(data[data.length - 1])
+  }
+  
+  return decimated
 }
 
 function calculateAverage(data) {
@@ -326,9 +424,11 @@ function createChart(element, title, description, unit, dataArrays, maxY = null)
   if (!element || !dataArrays || dataArrays.length === 0) return
   
   const options = getLineChartOptions(title, description, unit, maxY)
+  // Decimate data only for line chart rendering to improve performance
+  // Statistics are calculated from full data before this function is called
   options.series = dataArrays.map((dataArray, index) => ({
     name: dataArray.label,
-    data: dataArray.data || [],
+    data: decimateForLineChart(dataArray.data || [], 2000),
     color: colors[index % colors.length]
   }))
   
@@ -345,60 +445,31 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
   Highcharts.chart(element, options)
 }
 
-function renderCharts() {
+function prepareDataArrays() {
+  return {
+    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
+    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
+    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] })),
+    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] })),
+    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] })),
+    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] })),
+    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] })),
+    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] })),
+    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] })),
+    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] })),
+    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] })),
+    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
+    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
+  }
+}
+
+function renderFPSTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
-
-  // Prepare data arrays
-  const fpsDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] }))
-  const frameTimeDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] }))
-  const cpuLoadDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] }))
-  const gpuLoadDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] }))
-  const cpuTempDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] }))
-  const cpuPowerDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] }))
-  const gpuTempDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] }))
-  const gpuCoreClockDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] }))
-  const gpuMemClockDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] }))
-  const gpuVRAMUsedDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] }))
-  const gpuPowerDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] }))
-  const ramUsedDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] }))
-  const swapUsedDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
-
-  // Create line charts
-  createChart(fpsChart.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
+  
+  const { fpsDataArrays } = prepareDataArrays()
+  
+  // Create FPS charts
   createChart(fpsChart2.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
-  createChart(frameTimeChart.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
-  createChart(frameTimeChart2.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
-  createChart(cpuLoadChart.value, 'CPU Load', '', '%', cpuLoadDataArrays, 100)
-  createChart(gpuLoadChart.value, 'GPU Load', '', '%', gpuLoadDataArrays, 100)
-  createChart(cpuTempChart.value, 'CPU Temperature', '', '°C', cpuTempDataArrays)
-  createChart(cpuPowerChart.value, 'CPU Power', '', 'W', cpuPowerDataArrays)
-  createChart(gpuTempChart.value, 'GPU Temperature', '', '°C', gpuTempDataArrays)
-  createChart(gpuCoreClockChart.value, 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays)
-  createChart(gpuMemClockChart.value, 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays)
-  createChart(gpuVRAMUsedChart.value, 'GPU VRAM Usage', '', 'GB', gpuVRAMUsedDataArrays)
-  createChart(gpuPowerChart.value, 'GPU Power', '', 'W', gpuPowerDataArrays)
-  createChart(ramUsedChart.value, 'RAM Usage', '', 'GB', ramUsedDataArrays)
-  createChart(swapUsedChart.value, 'SWAP Usage', '', 'GB', swapUsedDataArrays)
-
-  // Calculate averages for summary charts
-  const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
-  const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
-  const cpuLoadAverages = cpuLoadDataArrays.map(d => calculateAverage(d.data))
-  const gpuLoadAverages = gpuLoadDataArrays.map(d => calculateAverage(d.data))
-  const gpuCoreClockAverages = gpuCoreClockDataArrays.map(d => calculateAverage(d.data))
-  const gpuMemClockAverages = gpuMemClockDataArrays.map(d => calculateAverage(d.data))
-  const cpuPowerAverages = cpuPowerDataArrays.map(d => calculateAverage(d.data))
-  const gpuPowerAverages = gpuPowerDataArrays.map(d => calculateAverage(d.data))
-
-  // Create summary bar charts
-  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', fpsDataArrays.map(d => d.label), fpsAverages, colors)
-  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', frameTimeDataArrays.map(d => d.label), frametimeAverages, colors)
-  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', cpuLoadDataArrays.map(d => d.label), cpuLoadAverages, colors, 100)
-  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', gpuLoadDataArrays.map(d => d.label), gpuLoadAverages, colors, 100)
-  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', gpuCoreClockDataArrays.map(d => d.label), gpuCoreClockAverages, colors)
-  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', gpuMemClockDataArrays.map(d => d.label), gpuMemClockAverages, colors)
-  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', cpuPowerDataArrays.map(d => d.label), cpuPowerAverages, colors)
-  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', gpuPowerDataArrays.map(d => d.label), gpuPowerAverages, colors)
 
   // FPS Min/Max/Avg chart
   if (fpsMinMaxAvgChart.value) {
@@ -425,34 +496,6 @@ function renderCharts() {
     })
   }
 
-  // FPS Average comparison chart
-  if (fpsAvgChart.value && fpsAverages.length > 0) {
-    // Calculate FPS as a percentage of the lowest baseline
-    const baselineFPS = Math.min(...fpsAverages)
-    const percentageFPSData = fpsAverages.map(fps => (fps / baselineFPS) * 100)
-
-    const sortedData = fpsDataArrays.map((d, index) => ({
-      label: d.label,
-      percentage: percentageFPSData[index]
-    })).sort((a, b) => a.percentage - b.percentage)
-
-    const sortedCategories = sortedData.map(item => item.label)
-    const sortedPercentages = sortedData.map(item => item.percentage)
-
-    Highcharts.chart(fpsAvgChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'Avg FPS comparison in %' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
-      xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
-      yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
-      legend: { enabled: false },
-      series: [{ name: 'FPS Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
-    })
-  }
-
   // FPS Density chart
   if (fpsDensityChart.value) {
     const densityData = fpsDataArrays.map(d => ({
@@ -470,6 +513,36 @@ function renderCharts() {
       legend: { ...commonChartOptions.legend, enabled: true },
       series: densityData
     })
+  }
+
+  // FPS Average comparison chart
+  if (fpsAvgChart.value) {
+    const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
+    if (fpsAverages.length > 0) {
+      const baselineFPS = Math.min(...fpsAverages)
+      const percentageFPSData = fpsAverages.map(fps => (fps / baselineFPS) * 100)
+
+      const sortedData = fpsDataArrays.map((d, index) => ({
+        label: d.label,
+        percentage: percentageFPSData[index]
+      })).sort((a, b) => a.percentage - b.percentage)
+
+      const sortedCategories = sortedData.map(item => item.label)
+      const sortedPercentages = sortedData.map(item => item.percentage)
+
+      Highcharts.chart(fpsAvgChart.value, {
+        ...commonChartOptions,
+        chart: { ...commonChartOptions.chart, type: 'bar' },
+        title: { ...commonChartOptions.title, text: 'Avg FPS comparison in %' },
+        subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
+        xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+        yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
+        tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
+        plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
+        legend: { enabled: false },
+        series: [{ name: 'FPS Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
+      })
+    }
   }
 
   // FPS Stability chart
@@ -494,6 +567,14 @@ function renderCharts() {
       ]
     })
   }
+}
+
+function renderFrametimeTab() {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  
+  const { frameTimeDataArrays } = prepareDataArrays()
+  
+  createChart(frameTimeChart2.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
 
   // Frametime Min/Max/Avg chart
   if (frametimeMinMaxAvgChart.value) {
@@ -520,34 +601,6 @@ function renderCharts() {
     })
   }
 
-  // Frametime Average comparison chart
-  if (frametimeAvgChart.value && frametimeAverages.length > 0) {
-    // Calculate Frametime as a percentage of the lowest baseline
-    const baselineFrametime = Math.min(...frametimeAverages)
-    const percentageData = frametimeAverages.map(ft => (ft / baselineFrametime) * 100)
-
-    const sortedData = frameTimeDataArrays.map((d, index) => ({
-      label: d.label,
-      percentage: percentageData[index]
-    })).sort((a, b) => a.percentage - b.percentage)
-
-    const sortedCategories = sortedData.map(item => item.label)
-    const sortedPercentages = sortedData.map(item => item.percentage)
-
-    Highcharts.chart(frametimeAvgChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'Avg Frametime comparison in %' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
-      xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
-      yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
-      legend: { enabled: false },
-      series: [{ name: 'Frametime Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
-    })
-  }
-
   // Frametime Density chart
   if (frametimeDensityChart.value) {
     const densityData = frameTimeDataArrays.map(d => ({
@@ -565,6 +618,36 @@ function renderCharts() {
       legend: { ...commonChartOptions.legend, enabled: true },
       series: densityData
     })
+  }
+
+  // Frametime Average comparison chart
+  if (frametimeAvgChart.value) {
+    const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
+    if (frametimeAverages.length > 0) {
+      const baselineFrametime = Math.min(...frametimeAverages)
+      const percentageData = frametimeAverages.map(ft => (ft / baselineFrametime) * 100)
+
+      const sortedData = frameTimeDataArrays.map((d, index) => ({
+        label: d.label,
+        percentage: percentageData[index]
+      })).sort((a, b) => a.percentage - b.percentage)
+
+      const sortedCategories = sortedData.map(item => item.label)
+      const sortedPercentages = sortedData.map(item => item.percentage)
+
+      Highcharts.chart(frametimeAvgChart.value, {
+        ...commonChartOptions,
+        chart: { ...commonChartOptions.chart, type: 'bar' },
+        title: { ...commonChartOptions.title, text: 'Avg Frametime comparison in %' },
+        subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
+        xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+        yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
+        tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
+        plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
+        legend: { enabled: false },
+        series: [{ name: 'Frametime Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
+      })
+    }
   }
 
   // Frametime Stability chart
@@ -591,12 +674,132 @@ function renderCharts() {
   }
 }
 
+function renderSummaryTab() {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  
+  const {
+    fpsDataArrays,
+    frameTimeDataArrays,
+    cpuLoadDataArrays,
+    gpuLoadDataArrays,
+    gpuCoreClockDataArrays,
+    gpuMemClockDataArrays,
+    cpuPowerDataArrays,
+    gpuPowerDataArrays
+  } = prepareDataArrays()
+
+  // Calculate averages for summary charts
+  const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
+  const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
+  const cpuLoadAverages = cpuLoadDataArrays.map(d => calculateAverage(d.data))
+  const gpuLoadAverages = gpuLoadDataArrays.map(d => calculateAverage(d.data))
+  const gpuCoreClockAverages = gpuCoreClockDataArrays.map(d => calculateAverage(d.data))
+  const gpuMemClockAverages = gpuMemClockDataArrays.map(d => calculateAverage(d.data))
+  const cpuPowerAverages = cpuPowerDataArrays.map(d => calculateAverage(d.data))
+  const gpuPowerAverages = gpuPowerDataArrays.map(d => calculateAverage(d.data))
+
+  // Create summary bar charts
+  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', fpsDataArrays.map(d => d.label), fpsAverages, colors)
+  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', frameTimeDataArrays.map(d => d.label), frametimeAverages, colors)
+  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', cpuLoadDataArrays.map(d => d.label), cpuLoadAverages, colors, 100)
+  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', gpuLoadDataArrays.map(d => d.label), gpuLoadAverages, colors, 100)
+  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', gpuCoreClockDataArrays.map(d => d.label), gpuCoreClockAverages, colors)
+  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', gpuMemClockDataArrays.map(d => d.label), gpuMemClockAverages, colors)
+  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', cpuPowerDataArrays.map(d => d.label), cpuPowerAverages, colors)
+  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', gpuPowerDataArrays.map(d => d.label), gpuPowerAverages, colors)
+}
+
+function renderMoreMetricsTab() {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  
+  const {
+    fpsDataArrays,
+    frameTimeDataArrays,
+    cpuLoadDataArrays,
+    gpuLoadDataArrays,
+    cpuTempDataArrays,
+    cpuPowerDataArrays,
+    gpuTempDataArrays,
+    gpuCoreClockDataArrays,
+    gpuMemClockDataArrays,
+    gpuVRAMUsedDataArrays,
+    gpuPowerDataArrays,
+    ramUsedDataArrays,
+    swapUsedDataArrays
+  } = prepareDataArrays()
+
+  // Create line charts
+  createChart(fpsChart.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
+  createChart(frameTimeChart.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
+  createChart(cpuLoadChart.value, 'CPU Load', '', '%', cpuLoadDataArrays, 100)
+  createChart(gpuLoadChart.value, 'GPU Load', '', '%', gpuLoadDataArrays, 100)
+  createChart(cpuTempChart.value, 'CPU Temperature', '', '°C', cpuTempDataArrays)
+  createChart(cpuPowerChart.value, 'CPU Power', '', 'W', cpuPowerDataArrays)
+  createChart(gpuTempChart.value, 'GPU Temperature', '', '°C', gpuTempDataArrays)
+  createChart(gpuCoreClockChart.value, 'GPU Core Clock', '', 'MHz', gpuCoreClockDataArrays)
+  createChart(gpuMemClockChart.value, 'GPU Memory Clock', '', 'MHz', gpuMemClockDataArrays)
+  createChart(gpuVRAMUsedChart.value, 'GPU VRAM Usage', '', 'GB', gpuVRAMUsedDataArrays)
+  createChart(gpuPowerChart.value, 'GPU Power', '', 'W', gpuPowerDataArrays)
+  createChart(ramUsedChart.value, 'RAM Usage', '', 'GB', ramUsedDataArrays)
+  createChart(swapUsedChart.value, 'SWAP Usage', '', 'GB', swapUsedDataArrays)
+}
+
+// Handle tab clicks
+function handleTabClick(tabName) {
+  // Check if already rendered
+  if (renderedTabs.value[tabName]) {
+    return
+  }
+
+  // Use nextTick to ensure DOM is ready
+  nextTick(() => {
+    switch (tabName) {
+      case 'fps':
+        renderFPSTab()
+        break
+      case 'frametime':
+        renderFrametimeTab()
+        break
+      case 'summary':
+        renderSummaryTab()
+        break
+      case 'more-metrics':
+        renderMoreMetricsTab()
+        break
+      default:
+        console.warn(`Unknown tab name: ${tabName}`)
+        return
+    }
+    renderedTabs.value[tabName] = true
+  })
+}
+
 onMounted(() => {
-  renderCharts()
+  // Only render the first tab (FPS) on mount
+  if (props.benchmarkData && props.benchmarkData.length > 0) {
+    nextTick(() => {
+      renderFPSTab()
+      renderedTabs.value.fps = true
+    })
+  }
 })
 
 watch(() => props.benchmarkData, () => {
-  renderCharts()
+  // Reset rendered tabs when data changes
+  renderedTabs.value = {
+    fps: false,
+    frametime: false,
+    summary: false,
+    'more-metrics': false
+  }
+  
+  // Re-render the active tab
+  if (props.benchmarkData && props.benchmarkData.length > 0) {
+    nextTick(() => {
+      renderFPSTab()
+      renderedTabs.value.fps = true
+    })
+  }
 }, { deep: true })
 </script>
 
