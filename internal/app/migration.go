@@ -27,6 +27,7 @@ type SchemaVersion struct {
 }
 
 // OldUser represents a user from the old flightlesssomething project
+// TableName returns "users" to match the old database table structure
 type OldUser struct {
 	gorm.Model
 	DiscordID string `gorm:"size:20"`
@@ -34,10 +35,11 @@ type OldUser struct {
 }
 
 func (OldUser) TableName() string {
-	return "users"
+	return "users" // Intentionally matches current User table for in-place migration
 }
 
 // OldBenchmark represents a benchmark from the old project
+// TableName returns "benchmarks" to match the old database table structure
 type OldBenchmark struct {
 	gorm.Model
 	UserID      uint
@@ -47,7 +49,7 @@ type OldBenchmark struct {
 }
 
 func (OldBenchmark) TableName() string {
-	return "benchmarks"
+	return "benchmarks" // Intentionally matches current Benchmark table for in-place migration
 }
 
 // detectSchemaVersion detects the schema version of the database
@@ -134,7 +136,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 
 		newUser := User{
 			Model: gorm.Model{
-				ID:        oldUser.ID, // Preserve original ID
+				ID:        oldUser.ID, // Preserve original ID to maintain benchmark relationships
 				CreatedAt: oldUser.CreatedAt,
 				UpdatedAt: oldUser.UpdatedAt,
 			},
@@ -199,11 +201,11 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 
 		newBenchmark := Benchmark{
 			Model: gorm.Model{
-				ID:        oldBenchmark.ID, // Preserve original ID
+				ID:        oldBenchmark.ID, // Preserve original ID to maintain data file associations
 				CreatedAt: oldBenchmark.CreatedAt,
 				UpdatedAt: oldBenchmark.UpdatedAt,
 			},
-			UserID:      oldBenchmark.UserID, // Use original user ID (preserved)
+			UserID:      oldBenchmark.UserID, // Use original user ID (preserved from migration)
 			Title:       oldBenchmark.Title,
 			Description: description,
 		}

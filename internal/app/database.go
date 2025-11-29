@@ -33,7 +33,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 			return nil, fmt.Errorf("failed to migrate from old schema: %w", err)
 		}
 		// Set current schema version after successful migration
-		if err := setSchemaVersion(db, 1); err != nil {
+		if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
 			return nil, fmt.Errorf("failed to set schema version: %w", err)
 		}
 	}
@@ -44,12 +44,12 @@ func InitDB(dataDir string) (*DBInstance, error) {
 	}
 
 	// Ensure schema version is set for new databases
-	if version == 1 {
+	if version == currentSchemaVersion {
 		// For brand new databases, set the version
 		var count int64
 		db.Model(&SchemaVersion{}).Count(&count)
 		if count == 0 {
-			if err := setSchemaVersion(db, 1); err != nil {
+			if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
 				return nil, fmt.Errorf("failed to set initial schema version: %w", err)
 			}
 		}
