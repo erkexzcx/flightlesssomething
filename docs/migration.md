@@ -68,16 +68,17 @@ The new application automatically detects and migrates old databases on startup.
 
 3. **Watch the Logs**
    
-   The server will detect the old schema and automatically migrate:
+   The server will detect the old database file and automatically migrate:
    ```
-   2024/11/29 10:00:00 Detected old database schema (version 0)
-   2024/11/29 10:00:00 Starting migration from old schema to current schema...
-   2024/11/29 10:00:00 Migrating users from old schema...
+   2024/11/29 10:00:00 Found old database.db, will migrate to flightlesssomething.db
+   2024/11/29 10:00:00 Migrating from database.db to flightlesssomething.db...
+   2024/11/29 10:00:00 Starting migration from /path/to/database.db...
+   2024/11/29 10:00:00 Migrating users from old database...
    2024/11/29 10:00:00 Found 42 users to migrate
    2024/11/29 10:00:00   Migrating user: JohnDoe (ID: 1, Discord: 123456789)
    2024/11/29 10:00:00     Migrated successfully
    ...
-   2024/11/29 10:00:01 Migrating benchmarks from old schema...
+   2024/11/29 10:00:01 Migrating benchmarks from old database...
    2024/11/29 10:00:01 Found 987 benchmarks to migrate
    2024/11/29 10:00:01   [1/987] Migrating benchmark: Cyberpunk 2077 (ID: 1)
    2024/11/29 10:00:01     Successfully migrated (3 runs)
@@ -88,31 +89,59 @@ The new application automatically detects and migrates old databases on startup.
    Benchmarks succeeded: 987
    Benchmarks failed: 0
    =========================
-   Migration from old schema completed successfully!
+   Migration from old database file completed successfully!
    ```
 
 4. **Verify Migration**
    
+   After migration, you'll see both database files:
+   ```bash
+   ls -la /path/to/data/
+   # database.db              <- Old database (kept as backup)
+   # flightlesssomething.db   <- New database with migrated data
+   # benchmarks/              <- Benchmark data files (unchanged)
+   ```
+   
    Check your data:
    ```bash
-   # Check files
-   ls -la /path/to/data-for-new-server/
-   ls -la /path/to/data-for-new-server/benchmarks/
-   
-   # Count migrated data
-   sqlite3 /path/to/data-for-new-server/flightlesssomething.db \
+   # Count migrated data in new database
+   sqlite3 /path/to/data/flightlesssomething.db \
      "SELECT COUNT(*) FROM users;"
-   sqlite3 /path/to/data-for-new-server/flightlesssomething.db \
+   sqlite3 /path/to/data/flightlesssomething.db \
      "SELECT COUNT(*) FROM benchmarks;"
    ```
 
 ## How It Works
 
-1. **Schema Detection**: On startup, the application checks for a `schema_versions` table
-2. **Old Schema Detected**: If the table doesn't exist but old tables do, migration begins
-3. **Data Migration**: Users and benchmarks are migrated with ID preservation
-4. **Version Tracking**: A schema version is stored to prevent re-migration
-5. **Normal Startup**: After migration, the server starts normally
+1. **File Detection**: On startup, checks if `database.db` exists in the data directory
+2. **File Migration**: If `database.db` found and `flightlesssomething.db` doesn't exist, migrates from old file
+3. **Schema Detection**: Otherwise, checks for `schema_versions` table in `flightlesssomething.db`
+4. **Schema Migration**: If old schema detected (no version table + `ai_summary` column), performs in-place upgrade
+5. **Version Tracking**: Sets schema version to prevent re-migration
+6. **Normal Startup**: After migration, server starts normally
+
+### Migration Paths
+
+**Path 1: File-based migration (v0.20 or earlier)**
+```
+database.db exists + flightlesssomething.db missing
+→ Migrate from database.db to flightlesssomething.db
+→ Set schema version to 1
+```
+
+**Path 2: In-place schema migration**
+```
+flightlesssomething.db exists with old schema (no schema_versions table)
+→ Upgrade schema in place
+→ Set schema version to 1
+```
+
+**Path 3: New database**
+```
+No existing database
+→ Create flightlesssomething.db with current schema
+→ Set schema version to 1
+```
 
 ## Post-Migration
 
