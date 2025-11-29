@@ -364,17 +364,15 @@ func TestInitDBWithMigration(t *testing.T) {
 		}
 		// Should have 1 user: the migrated one (system admin is created by EnsureSystemAdmin, not InitDB)
 		if len(users) != 1 {
-			t.Errorf("Expected 1 user (migrated), got %d", len(users))
+			t.Fatalf("Expected 1 user (migrated), got %d", len(users))
 		}
 		
 		// Verify it's the migrated user
-		if len(users) > 0 {
-			if users[0].DiscordID != "999888" {
-				t.Errorf("Expected DiscordID 999888, got %s", users[0].DiscordID)
-			}
-			if users[0].Username != "olddbuser" {
-				t.Errorf("Expected Username olddbuser, got %s", users[0].Username)
-			}
+		if users[0].DiscordID != "999888" {
+			t.Errorf("Expected DiscordID 999888, got %s", users[0].DiscordID)
+		}
+		if users[0].Username != "olddbuser" {
+			t.Errorf("Expected Username olddbuser, got %s", users[0].Username)
 		}
 
 		// Verify schema version is set

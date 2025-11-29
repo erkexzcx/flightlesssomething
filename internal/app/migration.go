@@ -115,6 +115,17 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 		return fmt.Errorf("failed to open old database: %w", err)
 	}
 	
+	// Close old database connection when done
+	sqlDB, err := oldDB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying database connection: %w", err)
+	}
+	defer func() {
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close old database: %v", closeErr)
+		}
+	}()
+	
 	// Migrate users
 	log.Println("Migrating users from old database...")
 	var oldUsers []OldUser
