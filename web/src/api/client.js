@@ -117,6 +117,10 @@ export const api = {
       return fetchJSON(`/api/benchmarks/${id}/data`)
     },
 
+    async getSampledData(id, sampleSize = 2000) {
+      return fetchJSON(`/api/benchmarks/${id}/data?sample=${sampleSize}`)
+    },
+
     getDataUrl(id) {
       return `${API_BASE}/api/benchmarks/${id}/data`
     },

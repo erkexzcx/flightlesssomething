@@ -644,3 +644,110 @@ func convertRAMToKB(ramStr string) string {
 	// If we can't parse it, return empty string
 	return ""
 }
+
+// SampleBenchmarkData downsamples benchmark data to approximately targetSize points
+// Uses LTTB (Largest Triangle Three Buckets) algorithm for intelligent sampling
+// that preserves visual characteristics of the data
+func SampleBenchmarkData(data *BenchmarkData, targetSize int) *BenchmarkData {
+	if data == nil {
+		return data
+	}
+
+	// Create a new BenchmarkData with sampled arrays
+	sampled := &BenchmarkData{
+		Label:              data.Label,
+		SpecOS:             data.SpecOS,
+		SpecCPU:            data.SpecCPU,
+		SpecGPU:            data.SpecGPU,
+		SpecRAM:            data.SpecRAM,
+		SpecLinuxKernel:    data.SpecLinuxKernel,
+		SpecLinuxScheduler: data.SpecLinuxScheduler,
+	}
+
+	// Sample each data array
+	sampled.DataFPS = sampleFloatArray(data.DataFPS, targetSize)
+	sampled.DataFrameTime = sampleFloatArray(data.DataFrameTime, targetSize)
+	sampled.DataCPULoad = sampleFloatArray(data.DataCPULoad, targetSize)
+	sampled.DataGPULoad = sampleFloatArray(data.DataGPULoad, targetSize)
+	sampled.DataCPUTemp = sampleFloatArray(data.DataCPUTemp, targetSize)
+	sampled.DataCPUPower = sampleFloatArray(data.DataCPUPower, targetSize)
+	sampled.DataGPUTemp = sampleFloatArray(data.DataGPUTemp, targetSize)
+	sampled.DataGPUCoreClock = sampleFloatArray(data.DataGPUCoreClock, targetSize)
+	sampled.DataGPUMemClock = sampleFloatArray(data.DataGPUMemClock, targetSize)
+	sampled.DataGPUVRAMUsed = sampleFloatArray(data.DataGPUVRAMUsed, targetSize)
+	sampled.DataGPUPower = sampleFloatArray(data.DataGPUPower, targetSize)
+	sampled.DataRAMUsed = sampleFloatArray(data.DataRAMUsed, targetSize)
+	sampled.DataSwapUsed = sampleFloatArray(data.DataSwapUsed, targetSize)
+
+	return sampled
+}
+
+// sampleFloatArray downsamples a float64 array using LTTB algorithm
+// If the array is already smaller than targetSize, it returns the original array
+func sampleFloatArray(data []float64, targetSize int) []float64 {
+	if len(data) == 0 || len(data) <= targetSize {
+		return data
+	}
+
+	// LTTB algorithm
+	sampled := make([]float64, 0, targetSize)
+
+	// Always include the first point
+	sampled = append(sampled, data[0])
+
+	// Bucket size (excluding first and last which are always included)
+	bucketSize := float64(len(data)-2) / float64(targetSize-2)
+
+	// Index of the point in the previous bucket
+	pointIndexA := 0
+
+	for i := 0; i < targetSize-2; i++ {
+		// Calculate point average for next bucket (for the next iteration)
+		avgRangeStart := int(math.Floor(float64(i+2)*bucketSize)) + 1
+		avgRangeEnd := int(math.Floor(float64(i+3)*bucketSize)) + 1
+		if avgRangeEnd >= len(data) {
+			avgRangeEnd = len(data)
+		}
+
+		avgRangeLength := float64(avgRangeEnd - avgRangeStart)
+		var avgY float64
+		if avgRangeLength > 0 {
+			for ; avgRangeStart < avgRangeEnd; avgRangeStart++ {
+				avgY += data[avgRangeStart]
+			}
+			avgY /= avgRangeLength
+		}
+
+		// Get the range for this bucket
+		rangeStart := int(math.Floor(float64(i+1)*bucketSize)) + 1
+		rangeEnd := int(math.Floor(float64(i+2)*bucketSize)) + 1
+		if rangeEnd >= len(data) {
+			rangeEnd = len(data)
+		}
+
+		// Point a
+		pointAY := data[pointIndexA]
+
+		maxArea := -1.0
+		var maxAreaPoint int
+
+		for ; rangeStart < rangeEnd; rangeStart++ {
+			// Calculate triangle area
+			area := math.Abs((float64(pointIndexA)-float64(rangeEnd))*(data[rangeStart]-pointAY) -
+				(float64(pointIndexA)-float64(rangeStart))*(avgY-pointAY)) * 0.5
+
+			if area > maxArea {
+				maxArea = area
+				maxAreaPoint = rangeStart
+			}
+		}
+
+		sampled = append(sampled, data[maxAreaPoint])
+		pointIndexA = maxAreaPoint
+	}
+
+	// Always include the last point
+	sampled = append(sampled, data[len(data)-1])
+
+	return sampled
+}

@@ -408,7 +408,8 @@ async function loadBenchmarkData(id) {
     loadingData.value = true
     dataError.value = null
     
-    benchmarkData.value = await api.benchmarks.getData(id)
+    // Use sampled data for faster initial load (2000 points is good for visualization)
+    benchmarkData.value = await api.benchmarks.getSampledData(id, 2000)
     
     // Initialize edit labels from loaded data
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
