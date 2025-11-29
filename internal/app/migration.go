@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/klauspost/compress/zstd"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -86,6 +87,8 @@ func detectSchemaVersion(db *gorm.DB) (int, error) {
 }
 
 // setSchemaVersion sets the schema version in the database
+//
+//nolint:unparam // version parameter is for future extensibility
 func setSchemaVersion(db *gorm.DB, version int) error {
 	// Ensure the table exists
 	if err := db.AutoMigrate(&SchemaVersion{}); err != nil {
@@ -99,6 +102,151 @@ func setSchemaVersion(db *gorm.DB, version int) error {
 		return fmt.Errorf("failed to set schema version: %w", result.Error)
 	}
 
+	return nil
+}
+
+// migrateFromOldDatabaseFile migrates data from the old database.db file to the new flightlesssomething.db
+func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error {
+	log.Printf("Starting migration from %s...", oldDBPath)
+	
+	// Open the old database
+	oldDB, err := gorm.Open(sqlite.Open(oldDBPath), &gorm.Config{})
+	if err != nil {
+		return fmt.Errorf("failed to open old database: %w", err)
+	}
+	
+	// Migrate users
+	log.Println("Migrating users from old database...")
+	var oldUsers []OldUser
+	if err := oldDB.Find(&oldUsers).Error; err != nil {
+		return fmt.Errorf("failed to fetch old users: %w", err)
+	}
+	log.Printf("Found %d users to migrate", len(oldUsers))
+
+	// Create new users table with proper schema
+	if err := newDB.AutoMigrate(&User{}); err != nil {
+		return fmt.Errorf("failed to migrate users table: %w", err)
+	}
+
+	// Migrate each user
+	for _, oldUser := range oldUsers {
+		log.Printf("  Migrating user: %s (ID: %d, Discord: %s)", oldUser.Username, oldUser.ID, oldUser.DiscordID)
+
+		newUser := User{
+			Model: gorm.Model{
+				ID:        oldUser.ID, // Preserve original ID to maintain benchmark relationships
+				CreatedAt: oldUser.CreatedAt,
+				UpdatedAt: oldUser.UpdatedAt,
+			},
+			DiscordID: oldUser.DiscordID,
+			Username:  oldUser.Username,
+			IsAdmin:   false,
+			IsBanned:  false,
+		}
+		if err := newDB.Create(&newUser).Error; err != nil {
+			return fmt.Errorf("failed to create user %s: %w", oldUser.Username, err)
+		}
+		log.Printf("    Migrated successfully")
+	}
+
+	// Migrate benchmarks
+	log.Println("Migrating benchmarks from old database...")
+	var oldBenchmarks []OldBenchmark
+	if err := oldDB.Find(&oldBenchmarks).Error; err != nil {
+		return fmt.Errorf("failed to fetch old benchmarks: %w", err)
+	}
+	log.Printf("Found %d benchmarks to migrate", len(oldBenchmarks))
+
+	// Create new benchmarks table with proper schema
+	if err := newDB.AutoMigrate(&Benchmark{}); err != nil {
+		return fmt.Errorf("failed to migrate benchmarks table: %w", err)
+	}
+
+	successCount := 0
+	errorCount := 0
+	benchmarksDir := filepath.Join(dataDir, "benchmarks")
+
+	for i := range oldBenchmarks {
+		oldBenchmark := &oldBenchmarks[i]
+		log.Printf("  [%d/%d] Migrating benchmark: %s (ID: %d)", i+1, len(oldBenchmarks), oldBenchmark.Title, oldBenchmark.ID)
+
+		// Truncate description if too long
+		description := oldBenchmark.Description
+		if len(description) > maxDescriptionLength {
+			description = description[:maxDescriptionLength]
+		}
+
+		// Verify the user exists
+		var userExists bool
+		if err := newDB.Model(&User{}).Select("count(*) > 0").Where("id = ?", oldBenchmark.UserID).Find(&userExists).Error; err != nil {
+			log.Printf("    ERROR: Database error checking user ID %d: %v", oldBenchmark.UserID, err)
+			errorCount++
+			continue
+		}
+		if !userExists {
+			log.Printf("    WARNING: User ID %d not found, skipping", oldBenchmark.UserID)
+			errorCount++
+			continue
+		}
+
+		newBenchmark := Benchmark{
+			Model: gorm.Model{
+				ID:        oldBenchmark.ID, // Preserve original ID to maintain data file associations
+				CreatedAt: oldBenchmark.CreatedAt,
+				UpdatedAt: oldBenchmark.UpdatedAt,
+			},
+			UserID:      oldBenchmark.UserID, // Use original user ID (preserved from migration)
+			Title:       oldBenchmark.Title,
+			Description: description,
+		}
+		if err := newDB.Create(&newBenchmark).Error; err != nil {
+			log.Printf("    ERROR: Failed to create benchmark: %v", err)
+			errorCount++
+			continue
+		}
+
+		// Verify benchmark data file exists
+		dataFile := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", oldBenchmark.ID))
+		if _, err := os.Stat(dataFile); os.IsNotExist(err) {
+			log.Printf("    WARNING: Data file not found: %s", dataFile)
+			errorCount++
+			continue
+		}
+
+		// Read and validate the data
+		benchmarkData, err := readBenchmarkDataForMigration(dataFile)
+		if err != nil {
+			log.Printf("    ERROR: Failed to read data file: %v", err)
+			errorCount++
+			continue
+		}
+
+		// Create metadata file if it doesn't exist
+		metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", oldBenchmark.ID))
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			if err := createMetadataFileForMigration(dataDir, oldBenchmark.ID, benchmarkData); err != nil {
+				log.Printf("    ERROR: Failed to create metadata file: %v", err)
+				errorCount++
+				continue
+			}
+		}
+
+		log.Printf("    Successfully migrated (%d runs)", len(benchmarkData))
+		successCount++
+	}
+
+	log.Println("\n=== Migration Summary ===")
+	log.Printf("Users migrated: %d", len(oldUsers))
+	log.Printf("Benchmarks attempted: %d", len(oldBenchmarks))
+	log.Printf("Benchmarks succeeded: %d", successCount)
+	log.Printf("Benchmarks failed: %d", errorCount)
+	log.Println("=========================")
+
+	if errorCount > 0 {
+		log.Printf("WARNING: %d benchmarks failed to migrate, but migration will continue", errorCount)
+	}
+
+	log.Println("Migration from old database file completed successfully!")
 	return nil
 }
 

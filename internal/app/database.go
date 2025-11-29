@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"path/filepath"
 
 	"gorm.io/driver/sqlite"
@@ -16,6 +18,18 @@ type DBInstance struct {
 // InitDB initializes the database connection and handles schema migrations
 func InitDB(dataDir string) (*DBInstance, error) {
 	dbPath := filepath.Join(dataDir, "flightlesssomething.db")
+	
+	// Check if we need to migrate from old database.db file
+	oldDBPath := filepath.Join(dataDir, "database.db")
+	needsOldFileMigration := false
+	if _, err := os.Stat(oldDBPath); err == nil {
+		// Old database.db exists, check if new database doesn't exist or is empty
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			needsOldFileMigration = true
+			log.Printf("Found old database.db, will migrate to flightlesssomething.db")
+		}
+	}
+	
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
@@ -27,8 +41,18 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		return nil, fmt.Errorf("failed to detect schema version: %w", err)
 	}
 
-	// Handle old schema migration if needed
-	if version == 0 {
+	// Handle old database.db file migration if needed
+	if needsOldFileMigration {
+		log.Println("Migrating from database.db to flightlesssomething.db...")
+		if err := migrateFromOldDatabaseFile(db, dataDir, oldDBPath); err != nil {
+			return nil, fmt.Errorf("failed to migrate from old database file: %w", err)
+		}
+		// Set current schema version after successful migration
+		if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
+			return nil, fmt.Errorf("failed to set schema version: %w", err)
+		}
+	} else if version == 0 {
+		// Handle in-place schema migration (for databases that are already flightlesssomething.db but old schema)
 		if err := migrateFromOldSchema(db, dataDir); err != nil {
 			return nil, fmt.Errorf("failed to migrate from old schema: %w", err)
 		}
@@ -44,7 +68,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 	}
 
 	// Ensure schema version is set for new databases
-	if version == currentSchemaVersion {
+	if !needsOldFileMigration && version == currentSchemaVersion {
 		// For brand new databases, set the version
 		var count int64
 		db.Model(&SchemaVersion{}).Count(&count)

@@ -307,4 +307,83 @@ func TestInitDBWithMigration(t *testing.T) {
 			t.Errorf("Expected schema version %d, got %d", currentSchemaVersion, version.Version)
 		}
 	})
+
+	t.Run("migrates from database.db file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create old database.db manually
+		oldDBPath := filepath.Join(tmpDir, "database.db")
+		oldDB, err := gorm.Open(sqlite.Open(oldDBPath), &gorm.Config{})
+		if err != nil {
+			t.Fatalf("Failed to open old database: %v", err)
+		}
+		if migrateErr := oldDB.AutoMigrate(&OldUser{}, &OldBenchmark{}); migrateErr != nil {
+			t.Fatalf("Failed to create old schema: %v", migrateErr)
+		}
+
+		// Create benchmarks directory
+		benchmarksDir := filepath.Join(tmpDir, "benchmarks")
+		if mkdirErr := os.MkdirAll(benchmarksDir, 0o755); mkdirErr != nil {
+			t.Fatalf("Failed to create benchmarks directory: %v", mkdirErr)
+		}
+
+		// Add test user to old database
+		oldUser := OldUser{DiscordID: "999888", Username: "olddbuser"}
+		if createErr := oldDB.Create(&oldUser).Error; createErr != nil {
+			t.Fatalf("Failed to create old user: %v", createErr)
+		}
+
+		// Close old DB
+		sqlDB, dbErr := oldDB.DB()
+		if dbErr != nil {
+			t.Fatalf("Failed to get sql.DB: %v", dbErr)
+		}
+		if sqlDB != nil {
+			if closeErr := sqlDB.Close(); closeErr != nil {
+				t.Fatalf("Failed to close database: %v", closeErr)
+			}
+		}
+
+		// Now initialize with InitDB - should detect and migrate from database.db
+		db, err := InitDB(tmpDir)
+		if err != nil {
+			t.Fatalf("Failed to initialize database with old file migration: %v", err)
+		}
+		defer cleanupTestDB(t, db)
+
+		// Verify flightlesssomething.db was created
+		newDBPath := filepath.Join(tmpDir, "flightlesssomething.db")
+		if _, err := os.Stat(newDBPath); os.IsNotExist(err) {
+			t.Fatalf("New database file not created")
+		}
+
+		// Verify user was migrated
+		var users []User
+		if err := db.DB.Find(&users).Error; err != nil {
+			t.Fatalf("Failed to query users: %v", err)
+		}
+		// Should have 1 user: the migrated one (system admin is created by EnsureSystemAdmin, not InitDB)
+		if len(users) != 1 {
+			t.Errorf("Expected 1 user (migrated), got %d", len(users))
+		}
+		
+		// Verify it's the migrated user
+		if len(users) > 0 {
+			if users[0].DiscordID != "999888" {
+				t.Errorf("Expected DiscordID 999888, got %s", users[0].DiscordID)
+			}
+			if users[0].Username != "olddbuser" {
+				t.Errorf("Expected Username olddbuser, got %s", users[0].Username)
+			}
+		}
+
+		// Verify schema version is set
+		var version SchemaVersion
+		if err := db.DB.First(&version).Error; err != nil {
+			t.Fatalf("Failed to read schema version: %v", err)
+		}
+		if version.Version != currentSchemaVersion {
+			t.Errorf("Expected schema version %d, got %d", currentSchemaVersion, version.Version)
+		}
+	})
 }
