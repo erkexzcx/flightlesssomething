@@ -104,7 +104,13 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		// if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
 		//     return nil, fmt.Errorf("failed to set schema version: %w", err)
 		// }
-		log.Printf("Database is at version %d, current version is %d", version, currentSchemaVersion)
+		
+		// For now, log that we're on an older version but no migration is needed yet
+		// (since currentSchemaVersion is 1, this code path won't execute until version 2+ is added)
+		log.Printf("Database is at version %d, current version is %d. No incremental migrations defined yet.", version, currentSchemaVersion)
+	} else if version > currentSchemaVersion {
+		// Database is from a newer version of the application - this shouldn't happen
+		return nil, fmt.Errorf("database version %d is newer than supported version %d - please upgrade the application", version, currentSchemaVersion)
 	}
 
 	// Auto-migrate the schema (this is safe for both new and existing databases)
