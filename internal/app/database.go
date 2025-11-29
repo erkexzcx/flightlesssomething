@@ -13,7 +13,7 @@ type DBInstance struct {
 	DB *gorm.DB
 }
 
-// InitDB initializes the database connection
+// InitDB initializes the database connection and handles schema migrations
 func InitDB(dataDir string) (*DBInstance, error) {
 	dbPath := filepath.Join(dataDir, "flightlesssomething.db")
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
@@ -21,9 +21,38 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Auto-migrate the schema
-	if err := db.AutoMigrate(&User{}, &Benchmark{}, &AuditLog{}, &APIToken{}); err != nil {
+	// Detect schema version
+	version, err := detectSchemaVersion(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect schema version: %w", err)
+	}
+
+	// Handle old schema migration if needed
+	if version == 0 {
+		if err := migrateFromOldSchema(db, dataDir); err != nil {
+			return nil, fmt.Errorf("failed to migrate from old schema: %w", err)
+		}
+		// Set current schema version after successful migration
+		if err := setSchemaVersion(db, 1); err != nil {
+			return nil, fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
+	// Auto-migrate the schema (this is safe for both new and existing databases)
+	if err := db.AutoMigrate(&User{}, &Benchmark{}, &AuditLog{}, &APIToken{}, &SchemaVersion{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	}
+
+	// Ensure schema version is set for new databases
+	if version == 1 {
+		// For brand new databases, set the version
+		var count int64
+		db.Model(&SchemaVersion{}).Count(&count)
+		if count == 0 {
+			if err := setSchemaVersion(db, 1); err != nil {
+				return nil, fmt.Errorf("failed to set initial schema version: %w", err)
+			}
+		}
 	}
 
 	return &DBInstance{DB: db}, nil
