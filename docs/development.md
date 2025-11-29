@@ -184,7 +184,8 @@ func TestHandleNewEndpoint(t *testing.T) {
 
 1. Update models in `internal/app/models.go`
 2. GORM auto-migrates on startup
-3. For complex migrations, consider migration tool
+3. Schema version tracking for major migrations
+4. Old schema detection and automatic migration
 
 ## Security
 

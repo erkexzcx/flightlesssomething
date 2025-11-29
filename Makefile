@@ -1,7 +1,7 @@
-.PHONY: build build-web build-server build-migrate clean run test
+.PHONY: build build-web build-server clean run test
 
 # Build everything
-build: build-web build-server build-migrate
+build: build-web build-server
 
 # Build the web UI
 build-web:
@@ -34,7 +34,7 @@ build-server: build-web
 
 # Clean build artifacts
 clean:
-	rm -rf web/node_modules web/dist server migrate internal/app/web internal/app/webfs_embed.go
+	rm -rf web/node_modules web/dist server internal/app/web internal/app/webfs_embed.go
 
 # Run the server (development mode without building web UI)
 run:
@@ -47,8 +47,3 @@ test:
 # Run backend integration tests
 test-integration:
 	./backend_test.sh
-
-# Build the migration tool
-build-migrate:
-	@echo "Building migration tool..."
-	go build -o migrate ./cmd/migrate
