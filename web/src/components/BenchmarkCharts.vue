@@ -100,6 +100,25 @@
           <div ref="fpsChart2" style="height:250pt;"></div>
           <div ref="fpsMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="fpsDensityChart" style="height:250pt;"></div>
+          <!-- Dropdown for selecting baseline -->
+          <div v-if="benchmarkData && benchmarkData.length > 1" class="baseline-selector mb-2">
+            <label for="fpsBaselineSelect" class="form-label me-2">Baseline (100%):</label>
+            <select 
+              id="fpsBaselineSelect" 
+              class="form-select form-select-sm d-inline-block w-auto"
+              v-model="fpsBaselineIndex"
+              @change="renderFPSComparisonChart"
+            >
+              <option :value="null">Auto (slowest)</option>
+              <option 
+                v-for="(data, index) in benchmarkData" 
+                :key="index" 
+                :value="index"
+              >
+                {{ data.Label }}
+              </option>
+            </select>
+          </div>
           <div ref="fpsAvgChart" style="height:250pt;"></div>
           <div ref="fpsStddevVarianceChart" style="height:400pt;"></div>
         </div>
@@ -117,6 +136,25 @@
           <div ref="frameTimeChart2" style="height:250pt;"></div>
           <div ref="frametimeMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="frametimeDensityChart" style="height:250pt;"></div>
+          <!-- Dropdown for selecting baseline -->
+          <div v-if="benchmarkData && benchmarkData.length > 1" class="baseline-selector mb-2">
+            <label for="frametimeBaselineSelect" class="form-label me-2">Baseline (100%):</label>
+            <select 
+              id="frametimeBaselineSelect" 
+              class="form-select form-select-sm d-inline-block w-auto"
+              v-model="frametimeBaselineIndex"
+              @change="renderFrametimeComparisonChart"
+            >
+              <option :value="null">Auto (fastest)</option>
+              <option 
+                v-for="(data, index) in benchmarkData" 
+                :key="index" 
+                :value="index"
+              >
+                {{ data.Label }}
+              </option>
+            </select>
+          </div>
           <div ref="frametimeAvgChart" style="height:250pt;"></div>
           <div ref="frametimeStddevVarianceChart" style="height:400pt;"></div>
         </div>
@@ -227,6 +265,10 @@ const renderedTabs = ref({
   summary: false,
   'more-metrics': false
 })
+
+// Track selected baseline for comparison charts
+const fpsBaselineIndex = ref(null) // null means auto (slowest)
+const frametimeBaselineIndex = ref(null) // null means auto (fastest)
 
 // Refs for chart containers
 const fpsChart = ref(null)
@@ -390,6 +432,88 @@ function countOccurrences(data) {
   return array
 }
 
+function renderFPSComparisonChart() {
+  if (!fpsAvgChart.value || !props.benchmarkData || props.benchmarkData.length === 0) return
+  
+  const fpsDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] }))
+  const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
+  
+  if (fpsAverages.length === 0) return
+  
+  // Determine baseline FPS
+  let baselineFPS
+  if (fpsBaselineIndex.value !== null && fpsBaselineIndex.value >= 0 && fpsBaselineIndex.value < fpsAverages.length) {
+    baselineFPS = fpsAverages[fpsBaselineIndex.value]
+  } else {
+    // Auto mode: use slowest (minimum FPS)
+    baselineFPS = Math.min(...fpsAverages)
+  }
+  
+  const percentageFPSData = fpsAverages.map(fps => (fps / baselineFPS) * 100)
+
+  const sortedData = fpsDataArrays.map((d, index) => ({
+    label: d.label,
+    percentage: percentageFPSData[index]
+  })).sort((a, b) => a.percentage - b.percentage)
+
+  const sortedCategories = sortedData.map(item => item.label)
+  const sortedPercentages = sortedData.map(item => item.percentage)
+
+  Highcharts.chart(fpsAvgChart.value, {
+    ...commonChartOptions,
+    chart: { ...commonChartOptions.chart, type: 'bar' },
+    title: { ...commonChartOptions.title, text: 'Avg FPS comparison in %' },
+    subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
+    xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+    yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
+    tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
+    plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
+    legend: { enabled: false },
+    series: [{ name: 'FPS Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
+  })
+}
+
+function renderFrametimeComparisonChart() {
+  if (!frametimeAvgChart.value || !props.benchmarkData || props.benchmarkData.length === 0) return
+  
+  const frameTimeDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] }))
+  const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
+  
+  if (frametimeAverages.length === 0) return
+  
+  // Determine baseline frametime
+  let baselineFrametime
+  if (frametimeBaselineIndex.value !== null && frametimeBaselineIndex.value >= 0 && frametimeBaselineIndex.value < frametimeAverages.length) {
+    baselineFrametime = frametimeAverages[frametimeBaselineIndex.value]
+  } else {
+    // Auto mode: use fastest (minimum frametime)
+    baselineFrametime = Math.min(...frametimeAverages)
+  }
+  
+  const percentageData = frametimeAverages.map(ft => (ft / baselineFrametime) * 100)
+
+  const sortedData = frameTimeDataArrays.map((d, index) => ({
+    label: d.label,
+    percentage: percentageData[index]
+  })).sort((a, b) => a.percentage - b.percentage)
+
+  const sortedCategories = sortedData.map(item => item.label)
+  const sortedPercentages = sortedData.map(item => item.percentage)
+
+  Highcharts.chart(frametimeAvgChart.value, {
+    ...commonChartOptions,
+    chart: { ...commonChartOptions.chart, type: 'bar' },
+    title: { ...commonChartOptions.title, text: 'Avg Frametime comparison in %' },
+    subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
+    xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+    yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
+    tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
+    plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
+    legend: { enabled: false },
+    series: [{ name: 'Frametime Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
+  })
+}
+
 function getLineChartOptions(title, description, unit, maxY = null) {
   return {
     ...commonChartOptions,
@@ -515,35 +639,8 @@ function renderFPSTab() {
     })
   }
 
-  // FPS Average comparison chart
-  if (fpsAvgChart.value) {
-    const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
-    if (fpsAverages.length > 0) {
-      const baselineFPS = Math.min(...fpsAverages)
-      const percentageFPSData = fpsAverages.map(fps => (fps / baselineFPS) * 100)
-
-      const sortedData = fpsDataArrays.map((d, index) => ({
-        label: d.label,
-        percentage: percentageFPSData[index]
-      })).sort((a, b) => a.percentage - b.percentage)
-
-      const sortedCategories = sortedData.map(item => item.label)
-      const sortedPercentages = sortedData.map(item => item.percentage)
-
-      Highcharts.chart(fpsAvgChart.value, {
-        ...commonChartOptions,
-        chart: { ...commonChartOptions.chart, type: 'bar' },
-        title: { ...commonChartOptions.title, text: 'Avg FPS comparison in %' },
-        subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
-        xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
-        yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
-        tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
-        plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
-        legend: { enabled: false },
-        series: [{ name: 'FPS Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
-      })
-    }
-  }
+  // FPS Average comparison chart - render via separate function
+  renderFPSComparisonChart()
 
   // FPS Stability chart
   if (fpsStddevVarianceChart.value) {
@@ -620,35 +717,8 @@ function renderFrametimeTab() {
     })
   }
 
-  // Frametime Average comparison chart
-  if (frametimeAvgChart.value) {
-    const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
-    if (frametimeAverages.length > 0) {
-      const baselineFrametime = Math.min(...frametimeAverages)
-      const percentageData = frametimeAverages.map(ft => (ft / baselineFrametime) * 100)
-
-      const sortedData = frameTimeDataArrays.map((d, index) => ({
-        label: d.label,
-        percentage: percentageData[index]
-      })).sort((a, b) => a.percentage - b.percentage)
-
-      const sortedCategories = sortedData.map(item => item.label)
-      const sortedPercentages = sortedData.map(item => item.percentage)
-
-      Highcharts.chart(frametimeAvgChart.value, {
-        ...commonChartOptions,
-        chart: { ...commonChartOptions.chart, type: 'bar' },
-        title: { ...commonChartOptions.title, text: 'Avg Frametime comparison in %' },
-        subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
-        xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
-        yAxis: { ...commonChartOptions.yAxis, min: 95, title: { text: 'Percentage (%)', align: 'high', style: { color: '#FFFFFF' } } },
-        tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' %', formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} %` } },
-        plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' %' } } } },
-        legend: { enabled: false },
-        series: [{ name: 'Frametime Percentage', data: sortedPercentages, colorByPoint: true, colors: colors }]
-      })
-    }
-  }
+  // Frametime Average comparison chart - render via separate function
+  renderFrametimeComparisonChart()
 
   // Frametime Stability chart
   if (frametimeStddevVarianceChart.value) {
@@ -820,5 +890,23 @@ watch(() => props.benchmarkData, () => {
 .table th,
 .table td {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.baseline-selector {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+}
+
+.baseline-selector .form-label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.baseline-selector .form-select {
+  max-width: 300px;
 }
 </style>
