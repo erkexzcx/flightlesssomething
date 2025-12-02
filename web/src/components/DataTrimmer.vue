@@ -150,7 +150,8 @@ const emit = defineEmits(['update:trimStart', 'update:trimEnd', 'update:runIndex
 
 const selectedRunIndex = ref(props.runIndex)
 const localTrimStart = ref(props.trimStart)
-const localTrimEnd = ref(props.trimEnd || props.totalSamples - 1)
+// Use explicit check for undefined/null instead of truthy evaluation
+const localTrimEnd = ref(props.trimEnd !== undefined && props.trimEnd !== null ? props.trimEnd : props.totalSamples - 1)
 
 const maxSampleIndex = computed(() => props.totalSamples - 1)
 
@@ -201,7 +202,8 @@ watch(() => props.trimStart, (newVal) => {
 })
 
 watch(() => props.trimEnd, (newVal) => {
-  localTrimEnd.value = newVal || maxSampleIndex.value
+  // Use explicit check for undefined/null
+  localTrimEnd.value = newVal !== undefined && newVal !== null ? newVal : maxSampleIndex.value
 })
 
 watch(() => props.runIndex, (newVal) => {

@@ -394,11 +394,28 @@ const currentTrimStart = computed(() => {
   return editTrims.value[currentTrimRunIndex.value]?.trim_start ?? runData.trim_start ?? 0
 })
 
-const currentTrimEnd = computed(() => {
-  if (!benchmarkData.value || currentTrimRunIndex.value >= benchmarkData.value.length) return 0
-  const runData = benchmarkData.value[currentTrimRunIndex.value]
+// Helper function to get trim end value with proper fallback
+function getTrimEndValue(runIndex) {
+  if (!benchmarkData.value || runIndex >= benchmarkData.value.length) return 0
+  const runData = benchmarkData.value[runIndex]
   const dataLength = getDataLength(runData)
-  return editTrims.value[currentTrimRunIndex.value]?.trim_end ?? runData.trim_end ?? (dataLength > 0 ? dataLength - 1 : 0)
+  
+  // Check edited trims first
+  if (editTrims.value[runIndex]?.trim_end !== undefined) {
+    return editTrims.value[runIndex].trim_end
+  }
+  
+  // Check stored trim_end
+  if (runData.trim_end !== undefined && runData.trim_end !== null) {
+    return runData.trim_end
+  }
+  
+  // Default to last index
+  return dataLength > 0 ? dataLength - 1 : 0
+}
+
+const currentTrimEnd = computed(() => {
+  return getTrimEndValue(currentTrimRunIndex.value)
 })
 
 const currentTotalSamples = computed(() => {

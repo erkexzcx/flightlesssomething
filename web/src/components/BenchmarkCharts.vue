@@ -262,13 +262,17 @@ const props = defineProps({
 function applyTrim(data) {
   if (!data) return []
   
+  // Check if trimming is configured using explicit null/undefined checks
+  const hasTrimStart = data.trim_start !== undefined && data.trim_start !== null
+  const hasTrimEnd = data.trim_end !== undefined && data.trim_end !== null
+  
   // If no trim is configured, return original data
-  if (!data.trim_start && !data.trim_end) {
+  if (!hasTrimStart && !hasTrimEnd) {
     return data
   }
   
-  const trimStart = data.trim_start || 0
-  const trimEnd = data.trim_end || 0
+  const trimStart = hasTrimStart ? data.trim_start : 0
+  const trimEnd = hasTrimEnd ? data.trim_end : 0
   
   // If both are 0, no trimming
   if (trimStart === 0 && trimEnd === 0) {

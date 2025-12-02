@@ -314,19 +314,25 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 					
 					// Validate and set trim parameters
 					if hasStart && hasEnd {
-						// Ensure valid range
-						if trimStart < 0 {
-							trimStart = 0
-						}
-						if trimEnd >= dataLen {
-							trimEnd = dataLen - 1
-						}
-						if trimStart <= trimEnd {
-							benchmarkData[idx].TrimStart = trimStart
-							benchmarkData[idx].TrimEnd = trimEnd
+						// Check if both are 0 - this means explicit reset
+						if trimStart == 0 && trimEnd == 0 {
+							benchmarkData[idx].TrimStart = 0
+							benchmarkData[idx].TrimEnd = 0
+						} else {
+							// Ensure valid range
+							if trimStart < 0 {
+								trimStart = 0
+							}
+							if trimEnd >= dataLen {
+								trimEnd = dataLen - 1
+							}
+							if trimStart <= trimEnd {
+								benchmarkData[idx].TrimStart = trimStart
+								benchmarkData[idx].TrimEnd = trimEnd
+							}
 						}
 					} else if !hasStart && !hasEnd {
-						// Reset trimming
+						// Reset trimming when both parameters are missing
 						benchmarkData[idx].TrimStart = 0
 						benchmarkData[idx].TrimEnd = 0
 					}
