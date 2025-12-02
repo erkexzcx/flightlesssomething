@@ -93,6 +93,13 @@ type BenchmarkData struct {
 	SpecLinuxKernel    string
 	SpecLinuxScheduler string
 
+	// Data trimming parameters
+	// TrimStart is the index of the first sample to include (0-based, inclusive)
+	// TrimEnd is the index of the last sample to include (0-based, inclusive)
+	// If both are 0, no trimming is applied
+	TrimStart int `json:"trim_start,omitempty"`
+	TrimEnd   int `json:"trim_end,omitempty"`
+
 	// Performance data arrays
 	DataFPS          []float64
 	DataFrameTime    []float64

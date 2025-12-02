@@ -134,6 +134,21 @@
               </div>
             </div>
 
+            <!-- Data trimming section -->
+            <div v-if="benchmarkData && benchmarkData.length > 0">
+              <DataTrimmer
+                :run-index="currentTrimRunIndex"
+                :trim-start="currentTrimStart"
+                :trim-end="currentTrimEnd"
+                :total-samples="currentTotalSamples"
+                :run-count="benchmarkData.length"
+                :run-labels="editLabels"
+                @update:runIndex="handleTrimRunChange"
+                @update:trimStart="handleTrimStartChange"
+                @update:trimEnd="handleTrimEndChange"
+              />
+            </div>
+
             <!-- Add new runs section -->
             <div class="mb-3">
               <label class="form-label">Add New Runs</label>
@@ -313,6 +328,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
 import BenchmarkCharts from '../components/BenchmarkCharts.vue'
+import DataTrimmer from '../components/DataTrimmer.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { formatRelativeDate } from '../utils/dateFormatter'
@@ -363,10 +379,77 @@ const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
 
+// Data trimmer state
+const currentTrimRunIndex = ref(0)
+const editTrims = ref({}) // Map of run index to {trim_start, trim_end}
+
 const isOwner = computed(() => {
   if (!authStore.isAuthenticated || !benchmark.value) return false
   return benchmark.value.UserID === authStore.user?.user_id || authStore.isAdmin
 })
+
+const currentTrimStart = computed(() => {
+  if (!benchmarkData.value || currentTrimRunIndex.value >= benchmarkData.value.length) return 0
+  const runData = benchmarkData.value[currentTrimRunIndex.value]
+  return editTrims.value[currentTrimRunIndex.value]?.trim_start ?? runData.trim_start ?? 0
+})
+
+const currentTrimEnd = computed(() => {
+  if (!benchmarkData.value || currentTrimRunIndex.value >= benchmarkData.value.length) return 0
+  const runData = benchmarkData.value[currentTrimRunIndex.value]
+  const dataLength = getDataLength(runData)
+  return editTrims.value[currentTrimRunIndex.value]?.trim_end ?? runData.trim_end ?? (dataLength > 0 ? dataLength - 1 : 0)
+})
+
+const currentTotalSamples = computed(() => {
+  if (!benchmarkData.value || currentTrimRunIndex.value >= benchmarkData.value.length) return 0
+  return getDataLength(benchmarkData.value[currentTrimRunIndex.value])
+})
+
+// Helper function to get data length
+function getDataLength(runData) {
+  if (!runData) return 0
+  const arrays = [
+    runData.DataFPS,
+    runData.DataFrameTime,
+    runData.DataCPULoad,
+    runData.DataGPULoad,
+    runData.DataCPUTemp,
+    runData.DataCPUPower,
+    runData.DataGPUTemp,
+    runData.DataGPUCoreClock,
+    runData.DataGPUMemClock,
+    runData.DataGPUVRAMUsed,
+    runData.DataGPUPower,
+    runData.DataRAMUsed,
+    runData.DataSwapUsed
+  ]
+  let maxLen = 0
+  for (const arr of arrays) {
+    if (arr && arr.length > maxLen) {
+      maxLen = arr.length
+    }
+  }
+  return maxLen
+}
+
+function handleTrimRunChange(newIndex) {
+  currentTrimRunIndex.value = newIndex
+}
+
+function handleTrimStartChange(newStart) {
+  if (!editTrims.value[currentTrimRunIndex.value]) {
+    editTrims.value[currentTrimRunIndex.value] = {}
+  }
+  editTrims.value[currentTrimRunIndex.value].trim_start = newStart
+}
+
+function handleTrimEndChange(newEnd) {
+  if (!editTrims.value[currentTrimRunIndex.value]) {
+    editTrims.value[currentTrimRunIndex.value] = {}
+  }
+  editTrims.value[currentTrimRunIndex.value].trim_end = newEnd
+}
 
 const renderedDescription = computed(() => {
   if (!benchmark.value?.Description) return ''
@@ -414,6 +497,17 @@ async function loadBenchmarkData(id) {
     
     // Initialize edit labels from loaded data
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
+    
+    // Initialize trim settings from loaded data
+    editTrims.value = {}
+    benchmarkData.value.forEach((runData, index) => {
+      if (runData.trim_start || runData.trim_end) {
+        editTrims.value[index] = {
+          trim_start: runData.trim_start || 0,
+          trim_end: runData.trim_end || 0
+        }
+      }
+    })
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
   } finally {
@@ -438,6 +532,19 @@ function cancelEdit() {
   editDescription.value = benchmark.value.Description || ''
   editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.Label || '') : []
   selectedFiles.value = []
+  // Reset trim settings to original values
+  editTrims.value = {}
+  if (benchmarkData.value) {
+    benchmarkData.value.forEach((runData, index) => {
+      if (runData.trim_start || runData.trim_end) {
+        editTrims.value[index] = {
+          trim_start: runData.trim_start || 0,
+          trim_end: runData.trim_end || 0
+        }
+      }
+    })
+  }
+  currentTrimRunIndex.value = 0
   if (fileInput.value) {
     fileInput.value.value = ''
   }
@@ -519,14 +626,38 @@ async function handleUpdate() {
       }
     }
     
+    // Add trim parameters if they've been edited
+    if (Object.keys(editTrims.value).length > 0) {
+      const trims = {}
+      Object.keys(editTrims.value).forEach(index => {
+        const trimData = editTrims.value[index]
+        const originalData = benchmarkData.value[index]
+        const dataLength = getDataLength(originalData)
+        
+        // Only include if trim settings changed or are not default
+        const originalStart = originalData.trim_start || 0
+        const originalEnd = originalData.trim_end || (dataLength > 0 ? dataLength - 1 : 0)
+        
+        if (trimData.trim_start !== originalStart || trimData.trim_end !== originalEnd) {
+          trims[index] = {
+            trim_start: trimData.trim_start,
+            trim_end: trimData.trim_end
+          }
+        }
+      })
+      if (Object.keys(trims).length > 0) {
+        data.trims = trims
+      }
+    }
+    
     const updated = await api.benchmarks.update(benchmark.value.ID, data)
     
     // Update local benchmark data
     benchmark.value.Title = updated.Title
     benchmark.value.Description = updated.Description
     
-    // If labels were updated, reload the benchmark data
-    if (data.labels) {
+    // If labels or trims were updated, reload the benchmark data
+    if (data.labels || data.trims) {
       await loadBenchmarkData(benchmark.value.ID)
     }
     

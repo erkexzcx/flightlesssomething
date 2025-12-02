@@ -644,3 +644,90 @@ func convertRAMToKB(ramStr string) string {
 	// If we can't parse it, return empty string
 	return ""
 }
+
+// GetTrimmedData returns a copy of the BenchmarkData with data arrays trimmed
+// according to TrimStart and TrimEnd indices. Returns the original data if
+// no trimming is configured.
+func (bd *BenchmarkData) GetTrimmedData() *BenchmarkData {
+	// If no trimming is configured, return a copy of the original
+	if bd.TrimStart == 0 && bd.TrimEnd == 0 {
+		return bd
+	}
+
+	// Create a copy with trimmed data
+	trimmed := &BenchmarkData{
+		Label:              bd.Label,
+		SpecOS:             bd.SpecOS,
+		SpecCPU:            bd.SpecCPU,
+		SpecGPU:            bd.SpecGPU,
+		SpecRAM:            bd.SpecRAM,
+		SpecLinuxKernel:    bd.SpecLinuxKernel,
+		SpecLinuxScheduler: bd.SpecLinuxScheduler,
+		TrimStart:          bd.TrimStart,
+		TrimEnd:            bd.TrimEnd,
+	}
+
+	// Helper function to trim array
+	trimArray := func(data []float64) []float64 {
+		if len(data) == 0 {
+			return data
+		}
+		start := bd.TrimStart
+		end := bd.TrimEnd
+		// Validate indices
+		if start < 0 {
+			start = 0
+		}
+		if end >= len(data) || end == 0 {
+			end = len(data) - 1
+		}
+		if start > end || start >= len(data) {
+			return []float64{}
+		}
+		return data[start : end+1]
+	}
+
+	// Trim all data arrays
+	trimmed.DataFPS = trimArray(bd.DataFPS)
+	trimmed.DataFrameTime = trimArray(bd.DataFrameTime)
+	trimmed.DataCPULoad = trimArray(bd.DataCPULoad)
+	trimmed.DataGPULoad = trimArray(bd.DataGPULoad)
+	trimmed.DataCPUTemp = trimArray(bd.DataCPUTemp)
+	trimmed.DataCPUPower = trimArray(bd.DataCPUPower)
+	trimmed.DataGPUTemp = trimArray(bd.DataGPUTemp)
+	trimmed.DataGPUCoreClock = trimArray(bd.DataGPUCoreClock)
+	trimmed.DataGPUMemClock = trimArray(bd.DataGPUMemClock)
+	trimmed.DataGPUVRAMUsed = trimArray(bd.DataGPUVRAMUsed)
+	trimmed.DataGPUPower = trimArray(bd.DataGPUPower)
+	trimmed.DataRAMUsed = trimArray(bd.DataRAMUsed)
+	trimmed.DataSwapUsed = trimArray(bd.DataSwapUsed)
+
+	return trimmed
+}
+
+// GetDataLength returns the length of the longest data array
+// Used to determine the total number of samples in the benchmark
+func (bd *BenchmarkData) GetDataLength() int {
+	maxLen := 0
+	arrays := [][]float64{
+		bd.DataFPS,
+		bd.DataFrameTime,
+		bd.DataCPULoad,
+		bd.DataGPULoad,
+		bd.DataCPUTemp,
+		bd.DataCPUPower,
+		bd.DataGPUTemp,
+		bd.DataGPUCoreClock,
+		bd.DataGPUMemClock,
+		bd.DataGPUVRAMUsed,
+		bd.DataGPUPower,
+		bd.DataRAMUsed,
+		bd.DataSwapUsed,
+	}
+	for _, arr := range arrays {
+		if len(arr) > maxLen {
+			maxLen = len(arr)
+		}
+	}
+	return maxLen
+}

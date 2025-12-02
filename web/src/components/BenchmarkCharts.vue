@@ -258,6 +258,50 @@ const props = defineProps({
   }
 })
 
+// Helper function to apply trimming to benchmark data
+function applyTrim(data) {
+  if (!data) return []
+  
+  // If no trim is configured, return original data
+  if (!data.trim_start && !data.trim_end) {
+    return data
+  }
+  
+  const trimStart = data.trim_start || 0
+  const trimEnd = data.trim_end || 0
+  
+  // If both are 0, no trimming
+  if (trimStart === 0 && trimEnd === 0) {
+    return data
+  }
+  
+  // Helper to trim array
+  const trimArray = (arr) => {
+    if (!arr || arr.length === 0) return arr
+    const end = trimEnd >= arr.length || trimEnd === 0 ? arr.length - 1 : trimEnd
+    if (trimStart > end || trimStart >= arr.length) return []
+    return arr.slice(trimStart, end + 1)
+  }
+  
+  // Create trimmed copy
+  return {
+    ...data,
+    DataFPS: trimArray(data.DataFPS),
+    DataFrameTime: trimArray(data.DataFrameTime),
+    DataCPULoad: trimArray(data.DataCPULoad),
+    DataGPULoad: trimArray(data.DataGPULoad),
+    DataCPUTemp: trimArray(data.DataCPUTemp),
+    DataCPUPower: trimArray(data.DataCPUPower),
+    DataGPUTemp: trimArray(data.DataGPUTemp),
+    DataGPUCoreClock: trimArray(data.DataGPUCoreClock),
+    DataGPUMemClock: trimArray(data.DataGPUMemClock),
+    DataGPUVRAMUsed: trimArray(data.DataGPUVRAMUsed),
+    DataGPUPower: trimArray(data.DataGPUPower),
+    DataRAMUsed: trimArray(data.DataRAMUsed),
+    DataSwapUsed: trimArray(data.DataSwapUsed)
+  }
+}
+
 // Track which tabs have been rendered
 const renderedTabs = ref({
   fps: false,
@@ -644,20 +688,23 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
 }
 
 function prepareDataArrays() {
+  // Apply trimming to all benchmark data before processing
+  const trimmedData = props.benchmarkData.map(d => applyTrim(d))
+  
   return {
-    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
-    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
-    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] })),
-    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] })),
-    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] })),
-    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] })),
-    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] })),
-    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] })),
-    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] })),
-    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] })),
-    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] })),
-    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
-    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
+    fpsDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
+    frameTimeDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
+    cpuLoadDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] })),
+    gpuLoadDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] })),
+    cpuTempDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] })),
+    cpuPowerDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] })),
+    gpuTempDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] })),
+    gpuCoreClockDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] })),
+    gpuMemClockDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] })),
+    gpuVRAMUsedDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] })),
+    gpuPowerDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] })),
+    ramUsedDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
+    swapUsedDataArrays: trimmedData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
   }
 }
 

@@ -114,6 +114,8 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Return full data with trim parameters
+		// Frontend will handle trimming for display/calculations
 		c.JSON(http.StatusOK, data)
 	}
 }
@@ -264,9 +266,10 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		var req struct {
-			Title       string         `json:"title" binding:"max=100"`
-			Description string         `json:"description" binding:"max=5000"`
-			Labels      map[int]string `json:"labels"` // Map of index to new label
+			Title       string                      `json:"title" binding:"max=100"`
+			Description string                      `json:"description" binding:"max=5000"`
+			Labels      map[int]string              `json:"labels"` // Map of index to new label
+			Trims       map[int]map[string]int      `json:"trims"`  // Map of run index to {trim_start, trim_end}
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -282,7 +285,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Update labels if provided
-		if len(req.Labels) > 0 {
+		if len(req.Labels) > 0 || len(req.Trims) > 0 {
 			benchmarkID, err := strconv.ParseUint(id, 10, 32)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
@@ -298,6 +301,35 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			for idx, newLabel := range req.Labels {
 				if idx >= 0 && idx < len(benchmarkData) {
 					benchmarkData[idx].Label = newLabel
+				}
+			}
+
+			// Update trim parameters
+			for idx, trimParams := range req.Trims {
+				if idx >= 0 && idx < len(benchmarkData) {
+					trimStart, hasStart := trimParams["trim_start"]
+					trimEnd, hasEnd := trimParams["trim_end"]
+					
+					dataLen := benchmarkData[idx].GetDataLength()
+					
+					// Validate and set trim parameters
+					if hasStart && hasEnd {
+						// Ensure valid range
+						if trimStart < 0 {
+							trimStart = 0
+						}
+						if trimEnd >= dataLen {
+							trimEnd = dataLen - 1
+						}
+						if trimStart <= trimEnd {
+							benchmarkData[idx].TrimStart = trimStart
+							benchmarkData[idx].TrimEnd = trimEnd
+						}
+					} else if !hasStart && !hasEnd {
+						// Reset trimming
+						benchmarkData[idx].TrimStart = 0
+						benchmarkData[idx].TrimEnd = 0
+					}
 				}
 			}
 
