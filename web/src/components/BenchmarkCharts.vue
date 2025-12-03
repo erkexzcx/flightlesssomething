@@ -30,12 +30,12 @@
       </div>
       <button 
         type="button" 
-        class="btn btn-sm btn-link" 
+        class="btn btn-sm btn-outline-secondary" 
         data-bs-toggle="modal" 
         data-bs-target="#calculationModeModal"
-        title="What's the difference?"
+        title="Learn about the calculation modes"
       >
-        <i class="fa-solid fa-circle-question"></i>
+        <i class="fa-solid fa-circle-info"></i> Info
       </button>
     </div>
 
@@ -505,6 +505,34 @@ function calculatePercentile(data, percentile) {
   return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
 }
 
+// Calculate percentile FPS using MangoHud method (via frametimes)
+function calculatePercentileFPSMangoHud(fpsData, percentile) {
+  if (!fpsData || fpsData.length === 0) return 0
+  
+  // Convert FPS to frametimes (ms)
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_MS)
+  
+  // Filter out outliers > 100 seconds as MangoHud does
+  const filteredFrametimes = frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
+  
+  if (filteredFrametimes.length === 0) return 0
+  
+  // Calculate percentile on frametimes
+  const sorted = [...filteredFrametimes].sort((a, b) => a - b)
+  const frametimePercentile = sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
+  
+  // Convert back to FPS
+  return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
+}
+
+// Get the appropriate percentile FPS calculation based on current mode
+function getPercentileFPS(fpsData, percentile) {
+  if (appStore.calculationMode === 'mangohud') {
+    return calculatePercentileFPSMangoHud(fpsData, percentile)
+  }
+  return calculatePercentile(fpsData, percentile)
+}
+
 function calculateStandardDeviation(data) {
   if (!data || data.length === 0) return 0
   const mean = calculateAverage(data)
@@ -798,9 +826,9 @@ function renderFPSTab() {
   // FPS Min/Max/Avg chart
   if (fpsMinMaxAvgChart.value) {
     const categories = fpsDataArrays.map(d => d.label)
-    const minFPSData = fpsDataArrays.map(d => calculatePercentile(d.data, 1))
+    const minFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 1))
     const avgFPSData = fpsDataArrays.map(d => getAverageFPS(d.data))
-    const maxFPSData = fpsDataArrays.map(d => calculatePercentile(d.data, 97))
+    const maxFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 97))
 
     Highcharts.chart(fpsMinMaxAvgChart.value, {
       ...commonChartOptions,
@@ -1140,12 +1168,11 @@ watch(() => props.benchmarkData, () => {
   font-weight: 500;
 }
 
-.calculation-mode-switch .btn-link {
-  padding: 0.25rem 0.5rem;
-  color: var(--bs-primary);
+.calculation-mode-switch .btn-outline-secondary {
+  margin-left: 0.5rem;
 }
 
-.calculation-mode-switch .btn-link:hover {
-  opacity: 0.8;
+.calculation-mode-switch .btn-outline-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 </style>
