@@ -1,5 +1,94 @@
 <template>
   <div>
+    <!-- Calculation Mode Switch -->
+    <div class="calculation-mode-switch mb-3 d-flex justify-content-end align-items-center">
+      <label class="me-2 mb-0">Calculation Mode:</label>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Calculation mode">
+        <input 
+          type="radio" 
+          class="btn-check" 
+          name="calculationMode" 
+          id="originalMode" 
+          autocomplete="off" 
+          value="original"
+          :checked="appStore.calculationMode === 'original'"
+          @change="handleCalculationModeChange('original')"
+        >
+        <label class="btn btn-outline-primary" for="originalMode">Original</label>
+
+        <input 
+          type="radio" 
+          class="btn-check" 
+          name="calculationMode" 
+          id="mangoMode" 
+          autocomplete="off" 
+          value="mangohud"
+          :checked="appStore.calculationMode === 'mangohud'"
+          @change="handleCalculationModeChange('mangohud')"
+        >
+        <label class="btn btn-outline-primary" for="mangoMode">MangoHud</label>
+      </div>
+      <button 
+        type="button" 
+        class="btn btn-sm btn-outline-secondary" 
+        data-bs-toggle="modal" 
+        data-bs-target="#calculationModeModal"
+        title="Learn about the calculation modes"
+      >
+        <i class="fa-solid fa-circle-info"></i> Info
+      </button>
+    </div>
+
+    <!-- Calculation Mode Info Modal -->
+    <div class="modal fade" id="calculationModeModal" tabindex="-1" aria-labelledby="calculationModeModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="calculationModeModalLabel">Calculation Mode Explanation</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <h6>Original Calculation (Arithmetic Mean)</h6>
+            <p>
+              Calculates the average FPS by summing all FPS values and dividing by the count. 
+              This is the straightforward average: <code>(FPS₁ + FPS₂ + ... + FPSₙ) / n</code>
+            </p>
+            
+            <h6 class="mt-3">MangoHud Calculation (Harmonic Mean)</h6>
+            <p>
+              MangoHud calculates the average based on frame times, not FPS values directly. 
+              It sums all frame times to get total duration, calculates average frame time, 
+              and then converts to FPS: <code>1000 / (sum of frametimes / count)</code>
+            </p>
+            <p>
+              This is mathematically equivalent to: <code>Total Frames / Total Time</code>
+            </p>
+            
+            <h6 class="mt-3">Why They Differ</h6>
+            <p>
+              The arithmetic mean is almost always higher than the harmonic mean when values fluctuate.
+            </p>
+            
+            <div class="alert alert-info">
+              <strong>Example:</strong><br>
+              Frame A: 10ms (100 FPS)<br>
+              Frame B: 20ms (50 FPS)<br><br>
+              <strong>Original:</strong> (100 + 50) / 2 = <strong>75 FPS</strong><br>
+              <strong>MangoHud:</strong> Total time is 30ms. Average frametime is 15ms. 1000 / 15 = <strong>66.66 FPS</strong>
+            </div>
+            
+            <p class="mb-0">
+              <strong>Note:</strong> MangoHud also excludes frames longer than 100 seconds and keeps only 
+              the last 10,000 frames in memory, but these edge cases rarely affect typical benchmarks.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Specifications Table -->
     <div class="row mb-4" v-if="benchmarkData && benchmarkData.length > 0">
       <div class="col-12">
@@ -234,6 +323,7 @@
 
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
+import { useAppStore } from '../stores/app'
 import Highcharts from 'highcharts'
 import HighchartsBoost from 'highcharts/modules/boost'
 import HighchartsExporting from 'highcharts/modules/exporting'
@@ -246,10 +336,14 @@ HighchartsExporting(Highcharts)
 HighchartsExportData(Highcharts)
 HighchartsFullScreen(Highcharts)
 
+// Use app store for calculation mode
+const appStore = useAppStore()
+
 // Constants for data processing
 const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
 const OUTLIER_HIGH_PERCENTILE = 0.97 // Remove top 3% outliers
 const MAX_DENSITY_POINTS = 100       // Maximum points for density charts
+const MAX_FRAMETIME_MS = 100000      // Maximum frametime in ms (100 seconds) - MangoHud outlier filter
 
 const props = defineProps({
   benchmarkData: {
@@ -373,10 +467,73 @@ function calculateAverage(data) {
   return data.reduce((acc, value) => acc + value, 0) / data.length
 }
 
+// Helper function to convert FPS data to frametimes with outlier filtering (MangoHud method)
+function convertFPSToFilteredFrametimes(fpsData) {
+  if (!fpsData || fpsData.length === 0) return []
+  
+  // Convert FPS to frametimes (ms): frametime = 1000 / fps
+  // Handle edge case where FPS is 0 or negative by capping at MAX_FRAMETIME_MS
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_MS)
+  
+  // Filter out outliers > 100 seconds (100000 ms) as MangoHud does
+  return frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
+}
+
+// Calculate average FPS using MangoHud method (harmonic mean via frametimes)
+// MangoHud: 1000 / (sum of frametimes / count)
+function calculateAverageFPSMangoHud(fpsData) {
+  const filteredFrametimes = convertFPSToFilteredFrametimes(fpsData)
+  
+  if (filteredFrametimes.length === 0) return 0
+  
+  // Calculate sum of frametimes
+  const sumFrametimes = filteredFrametimes.reduce((acc, ft) => acc + ft, 0)
+  
+  // Average frametime
+  const avgFrametime = sumFrametimes / filteredFrametimes.length
+  
+  // Convert back to FPS: 1000 / avgFrametime
+  return avgFrametime > 0 ? 1000 / avgFrametime : 0
+}
+
+// Get the appropriate average FPS calculation based on current mode
+function getAverageFPS(fpsData) {
+  if (appStore.calculationMode === 'mangohud') {
+    return calculateAverageFPSMangoHud(fpsData)
+  }
+  return calculateAverage(fpsData)
+}
+
 function calculatePercentile(data, percentile) {
   if (!data || data.length === 0) return 0
   const sorted = [...data].sort((a, b) => a - b)
   return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
+}
+
+// Calculate percentile FPS using MangoHud method (via frametimes)
+function calculatePercentileFPSMangoHud(fpsData, percentile) {
+  const filteredFrametimes = convertFPSToFilteredFrametimes(fpsData)
+  
+  if (filteredFrametimes.length === 0) return 0
+  
+  // IMPORTANT: Percentiles must be inverted when working with frametimes
+  // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
+  // - 1% low FPS (worst performance) = 99th percentile of frametimes (slowest frames)
+  // - 97th percentile FPS (good performance) = 3rd percentile of frametimes (fastest frames)
+  const invertedPercentile = 100 - percentile
+  const sorted = [...filteredFrametimes].sort((a, b) => a - b)
+  const frametimePercentile = sorted[Math.ceil(invertedPercentile / 100 * sorted.length) - 1]
+  
+  // Convert back to FPS
+  return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
+}
+
+// Get the appropriate percentile FPS calculation based on current mode
+function getPercentileFPS(fpsData, percentile) {
+  if (appStore.calculationMode === 'mangohud') {
+    return calculatePercentileFPSMangoHud(fpsData, percentile)
+  }
+  return calculatePercentile(fpsData, percentile)
 }
 
 function calculateStandardDeviation(data) {
@@ -436,7 +593,7 @@ function renderFPSComparisonChart() {
   if (!fpsAvgChart.value || !props.benchmarkData || props.benchmarkData.length === 0) return
   
   const fpsDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] }))
-  const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
+  const fpsAverages = fpsDataArrays.map(d => getAverageFPS(d.data))
   
   if (fpsAverages.length === 0) return
   
@@ -672,9 +829,9 @@ function renderFPSTab() {
   // FPS Min/Max/Avg chart
   if (fpsMinMaxAvgChart.value) {
     const categories = fpsDataArrays.map(d => d.label)
-    const minFPSData = fpsDataArrays.map(d => calculatePercentile(d.data, 1))
-    const avgFPSData = fpsDataArrays.map(d => calculateAverage(d.data))
-    const maxFPSData = fpsDataArrays.map(d => calculatePercentile(d.data, 97))
+    const minFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 1))
+    const avgFPSData = fpsDataArrays.map(d => getAverageFPS(d.data))
+    const maxFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 97))
 
     Highcharts.chart(fpsMinMaxAvgChart.value, {
       ...commonChartOptions,
@@ -833,7 +990,7 @@ function renderSummaryTab() {
   } = prepareDataArrays()
 
   // Calculate averages for summary charts
-  const fpsAverages = fpsDataArrays.map(d => calculateAverage(d.data))
+  const fpsAverages = fpsDataArrays.map(d => getAverageFPS(d.data))
   const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
   const cpuLoadAverages = cpuLoadDataArrays.map(d => calculateAverage(d.data))
   const gpuLoadAverages = gpuLoadDataArrays.map(d => calculateAverage(d.data))
@@ -918,6 +1075,24 @@ function handleTabClick(tabName) {
   })
 }
 
+// Handle calculation mode change
+function handleCalculationModeChange(mode) {
+  appStore.setCalculationMode(mode)
+  // Force re-render of all rendered tabs
+  nextTick(() => {
+    if (renderedTabs.value.fps) {
+      renderFPSTab()
+    }
+    if (renderedTabs.value.frametime) {
+      renderFrametimeTab()
+    }
+    if (renderedTabs.value.summary) {
+      renderSummaryTab()
+    }
+    // More metrics tab doesn't use FPS averages, so no need to re-render
+  })
+}
+
 onMounted(() => {
   // Only render the first tab (FPS) on mount
   if (props.benchmarkData && props.benchmarkData.length > 0) {
@@ -983,5 +1158,24 @@ watch(() => props.benchmarkData, () => {
 
 .baseline-selector .form-select {
   max-width: 300px;
+}
+
+.calculation-mode-switch {
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+}
+
+.calculation-mode-switch label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.calculation-mode-switch .btn-outline-secondary {
+  margin-left: 0.5rem;
+}
+
+.calculation-mode-switch .btn-outline-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 </style>
