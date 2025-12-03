@@ -6,8 +6,18 @@ export const useAppStore = defineStore('app', () => {
   const version = ref('')
   const loading = ref(false)
   
-  // Calculation mode: 'original' or 'mangohud'
-  const calculationMode = ref(localStorage.getItem('calculationMode') || 'original')
+  // Calculation mode: 'legacy' or 'mangohud'
+  // Migrate old 'original' value to 'legacy' for backward compatibility
+  const storedMode = localStorage.getItem('calculationMode')
+  const migratedMode = storedMode === 'original' ? 'legacy' : (storedMode || 'mangohud')
+  const calculationMode = ref(migratedMode)
+  
+  // Update localStorage if migration occurred
+  if (storedMode === 'original') {
+    localStorage.setItem('calculationMode', 'legacy')
+  } else if (!storedMode) {
+    localStorage.setItem('calculationMode', 'mangohud')
+  }
 
   // Fetch version from backend
   async function fetchVersion() {
