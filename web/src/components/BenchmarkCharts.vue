@@ -517,8 +517,12 @@ function calculatePercentileFPSMangoHud(fpsData, percentile) {
   if (filteredFrametimes.length === 0) return 0
   
   // Calculate percentile on frametimes
+  // IMPORTANT: Percentiles are inverted for frametimes vs FPS
+  // - 1% low FPS = 99th percentile of frametimes (slowest frames)
+  // - 97th percentile FPS = 3rd percentile of frametimes (fastest frames)
+  const invertedPercentile = 100 - percentile
   const sorted = [...filteredFrametimes].sort((a, b) => a - b)
-  const frametimePercentile = sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
+  const frametimePercentile = sorted[Math.ceil(invertedPercentile / 100 * sorted.length) - 1]
   
   // Convert back to FPS
   return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
