@@ -8,13 +8,13 @@
           type="radio" 
           class="btn-check" 
           name="calculationMode" 
-          id="originalMode" 
+          id="legacyMode" 
           autocomplete="off" 
-          value="original"
-          :checked="appStore.calculationMode === 'original'"
-          @change="handleCalculationModeChange('original')"
+          value="legacy"
+          :checked="appStore.calculationMode === 'legacy'"
+          @change="handleCalculationModeChange('legacy')"
         >
-        <label class="btn btn-outline-primary" for="originalMode">Original</label>
+        <label class="btn btn-outline-primary" for="legacyMode">Legacy</label>
 
         <input 
           type="radio" 
@@ -48,7 +48,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <h6>Original Calculation (Arithmetic Mean)</h6>
+            <h6>Legacy Calculation (Arithmetic Mean)</h6>
             <p>
               Calculates the average FPS by summing all FPS values and dividing by the count. 
               This is the straightforward average: <code>(FPS₁ + FPS₂ + ... + FPSₙ) / n</code>
@@ -73,7 +73,7 @@
               <strong>Example:</strong><br>
               Frame A: 10ms (100 FPS)<br>
               Frame B: 20ms (50 FPS)<br><br>
-              <strong>Original:</strong> (100 + 50) / 2 = <strong>75 FPS</strong><br>
+              <strong>Legacy:</strong> (100 + 50) / 2 = <strong>75 FPS</strong><br>
               <strong>MangoHud:</strong> Total time is 30ms. Average frametime is 15ms. 1000 / 15 = <strong>66.66 FPS</strong>
             </div>
             
