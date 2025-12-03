@@ -1,0 +1,53 @@
+name: Prod to Dev Data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-data:
+    name: Sync Production Data to Dev
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync prod data to dev
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          DEV_CONTAINER="flightlesssomething-dev"
+          DEV_DATA_DIR="flightlesssomething-dev/data"
+          PROD_DATA_DIR="flightlesssomething-prod/data"
+
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "
+            # Stop dev container
+            echo 'Stopping dev container...'
+            docker stop ${DEV_CONTAINER} || true
+
+            # Delete dev data directory
+            echo 'Deleting dev data directory...'
+            rm -rf ~/${DEV_DATA_DIR}
+
+            # Copy prod data to dev
+            echo 'Copying prod data to dev...'
+            cp -r ~/${PROD_DATA_DIR} ~/${DEV_DATA_DIR}
+
+            # Start dev container
+            echo 'Starting dev container...'
+            docker start ${DEV_CONTAINER}
+
+            echo 'Data sync complete!'
+          "
