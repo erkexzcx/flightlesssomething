@@ -522,7 +522,23 @@ function calculatePercentileFPSMangoHud(fpsData, percentile) {
   // - 97th percentile FPS (good performance) = 3rd percentile of frametimes (fastest frames)
   const invertedPercentile = 100 - percentile
   const sorted = [...filteredFrametimes].sort((a, b) => a - b)
-  const frametimePercentile = sorted[Math.ceil(invertedPercentile / 100 * sorted.length) - 1]
+  const n = sorted.length
+  
+  // Use linear interpolation to match MangoHud's percentile calculation
+  // Position = (percentile / 100) * (n - 1)
+  const position = (invertedPercentile / 100) * (n - 1)
+  const lower = Math.floor(position)
+  const upper = Math.ceil(position)
+  const fraction = position - lower
+  
+  let frametimePercentile
+  if (lower === upper || upper >= n) {
+    // Exact position or edge case - use the value at lower index
+    frametimePercentile = sorted[lower]
+  } else {
+    // Interpolate between lower and upper values
+    frametimePercentile = sorted[lower] + fraction * (sorted[upper] - sorted[lower])
+  }
   
   // Convert back to FPS
   return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
