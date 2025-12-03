@@ -5,6 +5,9 @@ import { api } from '../api/client'
 export const useAppStore = defineStore('app', () => {
   const version = ref('')
   const loading = ref(false)
+  
+  // Calculation mode: 'original' or 'mangohud'
+  const calculationMode = ref(localStorage.getItem('calculationMode') || 'original')
 
   // Fetch version from backend
   async function fetchVersion() {
@@ -22,9 +25,17 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // Set calculation mode
+  function setCalculationMode(mode) {
+    calculationMode.value = mode
+    localStorage.setItem('calculationMode', mode)
+  }
+
   return {
     version,
     loading,
+    calculationMode,
     fetchVersion,
+    setCalculationMode,
   }
 })
