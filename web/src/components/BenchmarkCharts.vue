@@ -467,17 +467,22 @@ function calculateAverage(data) {
   return data.reduce((acc, value) => acc + value, 0) / data.length
 }
 
-// Calculate average FPS using MangoHud method (harmonic mean via frametimes)
-// MangoHud: 1000 / (sum of frametimes / count)
-function calculateAverageFPSMangoHud(fpsData) {
-  if (!fpsData || fpsData.length === 0) return 0
+// Helper function to convert FPS data to frametimes with outlier filtering (MangoHud method)
+function convertFPSToFilteredFrametimes(fpsData) {
+  if (!fpsData || fpsData.length === 0) return []
   
   // Convert FPS to frametimes (ms): frametime = 1000 / fps
   // Handle edge case where FPS is 0 or negative by capping at MAX_FRAMETIME_MS
   const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_MS)
   
   // Filter out outliers > 100 seconds (100000 ms) as MangoHud does
-  const filteredFrametimes = frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
+  return frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
+}
+
+// Calculate average FPS using MangoHud method (harmonic mean via frametimes)
+// MangoHud: 1000 / (sum of frametimes / count)
+function calculateAverageFPSMangoHud(fpsData) {
+  const filteredFrametimes = convertFPSToFilteredFrametimes(fpsData)
   
   if (filteredFrametimes.length === 0) return 0
   
@@ -507,13 +512,7 @@ function calculatePercentile(data, percentile) {
 
 // Calculate percentile FPS using MangoHud method (via frametimes)
 function calculatePercentileFPSMangoHud(fpsData, percentile) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (ms)
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_MS)
-  
-  // Filter out outliers > 100 seconds as MangoHud does
-  const filteredFrametimes = frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
+  const filteredFrametimes = convertFPSToFilteredFrametimes(fpsData)
   
   if (filteredFrametimes.length === 0) return 0
   
