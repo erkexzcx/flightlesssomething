@@ -528,12 +528,12 @@ function calculatePercentileFPSMangoHud(fpsData, percentile) {
   // Position = (percentile / 100) * (n - 1)
   const position = (invertedPercentile / 100) * (n - 1)
   const lower = Math.min(Math.floor(position), n - 1)
-  const upper = Math.min(Math.ceil(position), n - 1)
-  const fraction = position - Math.floor(position)
+  const upper = Math.min(lower + 1, n - 1)
+  const fraction = position - lower
   
   let frametimePercentile
   if (lower === upper) {
-    // Exact position - use the value at this index
+    // Exact position or at the edge - use the value at this index
     frametimePercentile = sorted[lower]
   } else {
     // Interpolate between lower and upper values
