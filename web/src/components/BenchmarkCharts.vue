@@ -343,6 +343,7 @@ const appStore = useAppStore()
 const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
 const OUTLIER_HIGH_PERCENTILE = 0.97 // Remove top 3% outliers
 const MAX_DENSITY_POINTS = 100       // Maximum points for density charts
+const MAX_FRAMETIME_MS = 100000      // Maximum frametime in ms (100 seconds) - MangoHud outlier filter
 
 const props = defineProps({
   benchmarkData: {
@@ -472,11 +473,11 @@ function calculateAverageFPSMangoHud(fpsData) {
   if (!fpsData || fpsData.length === 0) return 0
   
   // Convert FPS to frametimes (ms): frametime = 1000 / fps
-  // But we need to handle edge cases where FPS might be 0 or very low
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : 100000)
+  // Handle edge case where FPS is 0 or negative by capping at MAX_FRAMETIME_MS
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_MS)
   
   // Filter out outliers > 100 seconds (100000 ms) as MangoHud does
-  const filteredFrametimes = frametimes.filter(ft => ft <= 100000)
+  const filteredFrametimes = frametimes.filter(ft => ft <= MAX_FRAMETIME_MS)
   
   if (filteredFrametimes.length === 0) return 0
   
@@ -1145,6 +1146,6 @@ watch(() => props.benchmarkData, () => {
 }
 
 .calculation-mode-switch .btn-link:hover {
-  color: var(--bs-primary-dark);
+  opacity: 0.8;
 }
 </style>
