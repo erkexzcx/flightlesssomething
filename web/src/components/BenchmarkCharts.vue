@@ -524,21 +524,11 @@ function calculatePercentileFPSMangoHud(fpsData, percentile) {
   const sorted = [...filteredFrametimes].sort((a, b) => a - b)
   const n = sorted.length
   
-  // Use linear interpolation to match MangoHud's percentile calculation
-  // Position = (percentile / 100) * (n - 1)
-  const position = (invertedPercentile / 100) * (n - 1)
-  const lower = Math.min(Math.floor(position), n - 1)
-  const upper = Math.min(lower + 1, n - 1)
-  const fraction = position - lower
-  
-  let frametimePercentile
-  if (lower === upper) {
-    // Exact position or at the edge - use the value at this index
-    frametimePercentile = sorted[lower]
-  } else {
-    // Interpolate between lower and upper values
-    frametimePercentile = sorted[lower] + fraction * (sorted[upper] - sorted[lower])
-  }
+  // MangoHud uses a simple percentile calculation without interpolation
+  // Index = round((percentile / 100) * (n + 1))
+  const index = Math.round((invertedPercentile / 100) * (n + 1))
+  const clampedIndex = Math.max(0, Math.min(index, n - 1))
+  const frametimePercentile = sorted[clampedIndex]
   
   // Convert back to FPS
   return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
