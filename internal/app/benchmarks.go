@@ -37,21 +37,33 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		sortOrder := c.DefaultQuery("sort_order", "desc")
 
 		// Validate sort_by to prevent SQL injection
-		allowedSortFields := map[string]bool{
-			"title":      true,
-			"created_at": true,
-			"updated_at": true,
-		}
-		if !allowedSortFields[sortBy] {
-			sortBy = "created_at"
+		// Use explicit column names to avoid any possibility of injection
+		var orderClause string
+		switch sortBy {
+		case "title":
+			orderClause = "title"
+		case "created_at":
+			orderClause = "created_at"
+		case "updated_at":
+			orderClause = "updated_at"
+		default:
+			orderClause = "created_at"
 		}
 
-		// Validate sort_order
-		if sortOrder != "asc" && sortOrder != "desc" {
-			sortOrder = "desc"
+		// Validate sort_order - only allow specific values
+		var ascending bool
+		if sortOrder == "asc" {
+			ascending = true
+		} else {
+			ascending = false
 		}
 
-		query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+		// Use GORM's safe order method with validated inputs
+		if ascending {
+			query = query.Order(orderClause + " ASC")
+		} else {
+			query = query.Order(orderClause + " DESC")
+		}
 
 		// Get total count
 		var total int64
