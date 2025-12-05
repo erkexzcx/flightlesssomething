@@ -260,6 +260,7 @@ const popoverRef = ref(null)
 const sortKey = ref(null)
 const sortDirection = ref('asc')
 const showScrollTop = ref(false)
+const windowWidth = ref(window.innerWidth)
 
 // Computed property to calculate which page numbers to show
 const paginationPages = computed(() => {
@@ -268,7 +269,7 @@ const paginationPages = computed(() => {
   const total = totalPages.value
   
   // Show max 7 page numbers (mobile: 5)
-  const maxVisible = window.innerWidth <= 768 ? 5 : 7
+  const maxVisible = windowWidth.value <= 768 ? 5 : 7
   const halfVisible = Math.floor(maxVisible / 2)
   
   if (total <= maxVisible) {
@@ -527,6 +528,10 @@ function handleScroll() {
   showScrollTop.value = window.scrollY > 300
 }
 
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
+
 // Handle clicking outside to close pinned popover
 function handleClickOutside(event) {
   if (pinnedPopover.value !== null) {
@@ -551,11 +556,13 @@ onMounted(() => {
   loadBenchmarks()
   document.addEventListener('click', handleClickOutside)
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', handleResize)
 })
 
 // Watch for route query changes
@@ -878,7 +885,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
 }
 
-.pagination .page-link:hover:not(.disabled .page-link) {
+.pagination .page-item:not(.disabled) .page-link:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }

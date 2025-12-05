@@ -125,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -141,6 +141,7 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const totalBenchmarks = ref(0)
 const perPage = ref(10)
+const windowWidth = ref(window.innerWidth)
 
 // Computed property to calculate which page numbers to show
 const paginationPages = computed(() => {
@@ -149,7 +150,7 @@ const paginationPages = computed(() => {
   const total = totalPages.value
   
   // Show max 7 page numbers (mobile: 5)
-  const maxVisible = window.innerWidth <= 768 ? 5 : 7
+  const maxVisible = windowWidth.value <= 768 ? 5 : 7
   const halfVisible = Math.floor(maxVisible / 2)
   
   if (total <= maxVisible) {
@@ -213,12 +214,21 @@ function navigateToBenchmark(id) {
   router.push(`/benchmarks/${id}`)
 }
 
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
+
 onMounted(() => {
   if (!authStore.isAuthenticated) {
     router.push('/login')
     return
   }
   loadBenchmarks()
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
@@ -262,7 +272,7 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
 }
 
-.pagination .page-link:hover:not(.disabled .page-link) {
+.pagination .page-item:not(.disabled) .page-link:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
