@@ -59,17 +59,19 @@ Response:
 
 **GET** `/api/benchmarks`
 
-List all benchmarks with pagination and search (no authentication required).
+List all benchmarks with pagination, search, and sorting (no authentication required).
 
 Query parameters:
 - `page` (integer) - Page number (default: 1)
 - `per_page` (integer) - Results per page (default: 10, max: 100)
 - `search` (string) - Search in title/description
 - `user_id` (integer) - Filter by user ID
+- `sort_by` (string) - Sort field: `title`, `created_at`, or `updated_at` (default: `created_at`)
+- `sort_order` (string) - Sort order: `asc` or `desc` (default: `desc`)
 
 Example:
 ```bash
-curl "http://localhost:5000/api/benchmarks?page=1&per_page=20"
+curl "http://localhost:5000/api/benchmarks?page=1&per_page=20&sort_by=title&sort_order=asc"
 ```
 
 Response:

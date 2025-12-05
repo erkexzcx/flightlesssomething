@@ -13,13 +13,13 @@
         <input
           type="search"
           v-model="searchQuery"
-          class="form-control rounded"
+          class="form-control rounded search-input"
           placeholder="Search title or description..."
           aria-label="Search"
           aria-describedby="search-addon"
           :disabled="route.query.user_id !== undefined"
         />
-        <span class="input-group-text border-0" id="search-addon">
+        <span class="input-group-text border-0 search-btn-icon" id="search-addon">
           <button type="submit" class="btn btn-link p-0 m-0" :disabled="route.query.user_id !== undefined">
             <i class="fas fa-search"></i>
           </button>
@@ -34,6 +34,29 @@
       </span>
       <button type="button" class="btn btn-sm btn-outline-info" @click="clearFilter">
         <i class="fas fa-times"></i> Clear filter
+      </button>
+    </div>
+
+    <!-- Sort buttons -->
+    <div class="mb-3 d-flex gap-2 align-items-center">
+      <small class="text-muted me-2">Sort by:</small>
+      <button
+        @click="toggleSort('name')"
+        :class="['btn', 'btn-sm', sortKey === 'name' ? 'btn-primary' : 'btn-outline-secondary', 'sort-btn']"
+      >
+        <i class="fas fa-sort-alpha-down"></i> Name
+        <span v-if="sortKey === 'name'" class="ms-1">
+          <i :class="['fas', sortDirection === 'asc' ? 'fa-arrow-up' : 'fa-arrow-down']"></i>
+        </span>
+      </button>
+      <button
+        @click="toggleSort('date')"
+        :class="['btn', 'btn-sm', sortKey === 'date' ? 'btn-primary' : 'btn-outline-secondary', 'sort-btn']"
+      >
+        <i class="fas fa-calendar-alt"></i> Date
+        <span v-if="sortKey === 'date'" class="ms-1">
+          <i :class="['fas', sortDirection === 'asc' ? 'fa-arrow-up' : 'fa-arrow-down']"></i>
+        </span>
       </button>
     </div>
 
@@ -58,7 +81,7 @@
       <div
         v-for="benchmark in benchmarks"
         :key="benchmark.ID"
-        class="list-group-item flex-column align-items-start"
+        class="list-group-item flex-column align-items-start benchmark-card"
         role="button"
         tabindex="0"
         :aria-label="`View benchmark: ${benchmark.Title}`"
@@ -154,6 +177,18 @@
         </li>
       </ul>
     </div>
+
+    <!-- Scroll to top button -->
+    <transition name="fade">
+      <button
+        v-if="showScrollTop"
+        @click="scrollToTop"
+        class="btn btn-primary scroll-top-btn"
+        aria-label="Scroll to top"
+      >
+        <i class="fas fa-arrow-up"></i>
+      </button>
+    </transition>
   </div>
 </template>
 
@@ -182,6 +217,9 @@ const hideTimeout = ref(null)
 const filterUserId = ref(null)
 const filterUsername = ref('')
 const popoverRef = ref(null)
+const sortKey = ref(null)
+const sortDirection = ref('asc')
+const showScrollTop = ref(false)
 
 async function loadBenchmarks() {
   try {
@@ -196,12 +234,25 @@ async function loadBenchmarks() {
       filterUserId.value = userId
     }
 
+    // Prepare sort parameters for backend
+    let sortByParam = ''
+    let sortOrderParam = ''
+    if (sortKey.value === 'name') {
+      sortByParam = 'title'
+      sortOrderParam = sortDirection.value
+    } else if (sortKey.value === 'date') {
+      sortByParam = 'updated_at'
+      sortOrderParam = sortDirection.value
+    }
+
     let response
     if (userId) {
       response = await api.benchmarks.listByUser(
         userId,
         currentPage.value,
-        perPage.value
+        perPage.value,
+        sortByParam,
+        sortOrderParam
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
       if (!filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
@@ -211,7 +262,9 @@ async function loadBenchmarks() {
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
-        searchQuery.value
+        searchQuery.value,
+        sortByParam,
+        sortOrderParam
       )
     }
 
@@ -224,6 +277,19 @@ async function loadBenchmarks() {
   } finally {
     loading.value = false
   }
+}
+
+function toggleSort(key) {
+  if (sortKey.value === key) {
+    // Toggle direction if same key
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // New sort key, default to ascending
+    sortKey.value = key
+    sortDirection.value = 'asc'
+  }
+  // Reload benchmarks with new sort order from backend
+  loadBenchmarks()
 }
 
 function goToPage(page) {
@@ -376,6 +442,14 @@ function navigateToBenchmark(id) {
   router.push(`/benchmarks/${id}`)
 }
 
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function handleScroll() {
+  showScrollTop.value = window.scrollY > 300
+}
+
 // Handle clicking outside to close pinned popover
 function handleClickOutside(event) {
   if (pinnedPopover.value !== null) {
@@ -399,10 +473,12 @@ function handleClickOutside(event) {
 onMounted(() => {
   loadBenchmarks()
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('scroll', handleScroll)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('scroll', handleScroll)
 })
 
 // Watch for route query changes
@@ -415,8 +491,119 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 </script>
 
 <style scoped>
-.list-group-item {
+/* Enhanced search input */
+.search-input {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.search-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  border-color: #86b7fe;
+}
+
+.search-btn-icon {
+  background-color: transparent;
+  transition: background-color 0.3s ease;
+}
+
+.search-btn-icon:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Sort buttons */
+.sort-btn {
+  transition: all 0.2s ease;
+  border-radius: 0.375rem;
+}
+
+.sort-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.sort-btn:active {
+  transform: translateY(0);
+}
+
+/* Enhanced benchmark cards */
+.benchmark-card {
   cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.benchmark-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(145deg, rgba(13, 110, 253, 0.05), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.benchmark-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 0 20px rgba(13, 110, 253, 0.1);
+  border-color: rgba(13, 110, 253, 0.3);
+}
+
+.benchmark-card:hover::before {
+  opacity: 1;
+}
+
+.benchmark-card:active {
+  transform: translateY(-2px);
+}
+
+/* Scroll to top button */
+.scroll-top-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  z-index: 1000;
+  border: none;
+}
+
+.scroll-top-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.scroll-top-btn:active {
+  transform: translateY(-2px);
+}
+
+/* Fade transition for scroll button */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+/* List group items */
+.list-group-item {
   transition: background-color 0.2s;
 }
 

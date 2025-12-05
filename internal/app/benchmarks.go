@@ -22,7 +22,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		}
 
 		var benchmarks []Benchmark
-		query := db.DB.Preload("User").Order("created_at DESC")
+		query := db.DB.Preload("User")
 
 		// Optional filters
 		if userID := c.Query("user_id"); userID != "" {
@@ -30,6 +30,39 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		}
 		if search := c.Query("search"); search != "" {
 			query = query.Where("title LIKE ? OR description LIKE ?", "%"+search+"%", "%"+search+"%")
+		}
+
+		// Sorting
+		sortBy := c.DefaultQuery("sort_by", "created_at")
+		sortOrder := c.DefaultQuery("sort_order", "desc")
+
+		// Validate sort_by to prevent SQL injection
+		// Use explicit column names to avoid any possibility of injection
+		var orderClause string
+		switch sortBy {
+		case "title":
+			orderClause = "title"
+		case "created_at":
+			orderClause = "created_at"
+		case "updated_at":
+			orderClause = "updated_at"
+		default:
+			orderClause = "created_at"
+		}
+
+		// Validate sort_order - only allow specific values
+		var ascending bool
+		if sortOrder == "asc" {
+			ascending = true
+		} else {
+			ascending = false
+		}
+
+		// Use GORM's safe order method with validated inputs
+		if ascending {
+			query = query.Order(orderClause + " ASC")
+		} else {
+			query = query.Order(orderClause + " DESC")
 		}
 
 		// Get total count
