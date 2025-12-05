@@ -288,10 +288,15 @@ function applySorting() {
     let comparison = 0
 
     if (sortKey.value === 'name') {
-      comparison = a.Title.localeCompare(b.Title)
+      const titleA = a.Title || ''
+      const titleB = b.Title || ''
+      comparison = titleA.localeCompare(titleB)
     } else if (sortKey.value === 'date') {
-      const dateA = new Date(a.UpdatedAt || a.CreatedAt)
-      const dateB = new Date(b.UpdatedAt || b.CreatedAt)
+      const dateStrA = a.UpdatedAt || a.CreatedAt
+      const dateStrB = b.UpdatedAt || b.UpdatedAt
+      if (!dateStrA || !dateStrB) return 0
+      const dateA = new Date(dateStrA)
+      const dateB = new Date(dateStrB)
       comparison = dateA - dateB
     }
 
@@ -538,7 +543,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   transition: all 0.3s ease;
   border-radius: 0.5rem;
   margin-bottom: 0.75rem;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
