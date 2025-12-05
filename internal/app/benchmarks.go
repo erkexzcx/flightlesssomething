@@ -22,7 +22,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		}
 
 		var benchmarks []Benchmark
-		query := db.DB.Preload("User").Order("created_at DESC")
+		query := db.DB.Preload("User")
 
 		// Optional filters
 		if userID := c.Query("user_id"); userID != "" {
@@ -31,6 +31,27 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		if search := c.Query("search"); search != "" {
 			query = query.Where("title LIKE ? OR description LIKE ?", "%"+search+"%", "%"+search+"%")
 		}
+
+		// Sorting
+		sortBy := c.DefaultQuery("sort_by", "created_at")
+		sortOrder := c.DefaultQuery("sort_order", "desc")
+
+		// Validate sort_by to prevent SQL injection
+		allowedSortFields := map[string]bool{
+			"title":      true,
+			"created_at": true,
+			"updated_at": true,
+		}
+		if !allowedSortFields[sortBy] {
+			sortBy = "created_at"
+		}
+
+		// Validate sort_order
+		if sortOrder != "asc" && sortOrder != "desc" {
+			sortOrder = "desc"
+		}
+
+		query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
 
 		// Get total count
 		var total int64

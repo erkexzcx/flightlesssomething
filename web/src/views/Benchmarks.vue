@@ -234,12 +234,25 @@ async function loadBenchmarks() {
       filterUserId.value = userId
     }
 
+    // Prepare sort parameters for backend
+    let sortByParam = ''
+    let sortOrderParam = ''
+    if (sortKey.value === 'name') {
+      sortByParam = 'title'
+      sortOrderParam = sortDirection.value
+    } else if (sortKey.value === 'date') {
+      sortByParam = 'updated_at'
+      sortOrderParam = sortDirection.value
+    }
+
     let response
     if (userId) {
       response = await api.benchmarks.listByUser(
         userId,
         currentPage.value,
-        perPage.value
+        perPage.value,
+        sortByParam,
+        sortOrderParam
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
       if (!filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
@@ -249,18 +262,15 @@ async function loadBenchmarks() {
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
-        searchQuery.value
+        searchQuery.value,
+        sortByParam,
+        sortOrderParam
       )
     }
 
     benchmarks.value = response.benchmarks || []
     totalBenchmarks.value = response.total || 0
     totalPages.value = response.total_pages || 1
-
-    // Apply client-side sorting if sort is active
-    if (sortKey.value) {
-      applySorting()
-    }
   } catch (err) {
     error.value = err.message || 'Failed to load benchmarks'
     benchmarks.value = []
@@ -278,30 +288,8 @@ function toggleSort(key) {
     sortKey.value = key
     sortDirection.value = 'asc'
   }
-  applySorting()
-}
-
-function applySorting() {
-  if (!sortKey.value || benchmarks.value.length === 0) return
-
-  benchmarks.value.sort((a, b) => {
-    let comparison = 0
-
-    if (sortKey.value === 'name') {
-      const titleA = a.Title || ''
-      const titleB = b.Title || ''
-      comparison = titleA.localeCompare(titleB)
-    } else if (sortKey.value === 'date') {
-      const dateStrA = a.UpdatedAt || a.CreatedAt
-      const dateStrB = b.UpdatedAt || b.UpdatedAt
-      if (!dateStrA || !dateStrB) return 0
-      const dateA = new Date(dateStrA)
-      const dateB = new Date(dateStrB)
-      comparison = dateA - dateB
-    }
-
-    return sortDirection.value === 'asc' ? comparison : -comparison
-  })
+  // Reload benchmarks with new sort order from backend
+  loadBenchmarks()
 }
 
 function goToPage(page) {
