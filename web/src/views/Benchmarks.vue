@@ -781,17 +781,13 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   }
   
   .custom-popover {
-    /* On mobile, use different positioning strategy */
+    /* On mobile, use fixed positioning (top is set by JavaScript) */
     position: fixed;
-    top: auto;
     left: 1rem;
     right: 1rem;
-    bottom: auto;
     transform: none;
     max-width: none;
     min-width: auto;
-    /* Position below click point with margin */
-    margin-top: 0.5rem;
   }
   
   /* Hide arrows on mobile since popover is fixed */
