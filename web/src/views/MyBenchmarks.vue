@@ -63,9 +63,9 @@
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="d-flex justify-content-center mt-3">
+      <div v-if="totalPages > 1" class="d-flex justify-content-center align-items-center gap-3 mt-3 flex-wrap">
         <nav aria-label="Benchmark pagination">
-          <ul class="pagination">
+          <ul class="pagination mb-0">
             <!-- Previous button -->
             <li class="page-item" :class="{ disabled: currentPage <= 1 }">
               <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)" aria-label="Previous page">
@@ -119,6 +119,30 @@
             </li>
           </ul>
         </nav>
+        
+        <!-- Custom page input -->
+        <div class="d-flex align-items-center gap-2 page-jump">
+          <label for="page-input" class="text-nowrap mb-0 small">Go to:</label>
+          <input
+            id="page-input"
+            v-model.number="pageInputValue"
+            type="number"
+            class="form-control form-control-sm page-input"
+            :min="1"
+            :max="totalPages"
+            :placeholder="`1-${totalPages}`"
+            @keyup.enter="goToCustomPage"
+            aria-label="Enter page number"
+          />
+          <button
+            class="btn btn-sm btn-primary"
+            @click="goToCustomPage"
+            :disabled="!isValidPageInput"
+            aria-label="Go to page"
+          >
+            Go
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -142,6 +166,13 @@ const totalPages = ref(1)
 const totalBenchmarks = ref(0)
 const perPage = ref(10)
 const windowWidth = ref(window.innerWidth)
+const pageInputValue = ref(null)
+
+// Computed property to validate page input
+const isValidPageInput = computed(() => {
+  const value = pageInputValue.value
+  return value && value >= 1 && value <= totalPages.value && value !== currentPage.value
+})
 
 // Computed property to calculate which page numbers to show
 const paginationPages = computed(() => {
@@ -207,6 +238,13 @@ function goToPage(page) {
     loadBenchmarks()
     // Scroll to top when changing pages for better UX
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function goToCustomPage() {
+  if (isValidPageInput.value) {
+    goToPage(pageInputValue.value)
+    pageInputValue.value = null // Clear input after navigation
   }
 }
 
@@ -279,6 +317,31 @@ onUnmounted(() => {
 
 .pagination .page-item.disabled .page-link {
   cursor: not-allowed;
+}
+
+/* Page jump input styles */
+.page-jump {
+  font-size: 0.875rem;
+}
+
+.page-jump .page-input {
+  width: 70px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.page-jump .page-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  border-color: #86b7fe;
+}
+
+.page-jump .btn {
+  transition: all 0.2s ease;
+}
+
+.page-jump .btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Mobile pagination adjustments */
