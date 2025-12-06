@@ -676,7 +676,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   transform: translateY(-4px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 0 20px rgba(13, 110, 253, 0.1);
   border-color: rgba(13, 110, 253, 0.3);
-  z-index: 1100;
+  z-index: 1025;
 }
 
 .benchmark-card:hover::before {
