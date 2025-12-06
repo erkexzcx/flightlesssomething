@@ -351,6 +351,8 @@ const getThemeColors = computed(() => {
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
     // Use softer background for light theme (light gray) and Bootstrap dark for dark theme
     chartBg: isDark ? '#212529' : '#F5F5F5',
+    // Bar border color - black for light theme, transparent for dark theme
+    barBorderColor: isDark ? 'transparent' : '#000000',
   }
 })
 
@@ -800,7 +802,13 @@ function getBarChartOptions(title, unit, maxY = null) {
     xAxis: { ...chartOpts.xAxis, categories: [], title: { text: null } },
     yAxis: { ...chartOpts.yAxis, min: 0, max: maxY, title: { text: unit, align: 'high', style: { color: colors.textColor } }, labels: { ...chartOpts.yAxis.labels, formatter: function() { return this.value.toFixed(2) + ' ' + unit } } },
     tooltip: { ...chartOpts.tooltip, valueSuffix: ' ' + unit, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ${unit}` } },
-    plotOptions: { bar: { dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ' + unit } } } },
+    plotOptions: { 
+      bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
+        dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ' + unit } } 
+      } 
+    },
     legend: { enabled: false },
     series: []
   }
@@ -875,7 +883,7 @@ function renderFPSTab() {
       xAxis: { ...chartOpts.xAxis, categories: categories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'FPS', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, valueSuffix: ' FPS', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} FPS` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' fps' } } } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' fps' } } } },
       legend: { ...chartOpts.legend, reversed: true, enabled: true },
       series: [
         { name: '97th', data: maxFPSData, color: '#00FF00' },
@@ -925,7 +933,7 @@ function renderFPSTab() {
       xAxis: { ...chartOpts.xAxis, categories: categories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
       legend: { ...chartOpts.legend, enabled: true },
       series: [
         { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
@@ -959,7 +967,7 @@ function renderFrametimeTab() {
       xAxis: { ...chartOpts.xAxis, categories: categories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Frametime (ms)', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, valueSuffix: ' ms', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} ms` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ms' } } } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ms' } } } },
       legend: { ...chartOpts.legend, reversed: true, enabled: true },
       series: [
         { name: '97th', data: maxData, color: '#00FF00' },
@@ -1009,7 +1017,7 @@ function renderFrametimeTab() {
       xAxis: { ...chartOpts.xAxis, categories: categories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
       legend: { ...chartOpts.legend, enabled: true },
       series: [
         { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
