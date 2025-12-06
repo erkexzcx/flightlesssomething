@@ -348,7 +348,8 @@ const getThemeColors = computed(() => {
     lineColor: isDark ? '#FFFFFF' : '#000000',
     tooltipBg: isDark ? '#1E1E1E' : '#FFFFFF',
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
-    chartBg: isDark ? '#000000' : '#FFFFFF',
+    // For fullscreen/export only - transparent for normal display
+    exportBg: isDark ? '#212529' : '#FFFFFF',
   }
 })
 
@@ -415,7 +416,7 @@ const commonChartOptions = computed(() => {
   const colors = getThemeColors.value
   return {
     chart: { 
-      backgroundColor: colors.chartBg, 
+      backgroundColor: 'transparent', 
       style: { color: colors.textColor }, 
       animation: false, 
       boost: { 
@@ -435,7 +436,7 @@ const commonChartOptions = computed(() => {
     exporting: {
       chartOptions: {
         chart: {
-          backgroundColor: colors.chartBg
+          backgroundColor: colors.exportBg
         }
       }
     }
