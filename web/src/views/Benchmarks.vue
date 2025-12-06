@@ -160,22 +160,86 @@
     </div>
 
     <!-- Pagination -->
-    <div class="d-flex justify-content-center mt-3">
-      <ul class="pagination">
-        <li class="page-item" :class="{ disabled: currentPage <= 1 || totalBenchmarks <= perPage }">
-          <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)">
-            Previous
-          </a>
-        </li>
-        <li class="page-item disabled">
-          <a class="page-link" href="#">{{ currentPage }} / {{ totalPages }}</a>
-        </li>
-        <li class="page-item" :class="{ disabled: currentPage >= totalPages || totalBenchmarks <= perPage }">
-          <a class="page-link" href="#" @click.prevent="goToPage(currentPage + 1)">
-            Next
-          </a>
-        </li>
-      </ul>
+    <div v-if="totalPages > 1" class="d-flex justify-content-center align-items-center gap-3 mt-3 flex-wrap">
+      <nav aria-label="Benchmark pagination">
+        <ul class="pagination mb-0">
+          <!-- Previous button -->
+          <li class="page-item" :class="{ disabled: currentPage <= 1 }">
+            <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)" aria-label="Previous page">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+          
+          <!-- First page -->
+          <li v-if="paginationPages.length > 0 && paginationPages[0] !== 1" class="page-item">
+            <a class="page-link" href="#" @click.prevent="goToPage(1)">1</a>
+          </li>
+          
+          <!-- Left ellipsis -->
+          <li v-if="paginationPages.length > 0 && paginationPages[0] > 2" class="page-item disabled">
+            <span class="page-link">...</span>
+          </li>
+          
+          <!-- Page numbers -->
+          <li 
+            v-for="page in paginationPages" 
+            :key="page" 
+            class="page-item" 
+            :class="{ active: page === currentPage }"
+          >
+            <a 
+              class="page-link" 
+              href="#" 
+              @click.prevent="goToPage(page)"
+              :aria-label="`Go to page ${page}`"
+              :aria-current="page === currentPage ? 'page' : undefined"
+            >
+              {{ page }}
+            </a>
+          </li>
+          
+          <!-- Right ellipsis -->
+          <li v-if="paginationPages.length > 0 && paginationPages[paginationPages.length - 1] < totalPages - 1" class="page-item disabled">
+            <span class="page-link">...</span>
+          </li>
+          
+          <!-- Last page -->
+          <li v-if="paginationPages.length > 0 && paginationPages[paginationPages.length - 1] !== totalPages" class="page-item">
+            <a class="page-link" href="#" @click.prevent="goToPage(totalPages)">{{ totalPages }}</a>
+          </li>
+          
+          <!-- Next button -->
+          <li class="page-item" :class="{ disabled: currentPage >= totalPages }">
+            <a class="page-link" href="#" @click.prevent="goToPage(currentPage + 1)" aria-label="Next page">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      
+      <!-- Custom page input -->
+      <div class="d-flex align-items-center gap-2 page-jump">
+        <label for="page-input" class="text-nowrap mb-0 small">Go to:</label>
+        <input
+          id="page-input"
+          v-model.number="pageInputValue"
+          type="number"
+          class="form-control form-control-sm page-input"
+          :min="1"
+          :max="totalPages"
+          :placeholder="`1-${totalPages}`"
+          @keyup.enter="goToCustomPage"
+          aria-label="Enter page number"
+        />
+        <button
+          class="btn btn-sm btn-primary"
+          @click="goToCustomPage"
+          :disabled="!isValidPageInput"
+          aria-label="Go to page"
+        >
+          Go
+        </button>
+      </div>
     </div>
 
     <!-- Scroll to top button -->
@@ -193,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -220,6 +284,49 @@ const popoverRef = ref(null)
 const sortKey = ref(null)
 const sortDirection = ref('asc')
 const showScrollTop = ref(false)
+const windowWidth = ref(window.innerWidth)
+const pageInputValue = ref(null)
+
+// Computed property to validate page input
+const isValidPageInput = computed(() => {
+  const value = pageInputValue.value
+  return value && value >= 1 && value <= totalPages.value && value !== currentPage.value
+})
+
+// Computed property to calculate which page numbers to show
+const paginationPages = computed(() => {
+  const pages = []
+  const current = currentPage.value
+  const total = totalPages.value
+  
+  // Show max 7 page numbers (mobile: 5)
+  const maxVisible = windowWidth.value <= 768 ? 5 : 7
+  const halfVisible = Math.floor(maxVisible / 2)
+  
+  if (total <= maxVisible) {
+    // Show all pages if total is less than max
+    for (let i = 1; i <= total; i++) {
+      pages.push(i)
+    }
+  } else {
+    // Calculate start and end of visible range
+    let start = Math.max(1, current - halfVisible)
+    let end = Math.min(total, current + halfVisible)
+    
+    // Adjust if we're near the beginning or end
+    if (current <= halfVisible) {
+      end = maxVisible
+    } else if (current >= total - halfVisible) {
+      start = total - maxVisible + 1
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+  }
+  
+  return pages
+})
 
 async function loadBenchmarks() {
   try {
@@ -296,6 +403,15 @@ function goToPage(page) {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page
     loadBenchmarks()
+    // Scroll to top when changing pages for better UX
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function goToCustomPage() {
+  if (isValidPageInput.value) {
+    goToPage(pageInputValue.value)
+    pageInputValue.value = null // Clear input after navigation
   }
 }
 
@@ -450,6 +566,10 @@ function handleScroll() {
   showScrollTop.value = window.scrollY > 300
 }
 
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
+
 // Handle clicking outside to close pinned popover
 function handleClickOutside(event) {
   if (pinnedPopover.value !== null) {
@@ -474,11 +594,13 @@ onMounted(() => {
   loadBenchmarks()
   document.addEventListener('click', handleClickOutside)
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', handleResize)
 })
 
 // Watch for route query changes
@@ -780,5 +902,71 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   font-weight: bold;
   cursor: help;
   margin-left: 2px;
+}
+
+/* Pagination styles */
+.pagination {
+  gap: 0.25rem;
+}
+
+.pagination .page-link {
+  transition: all 0.2s ease;
+  border-radius: 0.375rem;
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+}
+
+.pagination .page-item:not(.disabled) .page-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.pagination .page-item.disabled .page-link {
+  cursor: not-allowed;
+}
+
+/* Page jump input styles */
+.page-jump {
+  font-size: 0.875rem;
+}
+
+.page-jump .page-input {
+  width: 70px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.page-jump .page-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  border-color: #86b7fe;
+}
+
+.page-jump .btn {
+  transition: all 0.2s ease;
+}
+
+.page-jump .btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile pagination adjustments */
+@media (max-width: 768px) {
+  .pagination {
+    gap: 0.15rem;
+  }
+  
+  .pagination .page-link {
+    min-width: 2rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+  }
 }
 </style>
