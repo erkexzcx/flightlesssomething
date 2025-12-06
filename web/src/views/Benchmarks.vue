@@ -591,7 +591,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 }
 
 .search-btn-icon:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--bs-tertiary-bg);
 }
 
 /* Sort buttons */
@@ -615,8 +615,8 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   transition: all 0.3s ease;
   border-radius: 0.5rem;
   margin-bottom: 0.75rem;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
   position: relative;
   overflow: hidden;
 }
@@ -692,7 +692,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 }
 
 .list-group-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--bs-tertiary-bg);
 }
 
 .stretched-link {
@@ -715,8 +715,8 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 
 .badge-outline-white {
   background: transparent;
-  border: 1px solid white;
-  color: white;
+  border: 1px solid var(--bs-body-color);
+  color: var(--bs-body-color);
 }
 
 .custom-popover {
@@ -726,8 +726,8 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   transform: translateX(-50%);
   min-width: 200px;
   max-width: min(600px, calc(100vw - 2rem));
-  background: var(--bs-dark);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
   border-radius: 0.375rem;
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
   z-index: 1050;
@@ -772,7 +772,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   height: 0;
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-bottom: 6px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 6px solid var(--bs-border-color);
 }
 
 .custom-popover::after {
@@ -785,17 +785,17 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-bottom: 5px solid var(--bs-dark);
+  border-bottom: 5px solid var(--bs-body-bg);
 }
 
 .popover-header {
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bs-secondary-bg);
+  border-bottom: 1px solid var(--bs-border-color);
   border-radius: 0.375rem 0.375rem 0 0;
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--bs-light);
+  color: var(--bs-body-color);
 }
 
 .popover-body {

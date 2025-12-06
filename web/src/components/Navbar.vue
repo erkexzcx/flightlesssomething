@@ -32,6 +32,11 @@
 
         <ul class="navbar-nav">
           <li class="nav-item">
+            <a class="nav-link" href="#" @click.prevent="appStore.toggleTheme()" title="Toggle theme">
+              <i class="fa-solid" :class="appStore.theme === 'dark' ? 'fa-sun' : 'fa-moon'"></i>
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="https://github.com/erkexzcx/flightlesssomething" target="_blank">
               <i class="fa-brands fa-github"></i> Source
             </a>
