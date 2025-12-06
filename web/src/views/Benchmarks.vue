@@ -514,6 +514,12 @@ function positionPopoverOnMobile() {
     // Wait for popover to render to get its height
     nextTick(() => {
       if (!popoverRef.value) return
+      
+      // Recalculate badge position in case it changed
+      const badgeWrapper = popoverRef.value.parentElement
+      if (!badgeWrapper) return
+      const badgeRect = badgeWrapper.getBoundingClientRect()
+      
       const popoverRect = popoverRef.value.getBoundingClientRect()
       const popoverHeight = popoverRect.height
       const viewportHeight = window.innerHeight
