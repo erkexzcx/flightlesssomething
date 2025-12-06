@@ -351,8 +351,8 @@ const getThemeColors = computed(() => {
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
     // Use softer background for light theme (light gray) and Bootstrap dark for dark theme
     chartBg: isDark ? '#212529' : '#F5F5F5',
-    // Bar border color - black for light theme, transparent for dark theme
-    barBorderColor: isDark ? 'transparent' : '#000000',
+    // Bar border color - white for dark theme, black for light theme
+    barBorderColor: isDark ? '#FFFFFF' : '#000000',
   }
 })
 
@@ -679,6 +679,8 @@ function renderFPSComparisonChart() {
     },
     plotOptions: { 
       bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
         dataLabels: { 
           enabled: true, 
           style: { color: colors.textColor }, 
@@ -760,6 +762,8 @@ function renderFrametimeComparisonChart() {
     },
     plotOptions: { 
       bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
         dataLabels: { 
           enabled: true, 
           style: { color: colors.textColor }, 
