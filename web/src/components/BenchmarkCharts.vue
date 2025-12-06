@@ -348,6 +348,7 @@ const getThemeColors = computed(() => {
     lineColor: isDark ? '#FFFFFF' : '#000000',
     tooltipBg: isDark ? '#1E1E1E' : '#FFFFFF',
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
+    chartBg: isDark ? '#000000' : '#FFFFFF',
   }
 })
 
@@ -414,7 +415,7 @@ const commonChartOptions = computed(() => {
   const colors = getThemeColors.value
   return {
     chart: { 
-      backgroundColor: null, 
+      backgroundColor: colors.chartBg, 
       style: { color: colors.textColor }, 
       animation: false, 
       boost: { 
@@ -430,7 +431,14 @@ const commonChartOptions = computed(() => {
     tooltip: { backgroundColor: colors.tooltipBg, borderColor: colors.tooltipBorder, style: { color: colors.textColor } },
     legend: { itemStyle: { color: colors.textColor } },
     credits: { enabled: false },
-    plotOptions: { series: { animation: false, turboThreshold: 0 } }  // turboThreshold: 0 allows any number of points
+    plotOptions: { series: { animation: false, turboThreshold: 0 } },  // turboThreshold: 0 allows any number of points
+    exporting: {
+      chartOptions: {
+        chart: {
+          backgroundColor: colors.chartBg
+        }
+      }
+    }
   }
 })
 
