@@ -348,8 +348,8 @@ const getThemeColors = computed(() => {
     lineColor: isDark ? '#FFFFFF' : '#000000',
     tooltipBg: isDark ? '#1E1E1E' : '#FFFFFF',
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
-    // For fullscreen/export only - transparent for normal display
-    exportBg: isDark ? '#212529' : '#FFFFFF',
+    // Use actual Bootstrap background colors
+    chartBg: isDark ? '#212529' : '#FFFFFF',
   }
 })
 
@@ -416,7 +416,7 @@ const commonChartOptions = computed(() => {
   const colors = getThemeColors.value
   return {
     chart: { 
-      backgroundColor: 'transparent', 
+      backgroundColor: colors.chartBg, 
       style: { color: colors.textColor }, 
       animation: false, 
       boost: { 
@@ -432,20 +432,7 @@ const commonChartOptions = computed(() => {
     tooltip: { backgroundColor: colors.tooltipBg, borderColor: colors.tooltipBorder, style: { color: colors.textColor } },
     legend: { itemStyle: { color: colors.textColor } },
     credits: { enabled: false },
-    plotOptions: { series: { animation: false, turboThreshold: 0 } },  // turboThreshold: 0 allows any number of points
-    exporting: {
-      chartOptions: {
-        chart: {
-          backgroundColor: colors.exportBg,
-          style: { color: colors.textColor }
-        },
-        title: { style: { color: colors.textColor } },
-        subtitle: { style: { color: colors.textColor } },
-        xAxis: { labels: { style: { color: colors.textColor } }, lineColor: colors.lineColor, tickColor: colors.lineColor },
-        yAxis: { labels: { style: { color: colors.textColor } }, gridLineColor: colors.gridLineColor },
-        legend: { itemStyle: { color: colors.textColor } }
-      }
-    }
+    plotOptions: { series: { animation: false, turboThreshold: 0 } }  // turboThreshold: 0 allows any number of points
   }
 })
 
