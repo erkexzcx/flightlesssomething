@@ -1207,6 +1207,14 @@ watch(() => appStore.theme, () => {
   white-space: nowrap;
 }
 
+.tab-pane > div[ref*="Chart"] {
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
 .baseline-selector {
   display: flex;
   align-items: center;
