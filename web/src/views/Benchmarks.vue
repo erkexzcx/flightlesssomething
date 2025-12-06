@@ -656,7 +656,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   background: var(--bs-secondary-bg);
   border: 1px solid var(--bs-border-color);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .benchmark-card::before {
