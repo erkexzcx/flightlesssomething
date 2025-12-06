@@ -511,11 +511,36 @@ function positionPopoverOnMobile() {
   
   // On mobile (width <= 768px), use fixed positioning
   if (window.innerWidth <= 768) {
-    // Calculate top position (below the badge)
-    const top = badgeRect.bottom + 8
-    
-    // Set the top position as inline style
-    popoverRef.value.style.top = `${top}px`
+    // Wait for popover to render to get its height
+    nextTick(() => {
+      if (!popoverRef.value) return
+      const popoverRect = popoverRef.value.getBoundingClientRect()
+      const popoverHeight = popoverRect.height
+      const viewportHeight = window.innerHeight
+      const margin = 16
+      
+      // Try to position below the badge
+      let top = badgeRect.bottom + 8
+      
+      // Check if popover would go below viewport
+      if (top + popoverHeight + margin > viewportHeight) {
+        // Position above the badge instead
+        top = badgeRect.top - popoverHeight - 8
+        
+        // If still doesn't fit, position at top of viewport
+        if (top < margin) {
+          top = margin
+        }
+      }
+      
+      // Ensure popover doesn't go above viewport
+      if (top < margin) {
+        top = margin
+      }
+      
+      // Set the top position as inline style
+      popoverRef.value.style.top = `${top}px`
+    })
   } else {
     // On desktop, adjust if popover would go off-screen
     const popoverRect = popoverRef.value.getBoundingClientRect()
