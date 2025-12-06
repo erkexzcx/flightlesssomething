@@ -1207,7 +1207,9 @@ watch(() => appStore.theme, () => {
   white-space: nowrap;
 }
 
-.tab-pane > div[ref*="Chart"] {
+/* Chart container panels - targets all chart divs identified by ref attributes */
+.tab-pane > div[ref*="Chart"],
+.tab-pane > div > div[ref*="Chart"] {
   background-color: var(--bs-secondary-bg);
   border: 1px solid var(--bs-border-color);
   border-radius: 8px;
