@@ -19,6 +19,8 @@ onMounted(() => {
   authStore.checkAuth()
   // Fetch app version
   appStore.fetchVersion()
+  // Apply theme on mount
+  document.documentElement.setAttribute('data-bs-theme', appStore.theme)
 })
 </script>
 

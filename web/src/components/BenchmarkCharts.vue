@@ -322,7 +322,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import { useAppStore } from '../stores/app'
 import Highcharts from 'highcharts'
 import HighchartsBoost from 'highcharts/modules/boost'
@@ -338,6 +338,23 @@ HighchartsFullScreen(Highcharts)
 
 // Use app store for calculation mode
 const appStore = useAppStore()
+
+// Get theme-aware colors
+const getThemeColors = computed(() => {
+  const isDark = appStore.theme === 'dark'
+  return {
+    textColor: isDark ? '#FFFFFF' : '#000000',
+    // Increased contrast for light theme grid lines (from 0.1 to 0.2 opacity)
+    gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.2)',
+    lineColor: isDark ? '#FFFFFF' : '#000000',
+    tooltipBg: isDark ? '#1E1E1E' : '#F5F5F5',
+    tooltipBorder: isDark ? '#FFFFFF' : '#000000',
+    // Use softer background for light theme (light gray) and Bootstrap dark for dark theme
+    chartBg: isDark ? '#212529' : '#F5F5F5',
+    // Bar border color - white for dark theme, black for light theme
+    barBorderColor: isDark ? '#FFFFFF' : '#000000',
+  }
+})
 
 // Constants for data processing
 const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
@@ -397,27 +414,30 @@ const gpuMemClockSummaryChart = ref(null)
 const cpuPowerSummaryChart = ref(null)
 const gpuPowerSummaryChart = ref(null)
 
-// Common chart options
-const commonChartOptions = {
-  chart: { 
-    backgroundColor: null, 
-    style: { color: '#FFFFFF' }, 
-    animation: false, 
-    boost: { 
-      useGPUTranslations: true, 
-      usePreallocated: true,
-      seriesThreshold: 1  // Enable boost for all series
-    } 
-  },
-  title: { style: { color: '#FFFFFF', fontSize: '16px' } },
-  subtitle: { style: { color: '#FFFFFF', fontSize: '12px' } },
-  xAxis: { labels: { style: { color: '#FFFFFF' } }, lineColor: '#FFFFFF', tickColor: '#FFFFFF' },
-  yAxis: { labels: { style: { color: '#FFFFFF' } }, gridLineColor: 'rgba(255, 255, 255, 0.1)', title: { text: false } },
-  tooltip: { backgroundColor: '#1E1E1E', borderColor: '#FFFFFF', style: { color: '#FFFFFF' } },
-  legend: { itemStyle: { color: '#FFFFFF' } },
-  credits: { enabled: false },
-  plotOptions: { series: { animation: false, turboThreshold: 0 } }  // turboThreshold: 0 allows any number of points
-}
+// Common chart options - computed to react to theme changes
+const commonChartOptions = computed(() => {
+  const colors = getThemeColors.value
+  return {
+    chart: { 
+      backgroundColor: colors.chartBg, 
+      style: { color: colors.textColor }, 
+      animation: false, 
+      boost: { 
+        useGPUTranslations: true, 
+        usePreallocated: true,
+        seriesThreshold: 1  // Enable boost for all series
+      } 
+    },
+    title: { style: { color: colors.textColor, fontSize: '16px' } },
+    subtitle: { style: { color: colors.textColor, fontSize: '12px' } },
+    xAxis: { labels: { style: { color: colors.textColor } }, lineColor: colors.lineColor, tickColor: colors.lineColor },
+    yAxis: { labels: { style: { color: colors.textColor } }, gridLineColor: colors.gridLineColor, title: { text: false } },
+    tooltip: { backgroundColor: colors.tooltipBg, borderColor: colors.tooltipBorder, style: { color: colors.textColor } },
+    legend: { itemStyle: { color: colors.textColor } },
+    credits: { enabled: false },
+    plotOptions: { series: { animation: false, turboThreshold: 0 } }  // turboThreshold: 0 allows any number of points
+  }
+})
 
 // Set global options
 Highcharts.setOptions({ 
@@ -425,8 +445,6 @@ Highcharts.setOptions({
   plotOptions: { series: { animation: false, turboThreshold: 0 } },
   boost: { enabled: true }
 })
-
-const colors = Highcharts.getOptions().colors
 
 // Helper functions
 function formatOSSpecific(data) {
@@ -630,26 +648,29 @@ function renderFPSComparisonChart() {
   const yAxisMin = minPercentage - padding
   const yAxisMax = maxPercentage + padding
 
+  const colors = getThemeColors.value
+  const chartOpts = commonChartOptions.value
+
   Highcharts.chart(fpsAvgChart.value, {
-    ...commonChartOptions,
-    chart: { ...commonChartOptions.chart, type: 'bar' },
-    title: { ...commonChartOptions.title, text: 'Avg FPS comparison in %' },
-    subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
-    xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+    ...chartOpts,
+    chart: { ...chartOpts.chart, type: 'bar' },
+    title: { ...chartOpts.title, text: 'Avg FPS comparison in %' },
+    subtitle: { ...chartOpts.subtitle, text: 'More is better' },
+    xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
     yAxis: { 
-      ...commonChartOptions.yAxis, 
+      ...chartOpts.yAxis, 
       min: yAxisMin,
       max: yAxisMax,
-      title: { text: 'Difference (%)', align: 'high', style: { color: '#FFFFFF' } },
+      title: { text: 'Difference (%)', align: 'high', style: { color: colors.textColor } },
       plotLines: [{
         value: 0,
-        color: '#FFFFFF',
+        color: colors.lineColor,
         width: 2,
         zIndex: 4
       }]
     },
     tooltip: { 
-      ...commonChartOptions.tooltip, 
+      ...chartOpts.tooltip, 
       valueSuffix: ' %', 
       formatter: function() { 
         const sign = this.y >= 0 ? '+' : ''
@@ -658,9 +679,11 @@ function renderFPSComparisonChart() {
     },
     plotOptions: { 
       bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
         dataLabels: { 
           enabled: true, 
-          style: { color: '#FFFFFF' }, 
+          style: { color: colors.textColor }, 
           formatter: function() { 
             const sign = this.y >= 0 ? '+' : ''
             return sign + this.y.toFixed(2) + ' %' 
@@ -669,7 +692,7 @@ function renderFPSComparisonChart() {
       } 
     },
     legend: { enabled: false },
-    series: [{ name: 'FPS Difference', data: sortedPercentages, colorByPoint: true, colors: colors }]
+    series: [{ name: 'FPS Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
   })
 }
 
@@ -708,26 +731,29 @@ function renderFrametimeComparisonChart() {
   const yAxisMin = minPercentage - padding
   const yAxisMax = maxPercentage + padding
 
+  const colors = getThemeColors.value
+  const chartOpts = commonChartOptions.value
+
   Highcharts.chart(frametimeAvgChart.value, {
-    ...commonChartOptions,
-    chart: { ...commonChartOptions.chart, type: 'bar' },
-    title: { ...commonChartOptions.title, text: 'Avg Frametime comparison in %' },
-    subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
-    xAxis: { ...commonChartOptions.xAxis, categories: sortedCategories },
+    ...chartOpts,
+    chart: { ...chartOpts.chart, type: 'bar' },
+    title: { ...chartOpts.title, text: 'Avg Frametime comparison in %' },
+    subtitle: { ...chartOpts.subtitle, text: 'Less is better' },
+    xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
     yAxis: { 
-      ...commonChartOptions.yAxis, 
+      ...chartOpts.yAxis, 
       min: yAxisMin,
       max: yAxisMax,
-      title: { text: 'Difference (%)', align: 'high', style: { color: '#FFFFFF' } },
+      title: { text: 'Difference (%)', align: 'high', style: { color: colors.textColor } },
       plotLines: [{
         value: 0,
-        color: '#FFFFFF',
+        color: colors.lineColor,
         width: 2,
         zIndex: 4
       }]
     },
     tooltip: { 
-      ...commonChartOptions.tooltip, 
+      ...chartOpts.tooltip, 
       valueSuffix: ' %', 
       formatter: function() { 
         const sign = this.y >= 0 ? '+' : ''
@@ -736,9 +762,11 @@ function renderFrametimeComparisonChart() {
     },
     plotOptions: { 
       bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
         dataLabels: { 
           enabled: true, 
-          style: { color: '#FFFFFF' }, 
+          style: { color: colors.textColor }, 
           formatter: function() { 
             const sign = this.y >= 0 ? '+' : ''
             return sign + this.y.toFixed(2) + ' %' 
@@ -747,35 +775,44 @@ function renderFrametimeComparisonChart() {
       } 
     },
     legend: { enabled: false },
-    series: [{ name: 'Frametime Difference', data: sortedPercentages, colorByPoint: true, colors: colors }]
+    series: [{ name: 'Frametime Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
   })
 }
 
 function getLineChartOptions(title, description, unit, maxY = null) {
+  const chartOpts = commonChartOptions.value
   return {
-    ...commonChartOptions,
-    chart: { ...commonChartOptions.chart, type: 'line', zooming: { type: 'x' } },
-    title: { ...commonChartOptions.title, text: title },
-    subtitle: { ...commonChartOptions.subtitle, text: description },
-    xAxis: { ...commonChartOptions.xAxis, labels: { enabled: false } },
-    yAxis: { ...commonChartOptions.yAxis, max: maxY, labels: { ...commonChartOptions.yAxis.labels, formatter: function() { return this.value.toFixed(2) + ' ' + unit } } },
-    tooltip: { ...commonChartOptions.tooltip, pointFormat: `<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f} ${unit}</b><br/>` },
+    ...chartOpts,
+    chart: { ...chartOpts.chart, type: 'line', zooming: { type: 'x' } },
+    title: { ...chartOpts.title, text: title },
+    subtitle: { ...chartOpts.subtitle, text: description },
+    xAxis: { ...chartOpts.xAxis, labels: { enabled: false } },
+    yAxis: { ...chartOpts.yAxis, max: maxY, labels: { ...chartOpts.yAxis.labels, formatter: function() { return this.value.toFixed(2) + ' ' + unit } } },
+    tooltip: { ...chartOpts.tooltip, pointFormat: `<span style="color:{series.color}">{series.name}</span>: <b>{point.y:.2f} ${unit}</b><br/>` },
     plotOptions: { line: { marker: { enabled: false, symbol: 'circle', radius: 1.5, states: { hover: { enabled: true } } }, lineWidth: 1 } },
-    legend: { ...commonChartOptions.legend, enabled: true },
+    legend: { ...chartOpts.legend, enabled: true },
     series: [],
     exporting: { buttons: { contextButton: { menuItems: ['viewFullscreen', 'printChart', 'separator', 'downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG', 'separator', 'downloadCSV', 'downloadXLS'] } } }
   }
 }
 
 function getBarChartOptions(title, unit, maxY = null) {
+  const colors = getThemeColors.value
+  const chartOpts = commonChartOptions.value
   return {
-    ...commonChartOptions,
-    chart: { ...commonChartOptions.chart, type: 'bar' },
-    title: { ...commonChartOptions.title, text: title },
-    xAxis: { ...commonChartOptions.xAxis, categories: [], title: { text: null } },
-    yAxis: { ...commonChartOptions.yAxis, min: 0, max: maxY, title: { text: unit, align: 'high', style: { color: '#FFFFFF' } }, labels: { ...commonChartOptions.yAxis.labels, formatter: function() { return this.value.toFixed(2) + ' ' + unit } } },
-    tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' ' + unit, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ${unit}` } },
-    plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' ' + unit } } } },
+    ...chartOpts,
+    chart: { ...chartOpts.chart, type: 'bar' },
+    title: { ...chartOpts.title, text: title },
+    xAxis: { ...chartOpts.xAxis, categories: [], title: { text: null } },
+    yAxis: { ...chartOpts.yAxis, min: 0, max: maxY, title: { text: unit, align: 'high', style: { color: colors.textColor } }, labels: { ...chartOpts.yAxis.labels, formatter: function() { return this.value.toFixed(2) + ' ' + unit } } },
+    tooltip: { ...chartOpts.tooltip, valueSuffix: ' ' + unit, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ${unit}` } },
+    plotOptions: { 
+      bar: { 
+        borderColor: colors.barBorderColor,
+        borderWidth: 1,
+        dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ' + unit } } 
+      } 
+    },
     legend: { enabled: false },
     series: []
   }
@@ -787,10 +824,11 @@ function createChart(element, title, description, unit, dataArrays, maxY = null)
   const options = getLineChartOptions(title, description, unit, maxY)
   // Decimate data only for line chart rendering to improve performance
   // Statistics are calculated from full data before this function is called
+  const chartColors = Highcharts.getOptions().colors
   options.series = dataArrays.map((dataArray, index) => ({
     name: dataArray.label,
     data: decimateForLineChart(dataArray.data || [], 2000),
-    color: colors[index % colors.length]
+    color: chartColors[index % chartColors.length]
   }))
   
   Highcharts.chart(element, options)
@@ -834,21 +872,23 @@ function renderFPSTab() {
 
   // FPS Min/Max/Avg chart
   if (fpsMinMaxAvgChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const categories = fpsDataArrays.map(d => d.label)
     const minFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 1))
     const avgFPSData = fpsDataArrays.map(d => getAverageFPS(d.data))
     const maxFPSData = fpsDataArrays.map(d => getPercentileFPS(d.data, 97))
 
     Highcharts.chart(fpsMinMaxAvgChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'Min/Avg/Max FPS' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'More is better' },
-      xAxis: { ...commonChartOptions.xAxis, categories: categories },
-      yAxis: { ...commonChartOptions.yAxis, title: { text: 'FPS', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' FPS', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} FPS` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' fps' } } } },
-      legend: { ...commonChartOptions.legend, reversed: true, enabled: true },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Min/Avg/Max FPS' },
+      subtitle: { ...chartOpts.subtitle, text: 'More is better' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'FPS', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, valueSuffix: ' FPS', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} FPS` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' fps' } } } },
+      legend: { ...chartOpts.legend, reversed: true, enabled: true },
       series: [
         { name: '97th', data: maxFPSData, color: '#00FF00' },
         { name: 'AVG', data: avgFPSData, color: '#0000FF' },
@@ -859,19 +899,21 @@ function renderFPSTab() {
 
   // FPS Density chart
   if (fpsDensityChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const densityData = fpsDataArrays.map(d => ({
       name: d.label,
       data: countOccurrences(filterOutliers(d.data))
     }))
 
     Highcharts.chart(fpsDensityChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'areaspline' },
-      title: { ...commonChartOptions.title, text: 'FPS Density' },
-      xAxis: { ...commonChartOptions.xAxis, title: { text: 'FPS', style: { color: '#FFFFFF' } }, labels: { style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} FPS` } },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'areaspline' },
+      title: { ...chartOpts.title, text: 'FPS Density' },
+      xAxis: { ...chartOpts.xAxis, title: { text: 'FPS', style: { color: colors.textColor } }, labels: { style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} FPS` } },
       plotOptions: { areaspline: { fillOpacity: 0.5, marker: { enabled: false } } },
-      legend: { ...commonChartOptions.legend, enabled: true },
+      legend: { ...chartOpts.legend, enabled: true },
       series: densityData
     })
   }
@@ -881,20 +923,22 @@ function renderFPSTab() {
 
   // FPS Stability chart
   if (fpsStddevVarianceChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const categories = fpsDataArrays.map(d => d.label)
     const standardDeviations = fpsDataArrays.map(d => calculateStandardDeviation(d.data))
     const variances = fpsDataArrays.map(d => calculateVariance(d.data))
 
     Highcharts.chart(fpsStddevVarianceChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'FPS Stability' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'Measures of FPS consistency (std. dev.) and spread (variance). Less is better.' },
-      xAxis: { ...commonChartOptions.xAxis, categories: categories },
-      yAxis: { ...commonChartOptions.yAxis, title: { text: 'Value', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) } } } },
-      legend: { ...commonChartOptions.legend, enabled: true },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'FPS Stability' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures of FPS consistency (std. dev.) and spread (variance). Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      legend: { ...chartOpts.legend, enabled: true },
       series: [
         { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
         { name: 'Variance', data: variances, color: '#33FF57' }
@@ -912,21 +956,23 @@ function renderFrametimeTab() {
 
   // Frametime Min/Max/Avg chart
   if (frametimeMinMaxAvgChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const categories = frameTimeDataArrays.map(d => d.label)
     const minData = frameTimeDataArrays.map(d => calculatePercentile(d.data, 1))
     const avgData = frameTimeDataArrays.map(d => calculateAverage(d.data))
     const maxData = frameTimeDataArrays.map(d => calculatePercentile(d.data, 97))
 
     Highcharts.chart(frametimeMinMaxAvgChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'Min/Avg/Max Frametime' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'Less is better' },
-      xAxis: { ...commonChartOptions.xAxis, categories: categories },
-      yAxis: { ...commonChartOptions.yAxis, title: { text: 'Frametime (ms)', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, valueSuffix: ' ms', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} ms` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) + ' ms' } } } },
-      legend: { ...commonChartOptions.legend, reversed: true, enabled: true },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Min/Avg/Max Frametime' },
+      subtitle: { ...chartOpts.subtitle, text: 'Less is better' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Frametime (ms)', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, valueSuffix: ' ms', formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)} ms` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ms' } } } },
+      legend: { ...chartOpts.legend, reversed: true, enabled: true },
       series: [
         { name: '97th', data: maxData, color: '#00FF00' },
         { name: 'AVG', data: avgData, color: '#0000FF' },
@@ -937,19 +983,21 @@ function renderFrametimeTab() {
 
   // Frametime Density chart
   if (frametimeDensityChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const densityData = frameTimeDataArrays.map(d => ({
       name: d.label,
       data: countOccurrences(filterOutliers(d.data))
     }))
 
     Highcharts.chart(frametimeDensityChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'areaspline' },
-      title: { ...commonChartOptions.title, text: 'Frametime Density' },
-      xAxis: { ...commonChartOptions.xAxis, title: { text: 'Frametime (ms)', style: { color: '#FFFFFF' } }, labels: { style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} ms` } },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'areaspline' },
+      title: { ...chartOpts.title, text: 'Frametime Density' },
+      xAxis: { ...chartOpts.xAxis, title: { text: 'Frametime (ms)', style: { color: colors.textColor } }, labels: { style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} ms` } },
       plotOptions: { areaspline: { fillOpacity: 0.5, marker: { enabled: false } } },
-      legend: { ...commonChartOptions.legend, enabled: true },
+      legend: { ...chartOpts.legend, enabled: true },
       series: densityData
     })
   }
@@ -959,20 +1007,22 @@ function renderFrametimeTab() {
 
   // Frametime Stability chart
   if (frametimeStddevVarianceChart.value) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
     const categories = frameTimeDataArrays.map(d => d.label)
     const standardDeviations = frameTimeDataArrays.map(d => calculateStandardDeviation(d.data))
     const variances = frameTimeDataArrays.map(d => calculateVariance(d.data))
 
     Highcharts.chart(frametimeStddevVarianceChart.value, {
-      ...commonChartOptions,
-      chart: { ...commonChartOptions.chart, type: 'bar' },
-      title: { ...commonChartOptions.title, text: 'Frametime Stability' },
-      subtitle: { ...commonChartOptions.subtitle, text: 'Measures of Frametime consistency (std. dev.) and spread (variance). Less is better.' },
-      xAxis: { ...commonChartOptions.xAxis, categories: categories },
-      yAxis: { ...commonChartOptions.yAxis, title: { text: 'Value', align: 'high', style: { color: '#FFFFFF' } } },
-      tooltip: { ...commonChartOptions.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
-      plotOptions: { bar: { dataLabels: { enabled: true, style: { color: '#FFFFFF' }, formatter: function() { return this.y.toFixed(2) } } } },
-      legend: { ...commonChartOptions.legend, enabled: true },
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Frametime Stability' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures of Frametime consistency (std. dev.) and spread (variance). Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      legend: { ...chartOpts.legend, enabled: true },
       series: [
         { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
         { name: 'Variance', data: variances, color: '#33FF57' }
@@ -1006,14 +1056,15 @@ function renderSummaryTab() {
   const gpuPowerAverages = gpuPowerDataArrays.map(d => calculateAverage(d.data))
 
   // Create summary bar charts
-  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', fpsDataArrays.map(d => d.label), fpsAverages, colors)
-  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', frameTimeDataArrays.map(d => d.label), frametimeAverages, colors)
-  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', cpuLoadDataArrays.map(d => d.label), cpuLoadAverages, colors, 100)
-  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', gpuLoadDataArrays.map(d => d.label), gpuLoadAverages, colors, 100)
-  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', gpuCoreClockDataArrays.map(d => d.label), gpuCoreClockAverages, colors)
-  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', gpuMemClockDataArrays.map(d => d.label), gpuMemClockAverages, colors)
-  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', cpuPowerDataArrays.map(d => d.label), cpuPowerAverages, colors)
-  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', gpuPowerDataArrays.map(d => d.label), gpuPowerAverages, colors)
+  const chartColors = Highcharts.getOptions().colors
+  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', fpsDataArrays.map(d => d.label), fpsAverages, chartColors)
+  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', frameTimeDataArrays.map(d => d.label), frametimeAverages, chartColors)
+  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', cpuLoadDataArrays.map(d => d.label), cpuLoadAverages, chartColors, 100)
+  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', gpuLoadDataArrays.map(d => d.label), gpuLoadAverages, chartColors, 100)
+  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', gpuCoreClockDataArrays.map(d => d.label), gpuCoreClockAverages, chartColors)
+  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', gpuMemClockDataArrays.map(d => d.label), gpuMemClockAverages, chartColors)
+  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', cpuPowerDataArrays.map(d => d.label), cpuPowerAverages, chartColors)
+  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', gpuPowerDataArrays.map(d => d.label), gpuPowerAverages, chartColors)
 }
 
 function renderMoreMetricsTab() {
@@ -1126,6 +1177,25 @@ watch(() => props.benchmarkData, () => {
     })
   }
 }, { deep: true })
+
+// Watch for theme changes and re-render all rendered tabs
+watch(() => appStore.theme, () => {
+  nextTick(() => {
+    // Re-render all tabs that have been rendered
+    if (renderedTabs.value.fps) {
+      renderFPSTab()
+    }
+    if (renderedTabs.value.frametime) {
+      renderFrametimeTab()
+    }
+    if (renderedTabs.value.summary) {
+      renderSummaryTab()
+    }
+    if (renderedTabs.value['more-metrics']) {
+      renderMoreMetricsTab()
+    }
+  })
+})
 </script>
 
 <style scoped>
@@ -1134,17 +1204,17 @@ watch(() => props.benchmarkData, () => {
 }
 
 .table {
-  color: #ffffff;
   white-space: nowrap;
 }
 
-.table-bordered {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.table th,
-.table td {
-  border-color: rgba(255, 255, 255, 0.1);
+/* Chart container panels - targets all chart divs identified by ref attributes */
+.tab-pane > div[ref*="Chart"],
+.tab-pane > div > div[ref*="Chart"] {
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
 }
 
 .baseline-selector {
@@ -1152,7 +1222,7 @@ watch(() => props.benchmarkData, () => {
   align-items: center;
   justify-content: flex-end;
   padding: 10px;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--bs-secondary-bg);
   border-radius: 5px;
 }
 
@@ -1168,7 +1238,7 @@ watch(() => props.benchmarkData, () => {
 
 .calculation-mode-switch {
   padding: 10px;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--bs-secondary-bg);
   border-radius: 5px;
 }
 
@@ -1179,9 +1249,5 @@ watch(() => props.benchmarkData, () => {
 
 .calculation-mode-switch .btn-outline-secondary {
   margin-left: 0.5rem;
-}
-
-.calculation-mode-switch .btn-outline-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.1);
 }
 </style>

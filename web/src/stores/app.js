@@ -19,6 +19,15 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('calculationMode', 'mangohud')
   }
 
+  // Theme: 'light' or 'dark'
+  const storedTheme = localStorage.getItem('theme')
+  const theme = ref(storedTheme || 'dark')
+  
+  // Initialize theme if not set
+  if (!storedTheme) {
+    localStorage.setItem('theme', 'dark')
+  }
+
   // Fetch version from backend
   async function fetchVersion() {
     try {
@@ -41,11 +50,28 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('calculationMode', mode)
   }
 
+  // Set theme
+  function setTheme(newTheme) {
+    theme.value = newTheme
+    localStorage.setItem('theme', newTheme)
+    // Update the data-bs-theme attribute on the html element
+    document.documentElement.setAttribute('data-bs-theme', newTheme)
+  }
+
+  // Toggle theme between light and dark
+  function toggleTheme() {
+    const newTheme = theme.value === 'dark' ? 'light' : 'dark'
+    setTheme(newTheme)
+  }
+
   return {
     version,
     loading,
     calculationMode,
+    theme,
     fetchVersion,
     setCalculationMode,
+    setTheme,
+    toggleTheme,
   }
 })
