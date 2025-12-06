@@ -344,12 +344,13 @@ const getThemeColors = computed(() => {
   const isDark = appStore.theme === 'dark'
   return {
     textColor: isDark ? '#FFFFFF' : '#000000',
-    gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    // Increased contrast for light theme grid lines (from 0.1 to 0.2 opacity)
+    gridLineColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.2)',
     lineColor: isDark ? '#FFFFFF' : '#000000',
-    tooltipBg: isDark ? '#1E1E1E' : '#FFFFFF',
+    tooltipBg: isDark ? '#1E1E1E' : '#F5F5F5',
     tooltipBorder: isDark ? '#FFFFFF' : '#000000',
-    // Use actual Bootstrap background colors
-    chartBg: isDark ? '#212529' : '#FFFFFF',
+    // Use softer background for light theme (light gray) and Bootstrap dark for dark theme
+    chartBg: isDark ? '#212529' : '#F5F5F5',
   }
 })
 
