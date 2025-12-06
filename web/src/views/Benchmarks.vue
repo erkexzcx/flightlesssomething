@@ -526,11 +526,6 @@ function positionPopoverOnMobile() {
       if (top + popoverHeight + margin > viewportHeight) {
         // Position above the badge instead
         top = badgeRect.top - popoverHeight - 8
-        
-        // If still doesn't fit, position at top of viewport
-        if (top < margin) {
-          top = margin
-        }
       }
       
       // Ensure popover doesn't go above viewport
