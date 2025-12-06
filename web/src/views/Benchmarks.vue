@@ -511,7 +511,9 @@ function positionPopoverOnMobile() {
   
   // On mobile (width <= 768px), use fixed positioning
   if (window.innerWidth <= 768) {
-    // Wait for popover to render to get its height
+    // Wait for popover to render its content and calculate height
+    // Note: This is called inside a nextTick from showPopover/togglePopover,
+    // but we need another nextTick here to wait for the popover's height calculation
     nextTick(() => {
       if (!popoverRef.value) return
       
