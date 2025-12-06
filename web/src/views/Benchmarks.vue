@@ -511,11 +511,39 @@ function positionPopoverOnMobile() {
   
   // On mobile (width <= 768px), use fixed positioning
   if (window.innerWidth <= 768) {
-    // Calculate top position (below the badge)
-    const top = badgeRect.bottom + 8
-    
-    // Set the top position as inline style
-    popoverRef.value.style.top = `${top}px`
+    // Wait for popover to render its content and calculate height
+    // Note: This is called inside a nextTick from showPopover/togglePopover,
+    // but we need another nextTick here to wait for the popover's height calculation
+    nextTick(() => {
+      if (!popoverRef.value) return
+      
+      // Recalculate badge position in case it changed
+      const badgeWrapper = popoverRef.value.parentElement
+      if (!badgeWrapper) return
+      const badgeRect = badgeWrapper.getBoundingClientRect()
+      
+      const popoverRect = popoverRef.value.getBoundingClientRect()
+      const popoverHeight = popoverRect.height
+      const viewportHeight = window.innerHeight
+      const margin = 16
+      
+      // Try to position below the badge
+      let top = badgeRect.bottom + 8
+      
+      // Check if popover would go below viewport
+      if (top + popoverHeight + margin > viewportHeight) {
+        // Position above the badge instead
+        top = badgeRect.top - popoverHeight - 8
+      }
+      
+      // Ensure popover doesn't go above viewport
+      if (top < margin) {
+        top = margin
+      }
+      
+      // Set the top position as inline style
+      popoverRef.value.style.top = `${top}px`
+    })
   } else {
     // On desktop, adjust if popover would go off-screen
     const popoverRect = popoverRef.value.getBoundingClientRect()
@@ -656,7 +684,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   background: var(--bs-secondary-bg);
   border: 1px solid var(--bs-border-color);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .benchmark-card::before {
@@ -676,6 +704,7 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   transform: translateY(-4px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 0 20px rgba(13, 110, 253, 0.1);
   border-color: rgba(13, 110, 253, 0.3);
+  z-index: 1025;
 }
 
 .benchmark-card:hover::before {
@@ -780,17 +809,13 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
   }
   
   .custom-popover {
-    /* On mobile, use different positioning strategy */
+    /* On mobile, use fixed positioning (top is set by JavaScript) */
     position: fixed;
-    top: auto;
     left: 1rem;
     right: 1rem;
-    bottom: auto;
     transform: none;
     max-width: none;
     min-width: auto;
-    /* Position below click point with margin */
-    margin-top: 0.5rem;
   }
   
   /* Hide arrows on mobile since popover is fixed */
