@@ -436,8 +436,14 @@ const commonChartOptions = computed(() => {
     exporting: {
       chartOptions: {
         chart: {
-          backgroundColor: colors.exportBg
-        }
+          backgroundColor: colors.exportBg,
+          style: { color: colors.textColor }
+        },
+        title: { style: { color: colors.textColor } },
+        subtitle: { style: { color: colors.textColor } },
+        xAxis: { labels: { style: { color: colors.textColor } }, lineColor: colors.lineColor, tickColor: colors.lineColor },
+        yAxis: { labels: { style: { color: colors.textColor } }, gridLineColor: colors.gridLineColor },
+        legend: { itemStyle: { color: colors.textColor } }
       }
     }
   }
