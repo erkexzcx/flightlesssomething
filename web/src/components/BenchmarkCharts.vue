@@ -1149,6 +1149,12 @@ function handleTabClick(tabName) {
 function handleCalculationModeChange(mode) {
   appStore.setCalculationMode(mode)
   // Force re-render of all rendered tabs
+  reRenderAllTabs()
+}
+
+// Shared function to re-render all rendered tabs
+// Used by theme changes, DPI changes, and calculation mode changes
+function reRenderAllTabs() {
   nextTick(() => {
     if (renderedTabs.value.fps) {
       renderFPSTab()
@@ -1159,8 +1165,20 @@ function handleCalculationModeChange(mode) {
     if (renderedTabs.value.summary) {
       renderSummaryTab()
     }
-    // More metrics tab doesn't use FPS averages, so no need to re-render
+    if (renderedTabs.value['more-metrics']) {
+      renderMoreMetricsTab()
+    }
   })
+}
+
+// Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
+// This ensures charts remain crisp when moved between standard and HiDPI displays
+function updatePixelRatio() {
+  const newPixelRatio = window.devicePixelRatio || 1
+  if (newPixelRatio !== currentPixelRatio.value) {
+    currentPixelRatio.value = newPixelRatio
+    reRenderAllTabs()
+  }
 }
 
 onMounted(() => {
@@ -1172,44 +1190,16 @@ onMounted(() => {
     })
   }
 
-  // Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
-  // This ensures charts remain crisp when moved between standard and HiDPI displays
-  const updatePixelRatio = () => {
-    const newPixelRatio = window.devicePixelRatio || 1
-    if (newPixelRatio !== currentPixelRatio.value) {
-      currentPixelRatio.value = newPixelRatio
-      // Re-render all rendered tabs with new pixel ratio
-      nextTick(() => {
-        if (renderedTabs.value.fps) {
-          renderFPSTab()
-        }
-        if (renderedTabs.value.frametime) {
-          renderFrametimeTab()
-        }
-        if (renderedTabs.value.summary) {
-          renderSummaryTab()
-        }
-        if (renderedTabs.value['more-metrics']) {
-          renderMoreMetricsTab()
-        }
-      })
-    }
-  }
-
-  // Cleanup function for event listeners
-  const cleanup = () => {
-    window.removeEventListener('resize', updatePixelRatio)
-  }
-
   // Listen for window resize events which may indicate DPI changes
   // This handles cases like:
   // - Moving window between displays with different pixel densities
   // - Browser zoom changes
   // - Display settings changes
   window.addEventListener('resize', updatePixelRatio)
-  
-  // Register cleanup
-  onUnmounted(cleanup)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updatePixelRatio)
 })
 
 watch(() => props.benchmarkData, () => {
@@ -1232,21 +1222,7 @@ watch(() => props.benchmarkData, () => {
 
 // Watch for theme changes and re-render all rendered tabs
 watch(() => appStore.theme, () => {
-  nextTick(() => {
-    // Re-render all tabs that have been rendered
-    if (renderedTabs.value.fps) {
-      renderFPSTab()
-    }
-    if (renderedTabs.value.frametime) {
-      renderFrametimeTab()
-    }
-    if (renderedTabs.value.summary) {
-      renderSummaryTab()
-    }
-    if (renderedTabs.value['more-metrics']) {
-      renderMoreMetricsTab()
-    }
-  })
+  reRenderAllTabs()
 })
 </script>
 
