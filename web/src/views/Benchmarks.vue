@@ -894,8 +894,6 @@ watch(() => route.path, (newPath, oldPath) => {
   padding: 0.5rem 0.75rem;
   overflow-y: auto;
   overflow-x: hidden;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
 }
 
 .run-label-item {
@@ -904,6 +902,8 @@ watch(() => route.path, (newPath, oldPath) => {
   padding: 0.25rem 0;
   font-size: 0.875rem;
   color: var(--bs-body-color);
+  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .run-number {
@@ -914,9 +914,7 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .run-label {
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @keyframes fadeIn {
