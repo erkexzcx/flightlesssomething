@@ -94,6 +94,7 @@
             <div 
               v-if="benchmark.run_count"
               class="badge-wrapper flex-shrink-0"
+              :ref="el => setBadgeRef(benchmark.ID, el)"
               @mouseenter="showPopover(benchmark.ID)"
               @mouseleave="hidePopover(benchmark.ID)"
               @click.stop="togglePopover(benchmark.ID)"
@@ -101,26 +102,6 @@
               <span class="badge badge-outline-white rounded-pill">
                 {{ benchmark.run_count }}
               </span>
-              <div 
-                v-if="activePopover === benchmark.ID" 
-                :ref="el => popoverRef = el"
-                class="custom-popover"
-                @mouseenter="keepPopoverOpen(benchmark.ID)"
-                @mouseleave="hidePopover(benchmark.ID)"
-                @click.stop
-              >
-                <div class="popover-header">Runs ({{ benchmark.run_count }})</div>
-                <div class="popover-body">
-                  <div 
-                    v-for="(label, idx) in benchmark.run_labels" 
-                    :key="idx"
-                    class="run-label-item"
-                  >
-                    <span class="run-number">{{ idx + 1 }}.</span>
-                    <span class="run-label">{{ label }}</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
           <small class="text-nowrap flex-shrink-0 ms-2">
@@ -158,6 +139,31 @@
     <div v-else class="alert alert-info" role="alert">
       No benchmarks found. {{ authStore.isAuthenticated ? 'Create your first benchmark!' : 'Login to create benchmarks.' }}
     </div>
+
+    <!-- Popover portal (rendered at body level) -->
+    <Teleport to="body">
+      <div 
+        v-if="activePopover !== null" 
+        :ref="el => popoverRef = el"
+        class="custom-popover"
+        :style="popoverStyle"
+        @mouseenter="keepPopoverOpen(activePopover)"
+        @mouseleave="hidePopover(activePopover)"
+        @click.stop
+      >
+        <div class="popover-header">Runs ({{ getActiveBenchmark()?.run_count || 0 }})</div>
+        <div class="popover-body">
+          <div 
+            v-for="(label, idx) in getActiveBenchmark()?.run_labels || []" 
+            :key="idx"
+            class="run-label-item"
+          >
+            <span class="run-number">{{ idx + 1 }}.</span>
+            <span class="run-label">{{ label }}</span>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="d-flex justify-content-center align-items-center gap-3 mt-3 flex-wrap">
@@ -286,6 +292,23 @@ const sortDirection = ref('asc')
 const showScrollTop = ref(false)
 const windowWidth = ref(window.innerWidth)
 const pageInputValue = ref(null)
+const badgeRefs = ref(new Map())
+const popoverStyle = ref({})
+
+// Set badge ref for positioning
+function setBadgeRef(benchmarkId, el) {
+  if (el) {
+    badgeRefs.value.set(benchmarkId, el)
+  } else {
+    badgeRefs.value.delete(benchmarkId)
+  }
+}
+
+// Get the active benchmark data
+function getActiveBenchmark() {
+  if (activePopover.value === null) return null
+  return benchmarks.value.find(b => b.ID === activePopover.value)
+}
 
 // Computed property to validate page input
 const isValidPageInput = computed(() => {
@@ -453,9 +476,9 @@ function showPopover(benchmarkId) {
   // Always show on hover (unless a different one is pinned)
   if (pinnedPopover.value === null || pinnedPopover.value === benchmarkId) {
     activePopover.value = benchmarkId
-    // Position popover on mobile after DOM update
+    // Position popover after DOM update
     nextTick(() => {
-      positionPopoverOnMobile()
+      positionPopover(benchmarkId)
     })
   }
 }
@@ -492,83 +515,91 @@ function togglePopover(benchmarkId) {
   } else {
     pinnedPopover.value = benchmarkId
     activePopover.value = benchmarkId
-    // Position popover on mobile after DOM update
+    // Position popover after DOM update
     nextTick(() => {
-      positionPopoverOnMobile()
+      positionPopover(benchmarkId)
     })
   }
 }
 
-function positionPopoverOnMobile() {
+function positionPopover(benchmarkId) {
   if (!popoverRef.value) return
   
-  // Get the badge wrapper element (parent of popover)
-  const badgeWrapper = popoverRef.value.parentElement
-  if (!badgeWrapper) return
+  const badgeEl = badgeRefs.value.get(benchmarkId)
+  if (!badgeEl) return
   
-  // Get position of badge wrapper relative to viewport
-  const badgeRect = badgeWrapper.getBoundingClientRect()
-  
-  // On mobile (width <= 768px), use fixed positioning
-  if (window.innerWidth <= 768) {
-    // Wait for popover to render its content and calculate height
-    // Note: This is called inside a nextTick from showPopover/togglePopover,
-    // but we need another nextTick here to wait for the popover's height calculation
-    nextTick(() => {
-      if (!popoverRef.value) return
+  // Wait for next tick to ensure popover has rendered with content
+  nextTick(() => {
+    if (!popoverRef.value || !badgeRefs.value.has(benchmarkId)) return
+    
+    const badgeRect = badgeEl.getBoundingClientRect()
+    const popoverRect = popoverRef.value.getBoundingClientRect()
+    
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const margin = 16 // Minimum margin from edges
+    const spacing = 8 // Spacing between badge and popover
+    
+    // Calculate popover dimensions (use actual if available, otherwise estimate)
+    const popoverWidth = popoverRect.width || 300
+    const popoverHeight = popoverRect.height || 200
+    
+    let top = 0
+    let left = 0
+    let maxHeight = viewportHeight - margin * 2
+    
+    // Determine vertical position (prefer below badge)
+    const spaceBelow = viewportHeight - badgeRect.bottom - margin
+    const spaceAbove = badgeRect.top - margin
+    
+    if (spaceBelow >= popoverHeight + spacing || spaceBelow >= spaceAbove) {
+      // Position below badge
+      top = badgeRect.bottom + spacing
+      maxHeight = spaceBelow - spacing
+    } else {
+      // Position above badge
+      top = badgeRect.top - popoverHeight - spacing
+      maxHeight = spaceAbove - spacing
       
-      // Recalculate badge position in case it changed
-      const badgeWrapper = popoverRef.value.parentElement
-      if (!badgeWrapper) return
-      const badgeRect = badgeWrapper.getBoundingClientRect()
-      
-      const popoverRect = popoverRef.value.getBoundingClientRect()
-      const popoverHeight = popoverRect.height
-      const viewportHeight = window.innerHeight
-      const margin = 16
-      
-      // Try to position below the badge
-      let top = badgeRect.bottom + 8
-      
-      // Check if popover would go below viewport
-      if (top + popoverHeight + margin > viewportHeight) {
-        // Position above the badge instead
-        top = badgeRect.top - popoverHeight - 8
-      }
-      
-      // Ensure popover doesn't go above viewport
+      // If popover doesn't fit above, center it vertically
       if (top < margin) {
         top = margin
+        maxHeight = viewportHeight - margin * 2
       }
-      
-      // Set the top position as inline style
-      popoverRef.value.style.top = `${top}px`
-    })
-  } else {
-    // On desktop, adjust if popover would go off-screen
-    const popoverRect = popoverRef.value.getBoundingClientRect()
-    const popoverWidth = popoverRect.width
-    
-    // Calculate where the centered popover would be
-    const badgeCenter = badgeRect.left + (badgeRect.width / 2)
-    const popoverLeft = badgeCenter - (popoverWidth / 2)
-    
-    // Check if it goes off-screen and adjust
-    if (popoverLeft < 16) {
-      // Would go off left edge, align to left with margin
-      popoverRef.value.style.left = 'auto'
-      popoverRef.value.style.right = 'auto'
-      popoverRef.value.style.transform = 'none'
-      popoverRef.value.style.marginLeft = `${16 - badgeRect.left}px`
-    } else if (popoverLeft + popoverWidth > window.innerWidth - 16) {
-      // Would go off right edge, align to right with margin
-      popoverRef.value.style.left = 'auto'
-      popoverRef.value.style.right = 'auto'
-      popoverRef.value.style.transform = 'none'
-      popoverRef.value.style.marginLeft = `${window.innerWidth - 16 - popoverWidth - badgeRect.left}px`
     }
-    // Otherwise, leave it centered (default CSS handles this)
-  }
+    
+    // Ensure minimum popover height
+    maxHeight = Math.max(150, maxHeight)
+    
+    // Calculate final top position, ensuring it stays within bounds
+    // Note: This uses the constrained maxHeight, not the original popoverHeight
+    const finalPopoverHeight = Math.min(popoverHeight, maxHeight)
+    top = Math.max(margin, Math.min(top, viewportHeight - margin - finalPopoverHeight))
+    
+    // Determine horizontal position (prefer centered under badge)
+    const badgeCenter = badgeRect.left + badgeRect.width / 2
+    left = badgeCenter - popoverWidth / 2
+    
+    // Adjust if popover would overflow viewport
+    if (left < margin) {
+      left = margin
+    } else if (left + popoverWidth > viewportWidth - margin) {
+      left = viewportWidth - margin - popoverWidth
+    }
+    
+    // Calculate final width (constrained to viewport)
+    const finalWidth = Math.min(popoverWidth, viewportWidth - margin * 2)
+    
+    // Apply styles
+    popoverStyle.value = {
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${finalWidth}px`,
+      maxHeight: `${maxHeight}px`,
+      zIndex: '1060'
+    }
+  })
 }
 
 function keepPopoverOpen(benchmarkId) {
@@ -592,10 +623,20 @@ function scrollToTop() {
 
 function handleScroll() {
   showScrollTop.value = window.scrollY > 300
+  
+  // Reposition popover on scroll if it's open
+  if (activePopover.value !== null) {
+    positionPopover(activePopover.value)
+  }
 }
 
 function handleResize() {
   windowWidth.value = window.innerWidth
+  
+  // Reposition popover on resize if it's open
+  if (activePopover.value !== null) {
+    positionPopover(activePopover.value)
+  }
 }
 
 // Handle clicking outside to close pinned popover
@@ -787,68 +828,15 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 }
 
 .custom-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   min-width: 200px;
-  max-width: min(600px, calc(100vw - 2rem));
+  max-width: 600px;
   background: var(--bs-body-bg);
   border: 1px solid var(--bs-border-color);
   border-radius: 0.375rem;
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
-  z-index: 1050;
   animation: fadeIn 0.15s ease-in;
-}
-
-/* Adjust popover positioning on mobile */
-@media (max-width: 768px) {
-  /* On mobile, ensure list items don't cause horizontal overflow */
-  .list-group-item {
-    overflow: visible;
-  }
-  
-  .custom-popover {
-    /* On mobile, use fixed positioning (top is set by JavaScript) */
-    position: fixed;
-    left: 1rem;
-    right: 1rem;
-    transform: none;
-    max-width: none;
-    min-width: auto;
-  }
-  
-  /* Hide arrows on mobile since popover is fixed */
-  .custom-popover::before,
-  .custom-popover::after {
-    display: none;
-  }
-}
-
-.custom-popover::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid var(--bs-border-color);
-}
-
-.custom-popover::after {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 5px solid var(--bs-body-bg);
+  pointer-events: auto;
 }
 
 .popover-header {
@@ -863,8 +851,8 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 
 .popover-body {
   padding: 0.5rem 0.75rem;
-  max-height: calc(100vh - 150px);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .run-label-item {
@@ -884,21 +872,18 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 }
 
 .run-label {
-  white-space: nowrap;
-}
-
-.run-label {
   word-break: break-word;
+  white-space: normal;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-5px);
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: scale(1);
   }
 }
 
