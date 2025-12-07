@@ -569,8 +569,7 @@ function positionPopover(benchmarkId) {
     // Calculate maximum available width (90% of viewport width with margins)
     const maxAvailableWidth = Math.min(viewportWidth - margin * 2, viewportWidth * 0.9)
     
-    // Calculate popover dimensions (use actual if available, otherwise estimate)
-    const popoverWidth = Math.min(popoverRect.width || 300, maxAvailableWidth)
+    // Get popover dimensions - height for positioning, but don't constrain width
     const popoverHeight = popoverRect.height || 200
     
     let top = 0
@@ -606,6 +605,8 @@ function positionPopover(benchmarkId) {
     top = Math.max(margin, Math.min(top, viewportHeight - margin - finalPopoverHeight))
     
     // Determine horizontal position (prefer centered under badge)
+    // Use the natural width of the popover, but constrain to viewport
+    const popoverWidth = Math.min(popoverRect.width, maxAvailableWidth)
     const badgeCenter = badgeRect.left + badgeRect.width / 2
     left = badgeCenter - popoverWidth / 2
     
@@ -616,15 +617,12 @@ function positionPopover(benchmarkId) {
       left = viewportWidth - margin - popoverWidth
     }
     
-    // Calculate final width (constrained to viewport with margins)
-    const finalWidth = Math.min(popoverWidth, viewportWidth - margin * 2)
-    
-    // Apply styles
+    // Apply styles - let CSS max-width handle width constraint naturally
     popoverStyle.value = {
       position: 'fixed',
       top: `${top}px`,
       left: `${left}px`,
-      width: `${finalWidth}px`,
+      maxWidth: `${maxAvailableWidth}px`,
       maxHeight: `${maxHeight}px`,
       zIndex: '1060'
     }
