@@ -15,6 +15,8 @@
     "test:unit": "node tests/dateFormatter.test.js"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "bootstrap": "^5.3.8",
     "dayjs": "^1.11.19",
     "dompurify": "^3.3.0",
     "highcharts": "^11.4.8",
