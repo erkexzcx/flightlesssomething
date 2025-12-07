@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+const (
+	// maxLengthDifferenceThreshold is the maximum allowed percentage difference
+	// between FPS and frametime data array lengths in Afterburner files.
+	// Afterburner files may have duplicate column headers (e.g., "Framerate" and
+	// "Frametime" appear twice at different positions), which can result in slightly
+	// different array lengths when some rows have empty values in one set of columns.
+	maxLengthDifferenceThreshold = 0.05
+)
+
 // TestParseAfterburnerTestData tests parsing of actual afterburner test files in testdata/
 func TestParseAfterburnerTestData(t *testing.T) {
 	// Get the testdata directory
@@ -73,8 +82,11 @@ func TestParseAfterburnerTestData(t *testing.T) {
 			}
 
 			// For Afterburner files, FPS and frametime may have slightly different lengths
-			// due to duplicate columns in the format. This is expected and acceptable.
-			// We just verify they're close (within 5% difference)
+			// because Afterburner format contains duplicate column headers:
+			// - "Framerate" and "Frametime" appear at positions 4,5
+			// - "Framerate" and "Frametime" appear again at positions 12,13
+			// Some data rows may have values in only one set of columns, causing length mismatches.
+			// We verify they're within the acceptable threshold.
 			fpLen := len(data.DataFPS)
 			ftLen := len(data.DataFrameTime)
 			diff := fpLen - ftLen
@@ -85,9 +97,9 @@ func TestParseAfterburnerTestData(t *testing.T) {
 			if ftLen > maxLen {
 				maxLen = ftLen
 			}
-			if float64(diff) > float64(maxLen)*0.05 {
-				t.Errorf("FPS and frametime data length difference too large: %d vs %d (diff: %d)", 
-					fpLen, ftLen, diff)
+			if float64(diff) > float64(maxLen)*maxLengthDifferenceThreshold {
+				t.Errorf("FPS and frametime data length difference too large: %d vs %d (diff: %d, threshold: %.1f%%)", 
+					fpLen, ftLen, diff, maxLengthDifferenceThreshold*100)
 			}
 
 			t.Logf("Successfully parsed %s: %d data points, GPU: %s", 
