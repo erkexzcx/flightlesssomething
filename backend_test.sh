@@ -159,7 +159,7 @@ log_info "Test 5: Create benchmark"
 RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X POST \
     -F "title=Backend Test Benchmark" \
     -F "description=Comprehensive backend test" \
-    -F "files=@testdata/benchmark1/Overwatch_2025-11-23_17-36-50.csv" \
+    -F "files=@testdata/mangohud/run1.csv" \
     "${BASE_URL}/api/benchmarks")
 BENCHMARK_ID=$(echo "$RESPONSE" | jq -r '.ID')
 if [ "$BENCHMARK_ID" != "null" ] && [ -n "$BENCHMARK_ID" ]; then
