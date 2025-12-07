@@ -3,7 +3,6 @@ import Benchmarks from '../views/Benchmarks.vue'
 import Login from '../views/Login.vue'
 import BenchmarkCreate from '../views/BenchmarkCreate.vue'
 import BenchmarkDetail from '../views/BenchmarkDetail.vue'
-import MyBenchmarks from '../views/MyBenchmarks.vue'
 import APITokens from '../views/APITokens.vue'
 import Users from '../views/Users.vue'
 import Logs from '../views/Logs.vue'
@@ -27,7 +26,7 @@ const routes = [
   {
     path: '/benchmarks/my',
     name: 'my-benchmarks',
-    component: MyBenchmarks
+    component: Benchmarks
   },
   {
     path: '/benchmarks/:id',

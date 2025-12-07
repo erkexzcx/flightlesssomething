@@ -1,14 +1,14 @@
 <template>
   <div>
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2>Benchmarks</h2>
+      <h2>{{ isMyBenchmarksPage ? 'My Benchmarks' : 'Benchmarks' }}</h2>
       <router-link v-if="authStore.isAuthenticated" to="/benchmarks/new" class="btn btn-primary">
         <i class="fa-solid fa-plus"></i> New benchmark
       </router-link>
     </div>
 
     <!-- Search -->
-    <form @submit.prevent="handleSearch">
+    <form @submit.prevent="handleSearch" v-if="!isMyBenchmarksPage">
       <div class="input-group rounded mb-3">
         <input
           type="search"
@@ -28,7 +28,7 @@
     </form>
 
     <!-- Filter indicator -->
-    <div v-if="route.query.user_id || filterUserId" class="alert alert-info d-flex justify-content-between align-items-center mb-3" role="alert">
+    <div v-if="(route.query.user_id || filterUserId) && !isMyBenchmarksPage" class="alert alert-info d-flex justify-content-between align-items-center mb-3" role="alert">
       <span>
         <i class="fas fa-filter"></i> Showing benchmarks by <strong>{{ filterUsername }}</strong>
       </span>
@@ -137,7 +137,13 @@
 
     <!-- Empty state -->
     <div v-else class="alert alert-info" role="alert">
-      No benchmarks found. {{ authStore.isAuthenticated ? 'Create your first benchmark!' : 'Login to create benchmarks.' }}
+      <template v-if="isMyBenchmarksPage">
+        You haven't created any benchmarks yet. 
+        <router-link to="/benchmarks/new" class="alert-link">Create your first benchmark!</router-link>
+      </template>
+      <template v-else>
+        No benchmarks found. {{ authStore.isAuthenticated ? 'Create your first benchmark!' : 'Login to create benchmarks.' }}
+      </template>
     </div>
 
     <!-- Popover portal (rendered at body level) -->
@@ -295,6 +301,11 @@ const pageInputValue = ref(null)
 const badgeRefs = ref(new Map())
 const popoverStyle = ref({})
 
+// Computed property to check if we're on "My Benchmarks" page
+const isMyBenchmarksPage = computed(() => {
+  return route.path === '/benchmarks/my'
+})
+
 // Set badge ref for positioning
 function setBadgeRef(benchmarkId, el) {
   if (el) {
@@ -356,11 +367,21 @@ async function loadBenchmarks() {
     loading.value = true
     error.value = null
 
-    // Check if filtering by user_id from URL
-    const userId = route.query.user_id
+    // Check if we're on "My Benchmarks" page
+    let userId = route.query.user_id
     
-    // Update local state based on URL
-    if (userId && !filterUserId.value) {
+    if (isMyBenchmarksPage.value) {
+      // For "My Benchmarks", use current user's ID
+      if (!authStore.user?.user_id) {
+        // Not authenticated, redirect to login
+        router.push('/login')
+        return
+      }
+      userId = authStore.user.user_id
+      filterUserId.value = userId
+      filterUsername.value = authStore.user.username || 'You'
+    } else if (userId && !filterUserId.value) {
+      // Update local state based on URL query parameter
       filterUserId.value = userId
     }
 
@@ -385,7 +406,7 @@ async function loadBenchmarks() {
         sortOrderParam
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
-      if (!filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
+      if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
         filterUsername.value = response.benchmarks[0].User.Username
       }
     } else {
@@ -462,8 +483,13 @@ function clearFilter() {
   filterUserId.value = null
   filterUsername.value = ''
   currentPage.value = 1
-  // Remove user_id from URL
-  router.push({ query: {} })
+  // If on "My Benchmarks" page, go to regular benchmarks page
+  if (isMyBenchmarksPage.value) {
+    router.push('/')
+  } else {
+    // Remove user_id from URL
+    router.push({ query: {} })
+  }
 }
 
 function showPopover(benchmarkId) {
@@ -676,6 +702,16 @@ onUnmounted(() => {
 watch(() => route.query.user_id, (newUserId, oldUserId) => {
   if (newUserId !== oldUserId) {
     currentPage.value = 1
+    loadBenchmarks()
+  }
+})
+
+// Watch for route path changes (e.g., switching between / and /benchmarks/my)
+watch(() => route.path, (newPath, oldPath) => {
+  if (newPath !== oldPath) {
+    currentPage.value = 1
+    filterUserId.value = null
+    filterUsername.value = ''
     loadBenchmarks()
   }
 })
