@@ -671,7 +671,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   height: 50px;
-  background: linear-gradient(to bottom, transparent, var(--bs-dark, #212529));
+  background: linear-gradient(to bottom, transparent, var(--bs-body-bg));
   pointer-events: none;
 }
 
