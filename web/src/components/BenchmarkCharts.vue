@@ -322,7 +322,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useAppStore } from '../stores/app'
 import Highcharts from 'highcharts'
 import HighchartsBoost from 'highcharts/modules/boost'
@@ -414,7 +414,10 @@ const gpuMemClockSummaryChart = ref(null)
 const cpuPowerSummaryChart = ref(null)
 const gpuPowerSummaryChart = ref(null)
 
-// Common chart options - computed to react to theme changes
+// Track current device pixel ratio for HiDPI display support
+const currentPixelRatio = ref(window.devicePixelRatio || 1)
+
+// Common chart options - computed to react to theme changes and DPI changes
 const commonChartOptions = computed(() => {
   const colors = getThemeColors.value
   return {
@@ -426,7 +429,10 @@ const commonChartOptions = computed(() => {
         useGPUTranslations: true, 
         usePreallocated: true,
         seriesThreshold: 1,  // Enable boost for all series
-        pixelRatio: window.devicePixelRatio || 1  // Fix for Retina/HiDPI displays
+        // HiDPI/4K Display Support: Scale canvas to match device pixel ratio
+        // This ensures crisp rendering on Retina displays and 4K monitors
+        // The canvas dimensions are multiplied by this ratio and then scaled back via transform
+        pixelRatio: currentPixelRatio.value
       } 
     },
     title: { style: { color: colors.textColor, fontSize: '16px' } },
@@ -440,11 +446,17 @@ const commonChartOptions = computed(() => {
   }
 })
 
-// Set global options
+// Set global Highcharts options
+// Note: Per-chart pixelRatio is set in commonChartOptions computed property
+// This global setting serves as a fallback
 Highcharts.setOptions({ 
   chart: { animation: false }, 
   plotOptions: { series: { animation: false, turboThreshold: 0 } },
-  boost: { enabled: true, pixelRatio: window.devicePixelRatio || 1 }
+  boost: { 
+    enabled: true, 
+    // HiDPI/4K Display Support: This is a fallback value, actual value comes from computed options
+    pixelRatio: window.devicePixelRatio || 1 
+  }
 })
 
 // Helper functions
@@ -1137,6 +1149,12 @@ function handleTabClick(tabName) {
 function handleCalculationModeChange(mode) {
   appStore.setCalculationMode(mode)
   // Force re-render of all rendered tabs
+  reRenderAllTabs()
+}
+
+// Shared function to re-render all rendered tabs
+// Used by theme changes, DPI changes, and calculation mode changes
+function reRenderAllTabs() {
   nextTick(() => {
     if (renderedTabs.value.fps) {
       renderFPSTab()
@@ -1147,8 +1165,30 @@ function handleCalculationModeChange(mode) {
     if (renderedTabs.value.summary) {
       renderSummaryTab()
     }
-    // More metrics tab doesn't use FPS averages, so no need to re-render
+    if (renderedTabs.value['more-metrics']) {
+      renderMoreMetricsTab()
+    }
   })
+}
+
+// Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
+// This ensures charts remain crisp when moved between standard and HiDPI displays
+// Debounced to avoid excessive checks during window resizing
+let updatePixelRatioTimeout = null
+function updatePixelRatio() {
+  // Clear any pending update
+  if (updatePixelRatioTimeout) {
+    clearTimeout(updatePixelRatioTimeout)
+  }
+  
+  // Debounce to avoid excessive re-renders during window resize
+  updatePixelRatioTimeout = setTimeout(() => {
+    const newPixelRatio = window.devicePixelRatio || 1
+    if (newPixelRatio !== currentPixelRatio.value) {
+      currentPixelRatio.value = newPixelRatio
+      reRenderAllTabs()
+    }
+  }, 200) // 200ms debounce
 }
 
 onMounted(() => {
@@ -1158,6 +1198,21 @@ onMounted(() => {
       renderFPSTab()
       renderedTabs.value.fps = true
     })
+  }
+
+  // Listen for window resize events which may indicate DPI changes
+  // This handles cases like:
+  // - Moving window between displays with different pixel densities
+  // - Browser zoom changes
+  // - Display settings changes
+  window.addEventListener('resize', updatePixelRatio)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updatePixelRatio)
+  // Clear any pending timeout
+  if (updatePixelRatioTimeout) {
+    clearTimeout(updatePixelRatioTimeout)
   }
 })
 
@@ -1181,21 +1236,7 @@ watch(() => props.benchmarkData, () => {
 
 // Watch for theme changes and re-render all rendered tabs
 watch(() => appStore.theme, () => {
-  nextTick(() => {
-    // Re-render all tabs that have been rendered
-    if (renderedTabs.value.fps) {
-      renderFPSTab()
-    }
-    if (renderedTabs.value.frametime) {
-      renderFrametimeTab()
-    }
-    if (renderedTabs.value.summary) {
-      renderSummaryTab()
-    }
-    if (renderedTabs.value['more-metrics']) {
-      renderMoreMetricsTab()
-    }
-  })
+  reRenderAllTabs()
 })
 </script>
 
