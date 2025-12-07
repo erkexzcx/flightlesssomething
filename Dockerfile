@@ -37,7 +37,7 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -o server ./cmd/server
 
 # Runtime stage
-FROM gcr.io/distroless/base-debian12:latest
+FROM gcr.io/distroless/base-debian13:latest
 
 WORKDIR /app
 
