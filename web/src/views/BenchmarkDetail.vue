@@ -340,6 +340,7 @@ marked.use({ renderer })
 
 // Constants
 const FILE_EXTENSIONS = /\.(csv|hml)$/i
+const COLLAPSE_HEIGHT_THRESHOLD = 150 // px - should match .markdown-content.collapsed max-height in CSS
 
 const route = useRoute()
 const router = useRouter()
@@ -403,12 +404,13 @@ function checkIfDescriptionShouldCollapse() {
     return
   }
   
-  // Criterion 3: Rendered height exceeds 150px (smart approach)
+  // Criterion 3: Rendered height exceeds threshold (smart approach)
+  // Only check this if criteria 1 and 2 are not met
   // This will be checked after the DOM is rendered
   nextTick(() => {
     if (descriptionContentRef.value) {
       const height = descriptionContentRef.value.scrollHeight
-      shouldShowCollapseButton.value = height > 150
+      shouldShowCollapseButton.value = height > COLLAPSE_HEIGHT_THRESHOLD
     }
   })
 }
