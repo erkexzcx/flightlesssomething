@@ -869,7 +869,8 @@ watch(() => route.path, (newPath, oldPath) => {
 .custom-popover {
   position: fixed;
   min-width: 200px;
-  max-width: 90vw;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
   width: max-content;
   background: var(--bs-body-bg);
   border: 1px solid var(--bs-border-color);
@@ -893,13 +894,8 @@ watch(() => route.path, (newPath, oldPath) => {
   padding: 0.5rem 0.75rem;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-/* Enable horizontal scrolling only on mobile/tablet */
-@media (max-width: 768px) {
-  .popover-body {
-    overflow-x: auto;
-  }
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .run-label-item {
@@ -908,7 +904,6 @@ watch(() => route.path, (newPath, oldPath) => {
   padding: 0.25rem 0;
   font-size: 0.875rem;
   color: var(--bs-body-color);
-  white-space: nowrap;
 }
 
 .run-number {
@@ -919,7 +914,9 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .run-label {
-  /* Inherits white-space: nowrap from parent */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 @keyframes fadeIn {
