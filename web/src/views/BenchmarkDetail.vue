@@ -217,7 +217,7 @@
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h5 class="card-title mb-0">Description</h5>
             <button
-              v-if="benchmark.Description.length > 300"
+              v-if="shouldShowCollapseButton"
               type="button"
               class="btn btn-sm btn-outline-secondary"
               @click="toggleDescriptionExpanded"
@@ -227,8 +227,9 @@
             </button>
           </div>
           <div 
+            ref="descriptionContentRef"
             class="markdown-content"
-            :class="{ 'collapsed': !descriptionExpanded && benchmark.Description.length > 300 }"
+            :class="{ 'collapsed': !descriptionExpanded && shouldShowCollapseButton }"
             v-html="renderedDescription"
           ></div>
         </div>
@@ -308,7 +309,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -339,6 +340,7 @@ marked.use({ renderer })
 
 // Constants
 const FILE_EXTENSIONS = /\.(csv|hml)$/i
+const COLLAPSE_HEIGHT_THRESHOLD = 150 // px - should match .markdown-content.collapsed max-height in CSS
 
 const route = useRoute()
 const router = useRouter()
@@ -362,6 +364,8 @@ const dataError = ref(null)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
+const descriptionContentRef = ref(null)
+const shouldShowCollapseButton = ref(false)
 
 const isOwner = computed(() => {
   if (!authStore.isAuthenticated || !benchmark.value) return false
@@ -377,6 +381,44 @@ const renderedDescription = computed(() => {
     ALLOWED_ATTR: ['href', 'rel', 'target'],
   })
 })
+
+// Smart collapsible check based on multiple criteria
+function checkIfDescriptionShouldCollapse() {
+  if (!benchmark.value?.Description) {
+    shouldShowCollapseButton.value = false
+    return
+  }
+  
+  const description = benchmark.value.Description
+  
+  // Criterion 1: Character count > 300 (existing behavior)
+  if (description.length > 300) {
+    shouldShowCollapseButton.value = true
+    return
+  }
+  
+  // Criterion 2: Line count > 10 (new behavior for many short lines)
+  const lineCount = description.split('\n').length
+  if (lineCount > 10) {
+    shouldShowCollapseButton.value = true
+    return
+  }
+  
+  // Criterion 3: Rendered height exceeds threshold (smart approach)
+  // Only check this if criteria 1 and 2 are not met
+  // This will be checked after the DOM is rendered
+  nextTick(() => {
+    if (descriptionContentRef.value) {
+      const height = descriptionContentRef.value.scrollHeight
+      shouldShowCollapseButton.value = height > COLLAPSE_HEIGHT_THRESHOLD
+    }
+  })
+}
+
+// Watch for changes to benchmark description
+watch(() => benchmark.value?.Description, () => {
+  checkIfDescriptionShouldCollapse()
+}, { immediate: true })
 
 function toggleDescriptionExpanded() {
   descriptionExpanded.value = !descriptionExpanded.value
