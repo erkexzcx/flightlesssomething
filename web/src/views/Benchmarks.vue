@@ -876,6 +876,8 @@ watch(() => route.path, (newPath, oldPath) => {
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
   animation: fadeIn 0.15s ease-in;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .popover-header {
@@ -886,12 +888,15 @@ watch(() => route.path, (newPath, oldPath) => {
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--bs-body-color);
+  flex-shrink: 0;
 }
 
 .popover-body {
   padding: 0.5rem 0.75rem;
   overflow-y: auto;
   overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .run-label-item {
