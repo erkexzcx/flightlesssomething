@@ -1,8 +1,12 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-trixie AS builder
 
 # Install build dependencies (including Node.js for web UI)
-RUN apk add --no-cache git gcc musl-dev nodejs npm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -37,18 +41,12 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -o server ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
-
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates wget
+FROM gcr.io/distroless/base-debian13:latest
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /build/server .
-
-# Create data directory
-RUN mkdir -p /data
 
 # Expose port
 EXPOSE 5000
