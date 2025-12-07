@@ -532,9 +532,6 @@ function positionPopover(benchmarkId) {
   nextTick(() => {
     if (!popoverRef.value || !badgeRefs.value.has(benchmarkId)) return
     
-    const badgeEl = badgeRefs.value.get(benchmarkId)
-    if (!badgeEl) return
-    
     const badgeRect = badgeEl.getBoundingClientRect()
     const popoverRect = popoverRef.value.getBoundingClientRect()
     
@@ -571,8 +568,13 @@ function positionPopover(benchmarkId) {
       }
     }
     
-    // Ensure top is within bounds
-    top = Math.max(margin, Math.min(top, viewportHeight - margin - popoverHeight))
+    // Ensure minimum popover height
+    maxHeight = Math.max(150, maxHeight)
+    
+    // Calculate final top position, ensuring it stays within bounds
+    // Note: This uses the constrained maxHeight, not the original popoverHeight
+    const finalPopoverHeight = Math.min(popoverHeight, maxHeight)
+    top = Math.max(margin, Math.min(top, viewportHeight - margin - finalPopoverHeight))
     
     // Determine horizontal position (prefer centered under badge)
     const badgeCenter = badgeRect.left + badgeRect.width / 2
@@ -585,15 +587,15 @@ function positionPopover(benchmarkId) {
       left = viewportWidth - margin - popoverWidth
     }
     
-    // Ensure minimum popover height
-    maxHeight = Math.max(150, maxHeight)
+    // Calculate final width (constrained to viewport)
+    const finalWidth = Math.min(popoverWidth, viewportWidth - margin * 2)
     
     // Apply styles
     popoverStyle.value = {
       position: 'fixed',
       top: `${top}px`,
       left: `${left}px`,
-      width: `${Math.min(popoverWidth, viewportWidth - margin * 2)}px`,
+      width: `${finalWidth}px`,
       maxHeight: `${maxHeight}px`,
       zIndex: '1060'
     }
@@ -870,11 +872,8 @@ watch(() => route.query.user_id, (newUserId, oldUserId) => {
 }
 
 .run-label {
-  white-space: nowrap;
-}
-
-.run-label {
   word-break: break-word;
+  white-space: normal;
 }
 
 @keyframes fadeIn {
