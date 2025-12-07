@@ -408,11 +408,7 @@ function checkIfDescriptionShouldCollapse() {
   nextTick(() => {
     if (descriptionContentRef.value) {
       const height = descriptionContentRef.value.scrollHeight
-      if (height > 150) {
-        shouldShowCollapseButton.value = true
-      } else {
-        shouldShowCollapseButton.value = false
-      }
+      shouldShowCollapseButton.value = height > 150
     }
   })
 }
