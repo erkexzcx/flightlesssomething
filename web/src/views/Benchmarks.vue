@@ -912,7 +912,6 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .run-label {
-  word-wrap: break-word;
   overflow-wrap: anywhere;
   white-space: normal;
   flex: 1;
