@@ -398,7 +398,7 @@ function checkIfDescriptionShouldCollapse() {
   }
   
   // Criterion 2: Line count > 10 (new behavior for many short lines)
-  const lineCount = (description.match(/\n/g) || []).length + 1
+  const lineCount = description.split('\n').length
   if (lineCount > 10) {
     shouldShowCollapseButton.value = true
     return
