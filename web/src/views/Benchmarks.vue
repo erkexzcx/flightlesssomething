@@ -892,7 +892,7 @@ watch(() => route.path, (newPath, oldPath) => {
 .popover-body {
   padding: 0.5rem 0.75rem;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .run-label-item {
