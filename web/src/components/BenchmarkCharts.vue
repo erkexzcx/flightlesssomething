@@ -1173,7 +1173,7 @@ function reRenderAllTabs() {
 
 // Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
 // This ensures charts remain crisp when moved between standard and HiDPI displays
-// Throttled to avoid excessive checks during window resizing
+// Debounced to avoid excessive checks during window resizing
 let updatePixelRatioTimeout = null
 function updatePixelRatio() {
   // Clear any pending update
@@ -1181,7 +1181,7 @@ function updatePixelRatio() {
     clearTimeout(updatePixelRatioTimeout)
   }
   
-  // Throttle to avoid excessive re-renders during window resize
+  // Debounce to avoid excessive re-renders during window resize
   updatePixelRatioTimeout = setTimeout(() => {
     const newPixelRatio = window.devicePixelRatio || 1
     if (newPixelRatio !== currentPixelRatio.value) {
