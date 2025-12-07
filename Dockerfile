@@ -37,18 +37,12 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -o server ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
-
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates wget
+FROM gcr.io/distroless/base-debian12:latest
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /build/server .
-
-# Create data directory
-RUN mkdir -p /data
 
 # Expose port
 EXPOSE 5000
