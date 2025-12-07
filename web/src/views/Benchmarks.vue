@@ -912,8 +912,7 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .run-label {
-  word-break: break-word;
-  white-space: normal;
+  /* Inherits white-space: nowrap from parent */
 }
 
 @keyframes fadeIn {
