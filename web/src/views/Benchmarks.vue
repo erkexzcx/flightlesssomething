@@ -566,8 +566,11 @@ function positionPopover(benchmarkId) {
     const margin = 16 // Minimum margin from edges
     const spacing = 8 // Spacing between badge and popover
     
+    // Calculate maximum available width (90% of viewport width with margins)
+    const maxAvailableWidth = Math.min(viewportWidth - margin * 2, viewportWidth * 0.9)
+    
     // Calculate popover dimensions (use actual if available, otherwise estimate)
-    const popoverWidth = popoverRect.width || 300
+    const popoverWidth = Math.min(popoverRect.width || 300, maxAvailableWidth)
     const popoverHeight = popoverRect.height || 200
     
     let top = 0
@@ -613,7 +616,7 @@ function positionPopover(benchmarkId) {
       left = viewportWidth - margin - popoverWidth
     }
     
-    // Calculate final width (constrained to viewport)
+    // Calculate final width (constrained to viewport with margins)
     const finalWidth = Math.min(popoverWidth, viewportWidth - margin * 2)
     
     // Apply styles
@@ -866,7 +869,9 @@ watch(() => route.path, (newPath, oldPath) => {
 .custom-popover {
   position: fixed;
   min-width: 200px;
-  max-width: 600px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  width: max-content;
   background: var(--bs-body-bg);
   border: 1px solid var(--bs-border-color);
   border-radius: 0.375rem;
@@ -896,8 +901,9 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
   padding: 0.25rem 0;
   font-size: 0.875rem;
-  color: var(--bs-light);
+  color: var(--bs-body-color);
   white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .run-number {
@@ -908,8 +914,7 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .run-label {
-  word-break: break-word;
-  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 @keyframes fadeIn {
