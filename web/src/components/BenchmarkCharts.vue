@@ -425,7 +425,8 @@ const commonChartOptions = computed(() => {
       boost: { 
         useGPUTranslations: true, 
         usePreallocated: true,
-        seriesThreshold: 1  // Enable boost for all series
+        seriesThreshold: 1,  // Enable boost for all series
+        pixelRatio: window.devicePixelRatio || 1  // Fix for Retina/HiDPI displays
       } 
     },
     title: { style: { color: colors.textColor, fontSize: '16px' } },
@@ -443,7 +444,7 @@ const commonChartOptions = computed(() => {
 Highcharts.setOptions({ 
   chart: { animation: false }, 
   plotOptions: { series: { animation: false, turboThreshold: 0 } },
-  boost: { enabled: true }
+  boost: { enabled: true, pixelRatio: window.devicePixelRatio || 1 }
 })
 
 // Helper functions
