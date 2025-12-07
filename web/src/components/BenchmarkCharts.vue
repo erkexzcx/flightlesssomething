@@ -1196,28 +1196,20 @@ onMounted(() => {
     }
   }
 
-  // Listen for DPI changes using matchMedia
-  // Different browsers support different ways to detect this
-  const dpiMediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
-  if (dpiMediaQuery && dpiMediaQuery.addEventListener) {
-    dpiMediaQuery.addEventListener('change', updatePixelRatio)
-    
-    // Cleanup function
-    onUnmounted(() => {
-      if (dpiMediaQuery && dpiMediaQuery.removeEventListener) {
-        dpiMediaQuery.removeEventListener('change', updatePixelRatio)
-      }
-      window.removeEventListener('resize', updatePixelRatio)
-    })
-  } else {
-    // Fallback cleanup if no matchMedia support
-    onUnmounted(() => {
-      window.removeEventListener('resize', updatePixelRatio)
-    })
+  // Cleanup function for event listeners
+  const cleanup = () => {
+    window.removeEventListener('resize', updatePixelRatio)
   }
-  
-  // Also listen for general resize events as a fallback
+
+  // Listen for window resize events which may indicate DPI changes
+  // This handles cases like:
+  // - Moving window between displays with different pixel densities
+  // - Browser zoom changes
+  // - Display settings changes
   window.addEventListener('resize', updatePixelRatio)
+  
+  // Register cleanup
+  onUnmounted(cleanup)
 })
 
 watch(() => props.benchmarkData, () => {
