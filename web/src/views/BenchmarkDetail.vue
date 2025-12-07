@@ -327,16 +327,25 @@ marked.setOptions({
   headerIds: false,
 })
 
-// Use a custom renderer to sanitize output
-const renderer = new marked.Renderer()
-// Override link renderer to add security attributes
-const originalLink = renderer.link.bind(renderer)
-renderer.link = (href, title, text) => {
-  const html = originalLink(href, title, text)
-  return html.replace('<a', '<a rel="noopener noreferrer nofollow" target="_blank"')
-}
-
-marked.use({ renderer })
+// Use a custom renderer extension to add security attributes to links
+marked.use({
+  renderer: {
+    link({ href, title, tokens }) {
+      // Parse the tokens to get the link text
+      const text = this.parser.parseInline(tokens)
+      
+      // Build the link HTML with security attributes
+      let html = `<a href="${href}"`
+      if (title) {
+        html += ` title="${title}"`
+      }
+      html += ' rel="noopener noreferrer nofollow" target="_blank"'
+      html += `>${text}</a>`
+      
+      return html
+    }
+  }
+})
 
 // Constants
 const FILE_EXTENSIONS = /\.(csv|hml)$/i
