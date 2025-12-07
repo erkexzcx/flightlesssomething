@@ -1,8 +1,12 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-bookworm AS builder
 
 # Install build dependencies (including Node.js for web UI)
-RUN apk add --no-cache git gcc musl-dev nodejs npm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
