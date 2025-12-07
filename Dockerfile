@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.25-trixie AS builder
 
 # Install build dependencies (including Node.js for web UI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
