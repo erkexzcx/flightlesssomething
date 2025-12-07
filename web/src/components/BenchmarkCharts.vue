@@ -1173,12 +1173,22 @@ function reRenderAllTabs() {
 
 // Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
 // This ensures charts remain crisp when moved between standard and HiDPI displays
+// Throttled to avoid excessive checks during window resizing
+let updatePixelRatioTimeout = null
 function updatePixelRatio() {
-  const newPixelRatio = window.devicePixelRatio || 1
-  if (newPixelRatio !== currentPixelRatio.value) {
-    currentPixelRatio.value = newPixelRatio
-    reRenderAllTabs()
+  // Clear any pending update
+  if (updatePixelRatioTimeout) {
+    clearTimeout(updatePixelRatioTimeout)
   }
+  
+  // Throttle to avoid excessive re-renders during window resize
+  updatePixelRatioTimeout = setTimeout(() => {
+    const newPixelRatio = window.devicePixelRatio || 1
+    if (newPixelRatio !== currentPixelRatio.value) {
+      currentPixelRatio.value = newPixelRatio
+      reRenderAllTabs()
+    }
+  }, 200) // 200ms debounce
 }
 
 onMounted(() => {
@@ -1200,6 +1210,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updatePixelRatio)
+  // Clear any pending timeout
+  if (updatePixelRatioTimeout) {
+    clearTimeout(updatePixelRatioTimeout)
+  }
 })
 
 watch(() => props.benchmarkData, () => {
