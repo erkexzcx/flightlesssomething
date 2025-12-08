@@ -53,7 +53,11 @@ runs:
         mkdir -p ~/.ssh
         echo "${{ inputs.ssh-private-key }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -p ${{ inputs.ssh-port }} ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts
+        if [ -n "${{ inputs.ssh-port }}" ]; then
+          ssh-keyscan -p ${{ inputs.ssh-port }} ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts
+        else
+          ssh-keyscan ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts
+        fi
 
     - name: Deploy to server
       shell: bash
