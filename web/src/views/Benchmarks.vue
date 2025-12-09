@@ -300,11 +300,72 @@ const windowWidth = ref(window.innerWidth)
 const pageInputValue = ref(null)
 const badgeRefs = ref(new Map())
 const popoverStyle = ref({})
+const isInitialized = ref(false)
 
 // Computed property to check if we're on "My Benchmarks" page
 const isMyBenchmarksPage = computed(() => {
   return route.path === '/benchmarks/my'
 })
+
+// Initialize state from URL query parameters
+function initializeFromURL() {
+  // Page number
+  const pageParam = parseInt(route.query.page)
+  if (pageParam && pageParam > 0) {
+    currentPage.value = pageParam
+  }
+  
+  // Search query
+  if (route.query.search) {
+    searchQuery.value = route.query.search
+  }
+  
+  // Sort parameters
+  if (route.query.sort) {
+    sortKey.value = route.query.sort
+  }
+  if (route.query.order && (route.query.order === 'asc' || route.query.order === 'desc')) {
+    sortDirection.value = route.query.order
+  }
+  
+  isInitialized.value = true
+}
+
+// Update URL with current state
+function updateURL() {
+  if (!isInitialized.value) return
+  
+  const query = {}
+  
+  // Add page parameter if not on first page
+  if (currentPage.value > 1) {
+    query.page = currentPage.value
+  }
+  
+  // Add search parameter if present
+  if (searchQuery.value && !filterUserId.value) {
+    query.search = searchQuery.value
+  }
+  
+  // Add sort parameters if set
+  if (sortKey.value) {
+    query.sort = sortKey.value
+    query.order = sortDirection.value
+  }
+  
+  // Preserve user_id parameter if present
+  if (route.query.user_id) {
+    query.user_id = route.query.user_id
+  }
+  
+  // Only push if query actually changed
+  const currentQuery = route.query
+  const queryChanged = JSON.stringify(query) !== JSON.stringify(currentQuery)
+  
+  if (queryChanged) {
+    router.push({ query })
+  }
+}
 
 // Set badge ref for positioning
 function setBadgeRef(benchmarkId, el) {
@@ -439,6 +500,8 @@ function toggleSort(key) {
     sortKey.value = key
     sortDirection.value = 'asc'
   }
+  // Update URL with new sort order
+  updateURL()
   // Reload benchmarks with new sort order from backend
   loadBenchmarks()
 }
@@ -446,6 +509,8 @@ function toggleSort(key) {
 function goToPage(page) {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page
+    // Update URL with new page
+    updateURL()
     loadBenchmarks()
     // Scroll to top when changing pages for better UX
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -463,8 +528,8 @@ function handleSearch() {
   currentPage.value = 1
   filterUserId.value = null
   filterUsername.value = ''
-  // Remove user_id from URL
-  router.push({ query: {} })
+  // Update URL - this will remove user_id and add search if present
+  updateURL()
   loadBenchmarks()
 }
 
@@ -483,12 +548,14 @@ function clearFilter() {
   filterUserId.value = null
   filterUsername.value = ''
   currentPage.value = 1
+  searchQuery.value = ''
   // If on "My Benchmarks" page, go to regular benchmarks page
   if (isMyBenchmarksPage.value) {
     router.push('/')
   } else {
-    // Remove user_id from URL
-    router.push({ query: {} })
+    // Update URL to clear all filters
+    updateURL()
+    loadBenchmarks()
   }
 }
 
@@ -687,6 +754,9 @@ function handleClickOutside(event) {
 }
 
 onMounted(() => {
+  // Initialize state from URL parameters
+  initializeFromURL()
+  // Load benchmarks with initialized state
   loadBenchmarks()
   document.addEventListener('click', handleClickOutside)
   window.addEventListener('scroll', handleScroll)
@@ -699,13 +769,45 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 })
 
-// Watch for route query changes
-watch(() => route.query.user_id, (newUserId, oldUserId) => {
+// Watch for route query changes (for browser back/forward and direct URL changes)
+watch(() => route.query, (newQuery, oldQuery) => {
+  if (!isInitialized.value) return
+  
+  // Handle page changes
+  const newPage = parseInt(newQuery.page) || 1
+  if (newPage !== currentPage.value) {
+    currentPage.value = newPage
+    loadBenchmarks()
+    return
+  }
+  
+  // Handle search changes
+  const newSearch = newQuery.search || ''
+  if (newSearch !== searchQuery.value) {
+    searchQuery.value = newSearch
+    currentPage.value = 1
+    loadBenchmarks()
+    return
+  }
+  
+  // Handle sort changes
+  const newSort = newQuery.sort || null
+  const newOrder = newQuery.order || 'asc'
+  if (newSort !== sortKey.value || newOrder !== sortDirection.value) {
+    sortKey.value = newSort
+    sortDirection.value = newOrder
+    loadBenchmarks()
+    return
+  }
+  
+  // Handle user_id changes
+  const newUserId = newQuery.user_id
+  const oldUserId = oldQuery.user_id
   if (newUserId !== oldUserId) {
     currentPage.value = 1
     loadBenchmarks()
   }
-})
+}, { deep: true })
 
 // Watch for route path changes (e.g., switching between / and /benchmarks/my)
 watch(() => route.path, (newPath, oldPath) => {
@@ -713,6 +815,11 @@ watch(() => route.path, (newPath, oldPath) => {
     currentPage.value = 1
     filterUserId.value = null
     filterUsername.value = ''
+    searchQuery.value = ''
+    sortKey.value = null
+    sortDirection.value = 'asc'
+    // Re-initialize from URL for the new path
+    initializeFromURL()
     loadBenchmarks()
   }
 })

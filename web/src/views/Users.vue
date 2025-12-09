@@ -163,11 +163,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { formatRelativeDate } from '../utils/dateFormatter'
 
+const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const users = ref([])
 const loading = ref(false)
@@ -177,6 +180,7 @@ const perPage = ref(10)
 const totalUsers = ref(0)
 const totalPages = ref(0)
 const searchQuery = ref('')
+const isInitialized = ref(false)
 
 const displayPages = computed(() => {
   const pages = []
@@ -204,6 +208,42 @@ const isCurrentUser = (user) => {
   return Number(authStore.user.user_id) === Number(user.ID)
 }
 
+// Initialize state from URL query parameters
+function initializeFromURL() {
+  const pageParam = parseInt(route.query.page)
+  if (pageParam && pageParam > 0) {
+    currentPage.value = pageParam
+  }
+  
+  if (route.query.search) {
+    searchQuery.value = route.query.search
+  }
+  
+  isInitialized.value = true
+}
+
+// Update URL with current state
+function updateURL() {
+  if (!isInitialized.value) return
+  
+  const query = {}
+  
+  if (currentPage.value > 1) {
+    query.page = currentPage.value
+  }
+  
+  if (searchQuery.value) {
+    query.search = searchQuery.value
+  }
+  
+  const currentQuery = route.query
+  const queryChanged = JSON.stringify(query) !== JSON.stringify(currentQuery)
+  
+  if (queryChanged) {
+    router.push({ query })
+  }
+}
+
 async function fetchUsers() {
   try {
     loading.value = true
@@ -225,12 +265,14 @@ async function fetchUsers() {
 function changePage(page) {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page
+    updateURL()
     fetchUsers()
   }
 }
 
 function handleSearch() {
   currentPage.value = 1
+  updateURL()
   fetchUsers()
 }
 
@@ -309,8 +351,34 @@ async function confirmUnbanUser(user) {
 }
 
 onMounted(() => {
+  initializeFromURL()
   fetchUsers()
 })
+
+// Watch for route query changes (for browser back/forward)
+watch(() => route.query, (newQuery) => {
+  if (!isInitialized.value) return
+  
+  const newPage = parseInt(newQuery.page) || 1
+  const newSearch = newQuery.search || ''
+  
+  let shouldFetch = false
+  
+  if (newPage !== currentPage.value) {
+    currentPage.value = newPage
+    shouldFetch = true
+  }
+  
+  if (newSearch !== searchQuery.value) {
+    searchQuery.value = newSearch
+    currentPage.value = 1
+    shouldFetch = true
+  }
+  
+  if (shouldFetch) {
+    fetchUsers()
+  }
+}, { deep: true })
 </script>
 
 <style scoped>
