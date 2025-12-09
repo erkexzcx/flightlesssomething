@@ -118,151 +118,237 @@
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { api } from '../api/client'
 
-export default {
-  name: 'Logs',
-  data() {
-    return {
-      logs: [],
-      loading: true,
-      error: null,
-      currentPage: 1,
-      perPage: 50,
-      totalLogs: 0,
-      totalPages: 0,
-      filterAction: '',
-      filterTargetType: '',
-    }
-  },
-  computed: {
-    visiblePages() {
-      const pages = []
-      const maxVisible = 5
-      let start = Math.max(1, this.currentPage - Math.floor(maxVisible / 2))
-      let end = Math.min(this.totalPages, start + maxVisible - 1)
+const router = useRouter()
+const route = useRoute()
 
-      if (end - start < maxVisible - 1) {
-        start = Math.max(1, end - maxVisible + 1)
-      }
+const logs = ref([])
+const loading = ref(true)
+const error = ref(null)
+const currentPage = ref(1)
+const perPage = ref(50)
+const totalLogs = ref(0)
+const totalPages = ref(0)
+const filterAction = ref('')
+const filterTargetType = ref('')
+const isInitialized = ref(false)
 
-      for (let i = start; i <= end; i++) {
-        pages.push(i)
-      }
-      return pages
-    }
-  },
-  mounted() {
-    this.fetchLogs()
-  },
-  methods: {
-    async fetchLogs() {
-      this.loading = true
-      this.error = null
+const visiblePages = computed(() => {
+  const pages = []
+  const maxVisible = 5
+  let start = Math.max(1, currentPage.value - Math.floor(maxVisible / 2))
+  let end = Math.min(totalPages.value, start + maxVisible - 1)
 
-      try {
-        const filters = {}
-        if (this.filterAction) {
-          filters.action = this.filterAction
-        }
-        if (this.filterTargetType) {
-          filters.targetType = this.filterTargetType
-        }
+  if (end - start < maxVisible - 1) {
+    start = Math.max(1, end - maxVisible + 1)
+  }
 
-        const response = await api.admin.listLogs(this.currentPage, this.perPage, filters)
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  return pages
+})
 
-        this.logs = response.logs || []
-        this.totalLogs = response.total
-        this.totalPages = response.total_pages
-        this.currentPage = response.page
-      } catch (err) {
-        if (err.status === 403) {
-          this.error = 'Admin privileges required'
-        } else {
-          this.error = err.message || 'Failed to load audit logs'
-        }
-      } finally {
-        this.loading = false
-      }
-    },
-    changePage(page) {
-      if (page < 1 || page > this.totalPages) return
-      this.currentPage = page
-      this.fetchLogs()
-    },
-    handleFilter() {
-      this.currentPage = 1
-      this.fetchLogs()
-    },
-    resetFilters() {
-      this.filterAction = ''
-      this.filterTargetType = ''
-      this.currentPage = 1
-      this.fetchLogs()
-    },
-    formatDate(dateString) {
-      const date = new Date(dateString)
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
-    },
-    formatFullDate(dateString) {
-      const date = new Date(dateString)
-      return date.toLocaleString()
-    },
-    getActionBadgeClass(action) {
-      const actionLower = action.toLowerCase()
-      
-      if (actionLower.includes('created')) {
-        return 'bg-success'
-      } else if (actionLower.includes('deleted')) {
-        return 'bg-danger'
-      } else if (actionLower.includes('updated') || actionLower.includes('edited')) {
-        return 'bg-info'
-      } else if (actionLower.includes('banned')) {
-        return 'bg-danger'
-      } else if (actionLower.includes('unbanned')) {
-        return 'bg-success'
-      } else if (actionLower.includes('admin granted')) {
-        return 'bg-warning text-dark'
-      } else if (actionLower.includes('admin revoked')) {
-        return 'bg-secondary'
-      }
-      
-      return 'bg-secondary'
-    },
-    renderDescription(log) {
-      let description = this.escapeHtml(log.Description)
-      
-      // Make benchmark IDs clickable - safe because we control the format
-      // Benchmark IDs are always numeric and come from the backend
-      description = description.replace(
-        /#(\d+)/g,
-        '<a href="/benchmarks/$1" class="text-decoration-none">#$1</a>'
-      )
-      
-      // For user actions, create a link based on the target_id if it's a user
-      // This is safer than parsing the description string
-      if (log.TargetType === 'user' && log.TargetID) {
-        // Find the username in the description (it's always at the end after "user: ")
-        const match = description.match(/user: ([^<]+)$/)
-        if (match) {
-          const escapedUsername = match[1]
-          description = description.replace(
-            /user: ([^<]+)$/,
-            `user: <a href="/benchmarks?user_id=${log.TargetID}" class="text-decoration-none">${escapedUsername}</a>`
-          )
-        }
-      }
-      
-      return description
-    },
-    escapeHtml(text) {
-      const div = document.createElement('div')
-      div.textContent = text
-      return div.innerHTML
-    }
+// Initialize state from URL query parameters
+function initializeFromURL() {
+  const pageParam = parseInt(route.query.page)
+  if (pageParam && pageParam > 0) {
+    currentPage.value = pageParam
+  }
+  
+  if (route.query.action) {
+    filterAction.value = route.query.action
+  }
+  
+  if (route.query.target_type) {
+    filterTargetType.value = route.query.target_type
+  }
+  
+  isInitialized.value = true
+}
+
+// Update URL with current state
+function updateURL() {
+  if (!isInitialized.value) return
+  
+  const query = {}
+  
+  if (currentPage.value > 1) {
+    query.page = currentPage.value
+  }
+  
+  if (filterAction.value) {
+    query.action = filterAction.value
+  }
+  
+  if (filterTargetType.value) {
+    query.target_type = filterTargetType.value
+  }
+  
+  const currentQuery = route.query
+  const queryChanged = JSON.stringify(query) !== JSON.stringify(currentQuery)
+  
+  if (queryChanged) {
+    router.push({ query })
   }
 }
+
+async function fetchLogs() {
+  loading.value = true
+  error.value = null
+
+  try {
+    const filters = {}
+    if (filterAction.value) {
+      filters.action = filterAction.value
+    }
+    if (filterTargetType.value) {
+      filters.targetType = filterTargetType.value
+    }
+
+    const response = await api.admin.listLogs(currentPage.value, perPage.value, filters)
+
+    logs.value = response.logs || []
+    totalLogs.value = response.total
+    totalPages.value = response.total_pages
+    currentPage.value = response.page
+  } catch (err) {
+    if (err.status === 403) {
+      error.value = 'Admin privileges required'
+    } else {
+      error.value = err.message || 'Failed to load audit logs'
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+function changePage(page) {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  updateURL()
+  fetchLogs()
+}
+
+function handleFilter() {
+  currentPage.value = 1
+  updateURL()
+  fetchLogs()
+}
+
+function resetFilters() {
+  filterAction.value = ''
+  filterTargetType.value = ''
+  currentPage.value = 1
+  updateURL()
+  fetchLogs()
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString)
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
+}
+
+function formatFullDate(dateString) {
+  const date = new Date(dateString)
+  return date.toLocaleString()
+}
+
+function getActionBadgeClass(action) {
+  const actionLower = action.toLowerCase()
+  
+  if (actionLower.includes('created')) {
+    return 'bg-success'
+  } else if (actionLower.includes('deleted')) {
+    return 'bg-danger'
+  } else if (actionLower.includes('updated') || actionLower.includes('edited')) {
+    return 'bg-info'
+  } else if (actionLower.includes('banned')) {
+    return 'bg-danger'
+  } else if (actionLower.includes('unbanned')) {
+    return 'bg-success'
+  } else if (actionLower.includes('admin granted')) {
+    return 'bg-warning text-dark'
+  } else if (actionLower.includes('admin revoked')) {
+    return 'bg-secondary'
+  }
+  
+  return 'bg-secondary'
+}
+
+function renderDescription(log) {
+  let description = escapeHtml(log.Description)
+  
+  // Make benchmark IDs clickable - safe because we control the format
+  // Benchmark IDs are always numeric and come from the backend
+  description = description.replace(
+    /#(\d+)/g,
+    '<a href="/benchmarks/$1" class="text-decoration-none">#$1</a>'
+  )
+  
+  // For user actions, create a link based on the target_id if it's a user
+  // This is safer than parsing the description string
+  if (log.TargetType === 'user' && log.TargetID) {
+    // Find the username in the description (it's always at the end after "user: ")
+    const match = description.match(/user: ([^<]+)$/)
+    if (match) {
+      const escapedUsername = match[1]
+      description = description.replace(
+        /user: ([^<]+)$/,
+        `user: <a href="/benchmarks?user_id=${log.TargetID}" class="text-decoration-none">${escapedUsername}</a>`
+      )
+    }
+  }
+  
+  return description
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+onMounted(() => {
+  initializeFromURL()
+  fetchLogs()
+})
+
+// Watch for route query changes (for browser back/forward)
+watch(() => route.query, (newQuery) => {
+  if (!isInitialized.value) return
+  
+  const newPage = parseInt(newQuery.page) || 1
+  const newAction = newQuery.action || ''
+  const newTargetType = newQuery.target_type || ''
+  
+  let shouldFetch = false
+  
+  if (newPage !== currentPage.value) {
+    currentPage.value = newPage
+    shouldFetch = true
+  }
+  
+  if (newAction !== filterAction.value) {
+    filterAction.value = newAction
+    currentPage.value = 1
+    shouldFetch = true
+  }
+  
+  if (newTargetType !== filterTargetType.value) {
+    filterTargetType.value = newTargetType
+    currentPage.value = 1
+    shouldFetch = true
+  }
+  
+  if (shouldFetch) {
+    fetchLogs()
+  }
+}, { deep: true })
 </script>
 
 <style scoped>
