@@ -362,9 +362,9 @@ function updateURL() {
     query.order = sortDirection.value
   }
   
-  // Preserve user_id parameter if present
-  if (route.query.user_id) {
-    query.user_id = route.query.user_id
+  // Add user_id parameter if filter is active
+  if (filterUserId.value) {
+    query.user_id = filterUserId.value
   }
   
   // Only push if query actually changed
