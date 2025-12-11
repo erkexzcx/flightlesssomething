@@ -328,6 +328,15 @@ function initializeFromURL() {
     sortDirection.value = route.query.order
   }
   
+  // User filter parameter
+  if (route.query.user_id) {
+    filterUserId.value = route.query.user_id
+    // Note: filterUsername will be populated when benchmarks are loaded
+  } else {
+    filterUserId.value = null
+    filterUsername.value = ''
+  }
+  
   isInitialized.value = true
 }
 
@@ -353,9 +362,9 @@ function updateURL() {
     query.order = sortDirection.value
   }
   
-  // Preserve user_id parameter if present
-  if (route.query.user_id) {
-    query.user_id = route.query.user_id
+  // Add user_id parameter if filter is active
+  if (filterUserId.value) {
+    query.user_id = filterUserId.value
   }
   
   // Only push if query actually changed
@@ -804,6 +813,14 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const newUserId = newQuery.user_id
   const oldUserId = oldQuery.user_id
   if (newUserId !== oldUserId) {
+    // Sync filter state with URL
+    if (newUserId) {
+      filterUserId.value = newUserId
+      // filterUsername will be populated when benchmarks are loaded
+    } else {
+      filterUserId.value = null
+      filterUsername.value = ''
+    }
     currentPage.value = 1
     loadBenchmarks()
   }
