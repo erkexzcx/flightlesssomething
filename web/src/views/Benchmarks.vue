@@ -328,6 +328,15 @@ function initializeFromURL() {
     sortDirection.value = route.query.order
   }
   
+  // User filter parameter
+  if (route.query.user_id) {
+    filterUserId.value = route.query.user_id
+    // Note: filterUsername will be populated when benchmarks are loaded
+  } else {
+    filterUserId.value = null
+    filterUsername.value = ''
+  }
+  
   isInitialized.value = true
 }
 
@@ -804,6 +813,14 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const newUserId = newQuery.user_id
   const oldUserId = oldQuery.user_id
   if (newUserId !== oldUserId) {
+    // Sync filter state with URL
+    if (newUserId) {
+      filterUserId.value = newUserId
+      // filterUsername will be populated when benchmarks are loaded
+    } else {
+      filterUserId.value = null
+      filterUsername.value = ''
+    }
     currentPage.value = 1
     loadBenchmarks()
   }
