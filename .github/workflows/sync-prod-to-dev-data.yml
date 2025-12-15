@@ -20,7 +20,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          if [ -n "${{ secrets.SSH_PORT }}" ]; then
+            ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          fi
 
       - name: Sync prod data to dev
         env:
