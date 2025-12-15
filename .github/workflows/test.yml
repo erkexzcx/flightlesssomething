@@ -123,7 +123,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download server binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: server-binary
 
@@ -159,7 +159,7 @@ jobs:
         run: cd web && npm ci
 
       - name: Download server binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: server-binary
 
