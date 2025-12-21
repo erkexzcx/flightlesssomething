@@ -88,16 +88,32 @@
         @click="navigateToBenchmark(benchmark.ID)"
         @keypress.enter="navigateToBenchmark(benchmark.ID)"
       >
-        <div class="d-flex w-100 justify-content-between align-items-center">
+        <div class="d-flex w-100 justify-content-between align-items-center benchmark-first-row">
           <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
-          <small class="text-nowrap flex-shrink-0 ms-2">
-            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
-              {{ formatRelativeDate(benchmark.UpdatedAt) }}
-            </span>
-            <span v-else>
-              {{ formatRelativeDate(benchmark.CreatedAt) }}
-            </span>
-          </small>
+          <div class="benchmark-date-author">
+            <small class="text-nowrap flex-shrink-0">
+              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
+                {{ formatRelativeDate(benchmark.UpdatedAt) }}
+              </span>
+              <span v-else>
+                {{ formatRelativeDate(benchmark.CreatedAt) }}
+              </span>
+            </small>
+            <small class="text-nowrap benchmark-author-desktop">
+              By <template v-if="benchmark.User">
+                <a 
+                  v-if="!filterUserId && !route.query.user_id"
+                  href="#" 
+                  class="username-link" 
+                  @click.stop.prevent="filterByUser(benchmark.User)"
+                >
+                  <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                </a>
+                <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+              </template>
+              <b v-else>Unknown</b>
+            </small>
+          </div>
         </div>
         <div class="d-flex w-100 justify-content-between align-items-start benchmark-second-row">
           <p class="mb-1 text-truncate benchmark-description">
@@ -107,7 +123,7 @@
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
-            <small class="text-nowrap benchmark-author">
+            <small class="text-nowrap benchmark-author-mobile">
               By <template v-if="benchmark.User">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
@@ -759,8 +775,34 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
 }
 
+.benchmark-date-author {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+/* Desktop: show author next to date, hide mobile author */
+.benchmark-author-mobile {
+  display: none;
+}
+
+.benchmark-author-desktop {
+  display: inline;
+}
+
 /* Mobile responsive: stack metadata on separate line */
 @media (max-width: 768px) {
+  /* Hide desktop author, show mobile author */
+  .benchmark-author-desktop {
+    display: none;
+  }
+  
+  .benchmark-author-mobile {
+    display: inline;
+  }
+  
   .benchmark-second-row {
     flex-direction: column;
     align-items: flex-start !important;
