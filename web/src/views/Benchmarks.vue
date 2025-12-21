@@ -99,18 +99,14 @@
             </span>
           </small>
         </div>
-        <div class="d-flex w-100 justify-content-between align-items-end">
-          <div class="flex-grow-1" style="min-width: 0;">
-            <p class="mb-0 text-truncate">
-              <small>{{ benchmark.Description || 'No description' }}</small>
-            </p>
-            <small class="text-muted benchmark-metadata">
-              <template v-if="benchmark.run_count">
-                {{ benchmark.run_count }} {{ benchmark.run_count === 1 ? 'run' : 'runs' }}
-              </template>
+        <div class="d-flex w-100 justify-content-between">
+          <p class="mb-1">
+            <small>{{ benchmark.Description || 'No description' }}</small>
+            <small v-if="benchmark.run_count" class="text-muted benchmark-metadata">
+              · {{ benchmark.run_count }} {{ benchmark.run_count === 1 ? 'run' : 'runs' }}
             </small>
-          </div>
-          <small class="text-nowrap flex-shrink-0 ms-2">
+          </p>
+          <small class="text-nowrap">
             By <template v-if="benchmark.User">
               <a 
                 v-if="!filterUserId && !route.query.user_id"
@@ -740,10 +736,9 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .benchmark-metadata {
-  display: block;
   font-size: 0.8125rem;
-  margin-top: 0.25rem;
   color: var(--bs-secondary-color);
+  margin-left: 0.25rem;
 }
 
 .text-truncate {
