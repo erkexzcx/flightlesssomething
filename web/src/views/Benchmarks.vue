@@ -100,7 +100,7 @@
               </span>
             </small>
             <small class="text-nowrap benchmark-author-desktop">
-              By <template v-if="benchmark.User">
+              by <template v-if="benchmark.User">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
                   href="#" 
@@ -123,8 +123,14 @@
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
-            <small class="text-nowrap benchmark-author-mobile">
-              By <template v-if="benchmark.User">
+            <small class="text-nowrap benchmark-date-mobile">
+              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
+                {{ formatRelativeDate(benchmark.UpdatedAt) }}
+              </span>
+              <span v-else>
+                {{ formatRelativeDate(benchmark.CreatedAt) }}
+              </span>
+              by <template v-if="benchmark.User">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
                   href="#" 
@@ -786,8 +792,8 @@ watch(() => route.path, (newPath, oldPath) => {
   margin-left: 0.5rem;
 }
 
-/* Desktop: show author next to date, hide mobile author */
-.benchmark-author-mobile {
+/* Desktop: show author next to date, hide mobile date+author */
+.benchmark-date-mobile {
   display: none;
 }
 
@@ -797,12 +803,12 @@ watch(() => route.path, (newPath, oldPath) => {
 
 /* Mobile responsive: stack metadata on separate line */
 @media (max-width: 768px) {
-  /* Hide desktop author, show mobile author */
+  /* Hide desktop author, show mobile date+author */
   .benchmark-author-desktop {
     display: none;
   }
   
-  .benchmark-author-mobile {
+  .benchmark-date-mobile {
     display: inline;
   }
   
