@@ -77,6 +77,17 @@
               </div>
             </li>
           </ul>
+
+          <!-- Date/Time Warning -->
+          <div v-if="hasDateTimeWarning" class="alert alert-warning mt-3" role="alert">
+            <h6 class="alert-heading">
+              <i class="fa-solid fa-exclamation-triangle"></i> 
+              <strong>Warning - Default Filenames Detected</strong>
+            </h6>
+            <p class="mb-0">
+              {{ dateTimeWarningMessage }}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -135,9 +146,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
+import { hasAnyDateTimePattern, getDateTimeWarningMessage } from '../utils/filenameValidator'
 
 const router = useRouter()
 
@@ -147,6 +159,14 @@ const title = ref('')
 const description = ref('')
 const uploading = ref(false)
 const error = ref(null)
+
+// Computed property to check if any filenames have date/time patterns
+const hasDateTimeWarning = computed(() => {
+  const labels = selectedFiles.value.map(fileObj => fileObj.label)
+  return hasAnyDateTimePattern(labels)
+})
+
+const dateTimeWarningMessage = getDateTimeWarningMessage()
 
 function handleFileSelect(event) {
   const files = Array.from(event.target.files)
