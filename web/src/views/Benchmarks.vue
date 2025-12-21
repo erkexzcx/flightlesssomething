@@ -112,7 +112,7 @@
           </small>
         </div>
         <div class="d-flex w-100 justify-content-between align-items-start benchmark-second-row">
-          <p class="mb-1 text-truncate benchmark-description">
+          <p class="text-truncate benchmark-description">
             <small>{{ benchmark.Description || 'No description' }}</small>
           </p>
           <div class="benchmark-meta-group">
