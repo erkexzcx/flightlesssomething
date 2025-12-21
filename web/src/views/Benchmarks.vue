@@ -777,6 +777,10 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
 }
 
+.benchmark-card {
+  margin-bottom: 0 !important;
+}
+
 .benchmark-first-row h5 {
   margin: 0;
 }
