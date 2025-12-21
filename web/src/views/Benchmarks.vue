@@ -806,7 +806,6 @@ watch(() => route.path, (newPath, oldPath) => {
   .benchmark-meta-group {
     width: 100%;
     justify-content: space-between;
-    margin-top: 0.25rem;
   }
   
   .benchmark-description {
