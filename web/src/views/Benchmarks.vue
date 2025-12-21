@@ -777,6 +777,14 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
 }
 
+.benchmark-first-row h5 {
+  margin: 0;
+}
+
+.benchmark-description p {
+  margin: 0;
+}
+
 /* Desktop: show date+author on first line, hide mobile version */
 .benchmark-date-author-mobile {
   display: none;
