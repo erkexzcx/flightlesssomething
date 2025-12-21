@@ -772,7 +772,6 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .benchmark-second-row {
-  gap: 0.5rem;
 }
 
 .benchmark-description p {
