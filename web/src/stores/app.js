@@ -5,19 +5,6 @@ import { api } from '../api/client'
 export const useAppStore = defineStore('app', () => {
   const version = ref('')
   const loading = ref(false)
-  
-  // Calculation mode: 'legacy' or 'mangohud'
-  // Migrate old 'original' value to 'legacy' for backward compatibility
-  const storedMode = localStorage.getItem('calculationMode')
-  const migratedMode = storedMode === 'original' ? 'legacy' : (storedMode || 'mangohud')
-  const calculationMode = ref(migratedMode)
-  
-  // Update localStorage if migration occurred
-  if (storedMode === 'original') {
-    localStorage.setItem('calculationMode', 'legacy')
-  } else if (!storedMode) {
-    localStorage.setItem('calculationMode', 'mangohud')
-  }
 
   // Theme: 'light' or 'dark'
   const storedTheme = localStorage.getItem('theme')
@@ -44,12 +31,6 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  // Set calculation mode
-  function setCalculationMode(mode) {
-    calculationMode.value = mode
-    localStorage.setItem('calculationMode', mode)
-  }
-
   // Set theme
   function setTheme(newTheme) {
     theme.value = newTheme
@@ -67,10 +48,8 @@ export const useAppStore = defineStore('app', () => {
   return {
     version,
     loading,
-    calculationMode,
     theme,
     fetchVersion,
-    setCalculationMode,
     setTheme,
     toggleTheme,
   }
