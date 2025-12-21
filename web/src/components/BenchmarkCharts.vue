@@ -271,6 +271,7 @@ const getThemeColors = computed(() => {
 const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
 const OUTLIER_HIGH_PERCENTILE = 0.97 // Remove top 3% outliers
 const MAX_DENSITY_POINTS = 100       // Maximum points for density charts
+const MAX_FRAMETIME_FOR_INVALID_FPS = 1000000  // Very large frametime for invalid FPS (0 or negative)
 
 const props = defineProps({
   benchmarkData: {
@@ -416,7 +417,7 @@ function calculateAverageFPS(fpsData) {
   
   // Convert FPS to frametimes (ms): frametime = 1000 / fps
   // Handle edge case where FPS is 0 or negative by using a very large frametime
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : 1000000)
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
   
   // Calculate sum of frametimes
   const sumFrametimes = frametimes.reduce((acc, ft) => acc + ft, 0)
@@ -439,7 +440,7 @@ function calculatePercentileFPS(fpsData, percentile) {
   if (!fpsData || fpsData.length === 0) return 0
   
   // Convert FPS to frametimes
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : 1000000)
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
   
   // IMPORTANT: Percentiles must be inverted when working with frametimes
   // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
