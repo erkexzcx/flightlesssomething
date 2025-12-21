@@ -89,21 +89,7 @@
         @keypress.enter="navigateToBenchmark(benchmark.ID)"
       >
         <div class="d-flex w-100 justify-content-between align-items-center">
-          <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width: 0;">
-            <h5 class="mb-1 text-truncate flex-shrink-1">{{ benchmark.Title }}</h5>
-            <div 
-              v-if="benchmark.run_count"
-              class="badge-wrapper flex-shrink-0"
-              :ref="el => setBadgeRef(benchmark.ID, el)"
-              @mouseenter="showPopover(benchmark.ID)"
-              @mouseleave="hidePopover(benchmark.ID)"
-              @click.stop="togglePopover(benchmark.ID)"
-            >
-              <span class="badge badge-outline-white rounded-pill">
-                {{ benchmark.run_count }}
-              </span>
-            </div>
-          </div>
+          <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
           <small class="text-nowrap flex-shrink-0 ms-2">
             <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
               {{ formatRelativeDate(benchmark.UpdatedAt) }}
@@ -113,11 +99,18 @@
             </span>
           </small>
         </div>
-        <div class="d-flex w-100 justify-content-between">
-          <p class="mb-1 text-truncate">
-            <small>{{ benchmark.Description || 'No description' }}</small>
-          </p>
-          <small class="text-nowrap">
+        <div class="d-flex w-100 justify-content-between align-items-end">
+          <div class="flex-grow-1" style="min-width: 0;">
+            <p class="mb-0 text-truncate">
+              <small>{{ benchmark.Description || 'No description' }}</small>
+            </p>
+            <small class="text-muted benchmark-metadata">
+              <template v-if="benchmark.run_count">
+                {{ benchmark.run_count }} {{ benchmark.run_count === 1 ? 'run' : 'runs' }}
+              </template>
+            </small>
+          </div>
+          <small class="text-nowrap flex-shrink-0 ms-2">
             By <template v-if="benchmark.User">
               <a 
                 v-if="!filterUserId && !route.query.user_id"
@@ -145,31 +138,6 @@
         No benchmarks found. {{ authStore.isAuthenticated ? 'Create your first benchmark!' : 'Login to create benchmarks.' }}
       </template>
     </div>
-
-    <!-- Popover portal (rendered at body level) -->
-    <Teleport to="body">
-      <div 
-        v-if="activePopover !== null" 
-        :ref="el => popoverRef = el"
-        class="custom-popover"
-        :style="popoverStyle"
-        @mouseenter="keepPopoverOpen(activePopover)"
-        @mouseleave="hidePopover(activePopover)"
-        @click.stop
-      >
-        <div class="popover-header">Runs ({{ getActiveBenchmark()?.run_count || 0 }})</div>
-        <div class="popover-body">
-          <div 
-            v-for="(label, idx) in getActiveBenchmark()?.run_labels || []" 
-            :key="idx"
-            class="run-label-item"
-          >
-            <span class="run-number">{{ idx + 1 }}.</span>
-            <span class="run-label">{{ label }}</span>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="d-flex justify-content-center align-items-center gap-3 mt-3 flex-wrap">
@@ -269,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -287,19 +255,13 @@ const totalPages = ref(1)
 const totalBenchmarks = ref(0)
 const perPage = ref(10)
 const searchQuery = ref('')
-const activePopover = ref(null)
-const pinnedPopover = ref(null)
-const hideTimeout = ref(null)
 const filterUserId = ref(null)
 const filterUsername = ref('')
-const popoverRef = ref(null)
 const sortKey = ref(null)
 const sortDirection = ref('asc')
 const showScrollTop = ref(false)
 const windowWidth = ref(window.innerWidth)
 const pageInputValue = ref(null)
-const badgeRefs = ref(new Map())
-const popoverStyle = ref({})
 const isInitialized = ref(false)
 
 // Computed property to check if we're on "My Benchmarks" page
@@ -374,21 +336,6 @@ function updateURL() {
   if (queryChanged) {
     router.push({ query })
   }
-}
-
-// Set badge ref for positioning
-function setBadgeRef(benchmarkId, el) {
-  if (el) {
-    badgeRefs.value.set(benchmarkId, el)
-  } else {
-    badgeRefs.value.delete(benchmarkId)
-  }
-}
-
-// Get the active benchmark data
-function getActiveBenchmark() {
-  if (activePopover.value === null) return null
-  return benchmarks.value.find(b => b.ID === activePopover.value)
 }
 
 // Computed property to validate page input
@@ -568,154 +515,6 @@ function clearFilter() {
   }
 }
 
-function showPopover(benchmarkId) {
-  // Cancel any pending hide timeout
-  if (hideTimeout.value) {
-    clearTimeout(hideTimeout.value)
-    hideTimeout.value = null
-  }
-  
-  // Always show on hover (unless a different one is pinned)
-  if (pinnedPopover.value === null || pinnedPopover.value === benchmarkId) {
-    activePopover.value = benchmarkId
-    // Position popover after DOM update
-    nextTick(() => {
-      positionPopover(benchmarkId)
-    })
-  }
-}
-
-function hidePopover(benchmarkId) {
-  // Only hide on mouse leave if not pinned
-  if (pinnedPopover.value !== benchmarkId && activePopover.value === benchmarkId) {
-    // Cancel any existing timeout
-    if (hideTimeout.value) {
-      clearTimeout(hideTimeout.value)
-    }
-    
-    // Small delay to allow moving between badge and popover
-    hideTimeout.value = setTimeout(() => {
-      if (activePopover.value === benchmarkId && pinnedPopover.value !== benchmarkId) {
-        activePopover.value = null
-      }
-      hideTimeout.value = null
-    }, 100)
-  }
-}
-
-function togglePopover(benchmarkId) {
-  // Cancel any pending hide timeout
-  if (hideTimeout.value) {
-    clearTimeout(hideTimeout.value)
-    hideTimeout.value = null
-  }
-  
-  // Toggle pin on click/touch
-  if (pinnedPopover.value === benchmarkId) {
-    pinnedPopover.value = null
-    activePopover.value = null
-  } else {
-    pinnedPopover.value = benchmarkId
-    activePopover.value = benchmarkId
-    // Position popover after DOM update
-    nextTick(() => {
-      positionPopover(benchmarkId)
-    })
-  }
-}
-
-function positionPopover(benchmarkId) {
-  if (!popoverRef.value) return
-  
-  const badgeEl = badgeRefs.value.get(benchmarkId)
-  if (!badgeEl) return
-  
-  // Wait for next tick to ensure popover has rendered with content
-  nextTick(() => {
-    if (!popoverRef.value || !badgeRefs.value.has(benchmarkId)) return
-    
-    const badgeRect = badgeEl.getBoundingClientRect()
-    const popoverRect = popoverRef.value.getBoundingClientRect()
-    
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-    const margin = 16 // Minimum margin from edges
-    const spacing = 8 // Spacing between badge and popover
-    
-    // Calculate maximum available width (90% of viewport width with margins)
-    const maxAvailableWidth = Math.min(viewportWidth - margin * 2, viewportWidth * 0.9)
-    
-    // Get popover height for positioning calculations
-    const popoverHeight = popoverRect.height || 200
-    
-    let top = 0
-    let left = 0
-    let maxHeight = viewportHeight - margin * 2
-    
-    // Determine vertical position (prefer below badge)
-    const spaceBelow = viewportHeight - badgeRect.bottom - margin
-    const spaceAbove = badgeRect.top - margin
-    
-    if (spaceBelow >= popoverHeight + spacing || spaceBelow >= spaceAbove) {
-      // Position below badge
-      top = badgeRect.bottom + spacing
-      maxHeight = spaceBelow - spacing
-    } else {
-      // Position above badge
-      top = badgeRect.top - popoverHeight - spacing
-      maxHeight = spaceAbove - spacing
-      
-      // If popover doesn't fit above, center it vertically
-      if (top < margin) {
-        top = margin
-        maxHeight = viewportHeight - margin * 2
-      }
-    }
-    
-    // Ensure minimum popover height
-    maxHeight = Math.max(150, maxHeight)
-    
-    // Calculate final top position, ensuring it stays within bounds
-    // Note: This uses the constrained maxHeight, not the original popoverHeight
-    const finalPopoverHeight = Math.min(popoverHeight, maxHeight)
-    top = Math.max(margin, Math.min(top, viewportHeight - margin - finalPopoverHeight))
-    
-    // Determine horizontal position (prefer centered under badge)
-    // Read current width for positioning only - don't set it in styles to allow natural sizing
-    const currentPopoverWidth = Math.min(popoverRect.width, maxAvailableWidth)
-    const badgeCenter = badgeRect.left + badgeRect.width / 2
-    left = badgeCenter - currentPopoverWidth / 2
-    
-    // Adjust if popover would overflow viewport
-    if (left < margin) {
-      left = margin
-    } else if (left + currentPopoverWidth > viewportWidth - margin) {
-      left = viewportWidth - margin - currentPopoverWidth
-    }
-    
-    // Apply styles - let CSS max-width handle width constraint naturally
-    popoverStyle.value = {
-      position: 'fixed',
-      top: `${top}px`,
-      left: `${left}px`,
-      maxWidth: `${maxAvailableWidth}px`,
-      maxHeight: `${maxHeight}px`,
-      zIndex: '1060'
-    }
-  })
-}
-
-function keepPopoverOpen(benchmarkId) {
-  // Cancel any pending hide timeout when mouse enters popover
-  if (hideTimeout.value) {
-    clearTimeout(hideTimeout.value)
-    hideTimeout.value = null
-  }
-  
-  // Keep popover open when mouse enters it (for scrolling)
-  activePopover.value = benchmarkId
-}
-
 function navigateToBenchmark(id) {
   router.push(`/benchmarks/${id}`)
 }
@@ -726,40 +525,10 @@ function scrollToTop() {
 
 function handleScroll() {
   showScrollTop.value = window.scrollY > 300
-  
-  // Reposition popover on scroll if it's open
-  if (activePopover.value !== null) {
-    positionPopover(activePopover.value)
-  }
 }
 
 function handleResize() {
   windowWidth.value = window.innerWidth
-  
-  // Reposition popover on resize if it's open
-  if (activePopover.value !== null) {
-    positionPopover(activePopover.value)
-  }
-}
-
-// Handle clicking outside to close pinned popover
-function handleClickOutside(event) {
-  if (pinnedPopover.value !== null) {
-    // Check if click is outside the popover
-    const popoverElements = document.querySelectorAll('.badge-wrapper, .custom-popover')
-    let clickedInside = false
-    
-    popoverElements.forEach(el => {
-      if (el.contains(event.target)) {
-        clickedInside = true
-      }
-    })
-    
-    if (!clickedInside) {
-      pinnedPopover.value = null
-      activePopover.value = null
-    }
-  }
 }
 
 onMounted(() => {
@@ -767,13 +536,11 @@ onMounted(() => {
   initializeFromURL()
   // Load benchmarks with initialized state
   loadBenchmarks()
-  document.addEventListener('click', handleClickOutside)
   window.addEventListener('scroll', handleScroll)
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleResize)
 })
@@ -972,87 +739,11 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
 }
 
-.badge-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.badge {
-  cursor: help;
-  white-space: nowrap;
-}
-
-.badge-outline-white {
-  background: transparent;
-  border: 1px solid var(--bs-body-color);
-  color: var(--bs-body-color);
-}
-
-.custom-popover {
-  position: fixed;
-  min-width: 200px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
-  width: max-content;
-  background: var(--bs-body-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.375rem;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
-  animation: fadeIn 0.15s ease-in;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.popover-header {
-  padding: 0.5rem 0.75rem;
-  background: var(--bs-secondary-bg);
-  border-bottom: 1px solid var(--bs-border-color);
-  border-radius: 0.375rem 0.375rem 0 0;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--bs-body-color);
-  flex-shrink: 0;
-}
-
-.popover-body {
-  padding: 0.5rem 0.75rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.run-label-item {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-  font-size: 0.875rem;
-  color: var(--bs-body-color);
-}
-
-.run-number {
-  color: var(--bs-primary);
-  font-weight: 500;
-  min-width: 1.5rem;
-  flex-shrink: 0;
-}
-
-.run-label {
-  overflow-wrap: anywhere;
-  white-space: normal;
-  flex: 1;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.benchmark-metadata {
+  display: block;
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+  color: var(--bs-secondary-color);
 }
 
 .text-truncate {
