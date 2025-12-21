@@ -89,7 +89,7 @@
         @keypress.enter="navigateToBenchmark(benchmark.ID)"
       >
         <div class="d-flex w-100 justify-content-between align-items-center benchmark-first-row">
-          <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
+          <h5 class="text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
           <small class="text-nowrap flex-shrink-0 benchmark-date-author-desktop">
             <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
               {{ formatRelativeDate(benchmark.UpdatedAt) }}
