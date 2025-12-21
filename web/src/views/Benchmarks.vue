@@ -105,7 +105,7 @@
           </p>
           <div class="benchmark-meta-group">
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
-              {{ benchmark.run_count }} ▶️
+              {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
             <small class="text-nowrap benchmark-author">
               By <template v-if="benchmark.User">
