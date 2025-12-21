@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Unit tests for filenameValidator.js
  * 
