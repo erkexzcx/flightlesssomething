@@ -90,30 +90,26 @@
       >
         <div class="d-flex w-100 justify-content-between align-items-center benchmark-first-row">
           <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
-          <div class="benchmark-date-author">
-            <small class="text-nowrap flex-shrink-0">
-              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
-                {{ formatRelativeDate(benchmark.UpdatedAt) }}
-              </span>
-              <span v-else>
-                {{ formatRelativeDate(benchmark.CreatedAt) }}
-              </span>
-            </small>
-            <small class="text-nowrap benchmark-author-desktop">
-              By <template v-if="benchmark.User">
-                <a 
-                  v-if="!filterUserId && !route.query.user_id"
-                  href="#" 
-                  class="username-link" 
-                  @click.stop.prevent="filterByUser(benchmark.User)"
-                >
-                  <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
-                </a>
-                <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
-              </template>
-              <b v-else>Unknown</b>
-            </small>
-          </div>
+          <small class="text-nowrap flex-shrink-0 benchmark-date-author-desktop">
+            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
+              {{ formatRelativeDate(benchmark.UpdatedAt) }}
+            </span>
+            <span v-else>
+              {{ formatRelativeDate(benchmark.CreatedAt) }}
+            </span>
+            by <template v-if="benchmark.User">
+              <a 
+                v-if="!filterUserId && !route.query.user_id"
+                href="#" 
+                class="username-link" 
+                @click.stop.prevent="filterByUser(benchmark.User)"
+              >
+                <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+              </a>
+              <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+            </template>
+            <b v-else>Unknown</b>
+          </small>
         </div>
         <div class="d-flex w-100 justify-content-between align-items-start benchmark-second-row">
           <p class="mb-1 text-truncate benchmark-description">
@@ -123,8 +119,14 @@
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
-            <small class="text-nowrap benchmark-author-mobile">
-              By <template v-if="benchmark.User">
+            <small class="text-nowrap benchmark-date-author-mobile">
+              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
+                {{ formatRelativeDate(benchmark.UpdatedAt) }}
+              </span>
+              <span v-else>
+                {{ formatRelativeDate(benchmark.CreatedAt) }}
+              </span>
+              by <template v-if="benchmark.User">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
                   href="#" 
@@ -775,31 +777,24 @@ watch(() => route.path, (newPath, oldPath) => {
   gap: 0.5rem;
 }
 
-.benchmark-date-author {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-  margin-left: 0.5rem;
-}
-
-/* Desktop: show author next to date, hide mobile author */
-.benchmark-author-mobile {
+/* Desktop: show date+author on first line, hide mobile version */
+.benchmark-date-author-mobile {
   display: none;
 }
 
-.benchmark-author-desktop {
+.benchmark-date-author-desktop {
   display: inline;
+  margin-left: 0.5rem;
 }
 
-/* Mobile responsive: stack metadata on separate line */
+/* Mobile responsive: hide date+author from first line, show on third line with metadata */
 @media (max-width: 768px) {
-  /* Hide desktop author, show mobile author */
-  .benchmark-author-desktop {
+  /* Hide desktop date+author, show mobile version */
+  .benchmark-date-author-desktop {
     display: none;
   }
   
-  .benchmark-author-mobile {
+  .benchmark-date-author-mobile {
     display: inline;
   }
   
