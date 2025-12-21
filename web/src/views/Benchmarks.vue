@@ -99,27 +99,29 @@
             </span>
           </small>
         </div>
-        <div class="d-flex w-100 justify-content-between">
-          <p class="mb-1">
+        <div class="d-flex w-100 justify-content-between align-items-start benchmark-second-row">
+          <p class="mb-1 text-truncate benchmark-description">
             <small>{{ benchmark.Description || 'No description' }}</small>
-            <small v-if="benchmark.run_count" class="text-muted benchmark-metadata">
-              · {{ benchmark.run_count }} {{ benchmark.run_count === 1 ? 'run' : 'runs' }}
-            </small>
           </p>
-          <small class="text-nowrap">
-            By <template v-if="benchmark.User">
-              <a 
-                v-if="!filterUserId && !route.query.user_id"
-                href="#" 
-                class="username-link" 
-                @click.stop.prevent="filterByUser(benchmark.User)"
-              >
-                <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
-              </a>
-              <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
-            </template>
-            <b v-else>Unknown</b>
-          </small>
+          <div class="benchmark-meta-group">
+            <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
+              {{ benchmark.run_count }} {{ benchmark.run_count === 1 ? 'run' : 'runs' }}
+            </small>
+            <small class="text-nowrap benchmark-author">
+              By <template v-if="benchmark.User">
+                <a 
+                  v-if="!filterUserId && !route.query.user_id"
+                  href="#" 
+                  class="username-link" 
+                  @click.stop.prevent="filterByUser(benchmark.User)"
+                >
+                  <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                </a>
+                <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+              </template>
+              <b v-else>Unknown</b>
+            </small>
+          </div>
         </div>
       </div>
     </div>
@@ -738,7 +740,41 @@ watch(() => route.path, (newPath, oldPath) => {
 .benchmark-metadata {
   font-size: 0.8125rem;
   color: var(--bs-secondary-color);
-  margin-left: 0.25rem;
+}
+
+.benchmark-description {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0.5rem;
+}
+
+.benchmark-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.benchmark-second-row {
+  gap: 0.5rem;
+}
+
+/* Mobile responsive: stack metadata on separate line */
+@media (max-width: 768px) {
+  .benchmark-second-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  
+  .benchmark-meta-group {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+  }
+  
+  .benchmark-description {
+    margin-right: 0;
+  }
 }
 
 .text-truncate {
