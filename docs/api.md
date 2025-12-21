@@ -64,13 +64,20 @@ List all benchmarks with pagination, search, and sorting (no authentication requ
 Query parameters:
 - `page` (integer) - Page number (default: 1)
 - `per_page` (integer) - Results per page (default: 10, max: 100)
-- `search` (string) - Search in title/description
+- `search` (string) - Search keywords in title, description, and username. Multiple keywords are supported (space-separated) and all keywords must match at least one field (AND logic between keywords, OR logic within fields).
 - `user_id` (integer) - Filter by user ID
 - `sort_by` (string) - Sort field: `title`, `created_at`, or `updated_at` (default: `created_at`)
 - `sort_order` (string) - Sort order: `asc` or `desc` (default: `desc`)
 
-Example:
+Examples:
 ```bash
+# Basic search
+curl "http://localhost:5000/api/benchmarks?search=rust"
+
+# Multi-keyword search (finds benchmarks with both "rust" AND "win" in any field)
+curl "http://localhost:5000/api/benchmarks?search=rust+win"
+
+# Sorting
 curl "http://localhost:5000/api/benchmarks?page=1&per_page=20&sort_by=title&sort_order=asc"
 ```
 

@@ -14,7 +14,7 @@
           type="search"
           v-model="searchQuery"
           class="form-control rounded search-input"
-          placeholder="Search title or description..."
+          placeholder="Search title, description, or username..."
           aria-label="Search"
           aria-describedby="search-addon"
           :disabled="route.query.user_id !== undefined"

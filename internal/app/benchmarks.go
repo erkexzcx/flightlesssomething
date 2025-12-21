@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +30,21 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			query = query.Where("user_id = ?", userID)
 		}
 		if search := c.Query("search"); search != "" {
-			query = query.Where("title LIKE ? OR description LIKE ?", "%"+search+"%", "%"+search+"%")
+			// Split search query into keywords
+			keywords := strings.Fields(search)
+			
+			// For each keyword, search in title, description, and username
+			// All keywords must match (AND logic), but each keyword can match any field (OR logic)
+			for _, keyword := range keywords {
+				keyword = strings.TrimSpace(keyword)
+				if keyword != "" {
+					// Search in benchmarks table (title, description) and users table (username)
+					query = query.Where(
+						"benchmarks.title LIKE ? OR benchmarks.description LIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?)",
+						"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
+					)
+				}
+			}
 		}
 
 		// Sorting
