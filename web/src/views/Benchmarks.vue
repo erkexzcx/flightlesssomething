@@ -792,7 +792,7 @@ watch(() => route.path, (newPath, oldPath) => {
   margin-left: 0.5rem;
 }
 
-/* Desktop: show author next to date, hide mobile date+author */
+/* Desktop: show date and author on first line, hide mobile date+author */
 .benchmark-date-mobile {
   display: none;
 }
@@ -803,11 +803,12 @@ watch(() => route.path, (newPath, oldPath) => {
 
 /* Mobile responsive: stack metadata on separate line */
 @media (max-width: 768px) {
-  /* Hide desktop author, show mobile date+author */
-  .benchmark-author-desktop {
+  /* Hide date+author from first line on mobile */
+  .benchmark-date-author {
     display: none;
   }
   
+  /* Show date+author on third line */
   .benchmark-date-mobile {
     display: inline;
   }
