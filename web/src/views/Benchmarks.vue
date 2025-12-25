@@ -14,16 +14,76 @@
           type="search"
           v-model="searchQuery"
           class="form-control rounded search-input"
-          placeholder="Search title, description, or username..."
+          placeholder="Search benchmarks (min 3 chars)..."
           aria-label="Search"
           aria-describedby="search-addon"
-          :disabled="route.query.user_id !== undefined"
+          :disabled="route.query.user_id !== undefined || !hasAnySearchFieldSelected"
         />
-        <span class="input-group-text border-0 search-btn-icon" id="search-addon">
-          <button type="submit" class="btn btn-link p-0 m-0" :disabled="route.query.user_id !== undefined">
-            <i class="fas fa-search"></i>
-          </button>
-        </span>
+      </div>
+      
+      <!-- Search field checkboxes -->
+      <div class="mb-3 d-flex flex-wrap gap-3 align-items-center search-fields">
+        <small class="text-muted">Search by:</small>
+        <div class="form-check">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            v-model="searchFields.title" 
+            id="searchFieldTitle"
+            @change="handleSearchFieldsChange"
+          >
+          <label class="form-check-label" for="searchFieldTitle">
+            Title
+          </label>
+        </div>
+        <div class="form-check">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            v-model="searchFields.description" 
+            id="searchFieldDescription"
+            @change="handleSearchFieldsChange"
+          >
+          <label class="form-check-label" for="searchFieldDescription">
+            Description
+          </label>
+        </div>
+        <div class="form-check">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            v-model="searchFields.user" 
+            id="searchFieldUser"
+            @change="handleSearchFieldsChange"
+          >
+          <label class="form-check-label" for="searchFieldUser">
+            User
+          </label>
+        </div>
+        <div class="form-check">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            v-model="searchFields.runName" 
+            id="searchFieldRunName"
+            @change="handleSearchFieldsChange"
+          >
+          <label class="form-check-label" for="searchFieldRunName">
+            Run name
+          </label>
+        </div>
+        <div class="form-check">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            v-model="searchFields.specifications" 
+            id="searchFieldSpecifications"
+            @change="handleSearchFieldsChange"
+          >
+          <label class="form-check-label" for="searchFieldSpecifications">
+            Specifications
+          </label>
+        </div>
       </div>
     </form>
 
@@ -283,10 +343,27 @@ const showScrollTop = ref(false)
 const windowWidth = ref(window.innerWidth)
 const pageInputValue = ref(null)
 const isInitialized = ref(false)
+const searchFields = ref({
+  title: true,
+  description: true,
+  user: false,
+  runName: false,
+  specifications: false
+})
+let searchDebounceTimer = null
 
 // Computed property to check if we're on "My Benchmarks" page
 const isMyBenchmarksPage = computed(() => {
   return route.path === '/benchmarks/my'
+})
+
+// Computed property to check if any search field is selected
+const hasAnySearchFieldSelected = computed(() => {
+  return searchFields.value.title || 
+         searchFields.value.description || 
+         searchFields.value.user || 
+         searchFields.value.runName || 
+         searchFields.value.specifications
 })
 
 // Initialize state from URL query parameters
@@ -300,6 +377,18 @@ function initializeFromURL() {
   // Search query
   if (route.query.search) {
     searchQuery.value = route.query.search
+  }
+  
+  // Search fields
+  if (route.query.search_fields) {
+    const fields = route.query.search_fields.split(',')
+    searchFields.value = {
+      title: fields.includes('title'),
+      description: fields.includes('description'),
+      user: fields.includes('user'),
+      runName: fields.includes('run_name'),
+      specifications: fields.includes('specifications')
+    }
   }
   
   // Sort parameters
@@ -322,6 +411,17 @@ function initializeFromURL() {
   isInitialized.value = true
 }
 
+// Get enabled search fields as an array
+function getEnabledSearchFields() {
+  const fields = []
+  if (searchFields.value.title) fields.push('title')
+  if (searchFields.value.description) fields.push('description')
+  if (searchFields.value.user) fields.push('user')
+  if (searchFields.value.runName) fields.push('run_name')
+  if (searchFields.value.specifications) fields.push('specifications')
+  return fields
+}
+
 // Update URL with current state
 function updateURL() {
   if (!isInitialized.value) return
@@ -336,6 +436,14 @@ function updateURL() {
   // Add search parameter if present
   if (searchQuery.value && !filterUserId.value) {
     query.search = searchQuery.value
+  }
+  
+  // Always add search_fields parameter to persist checkbox state
+  if (!filterUserId.value) {
+    const enabledFields = getEnabledSearchFields()
+    if (enabledFields.length > 0) {
+      query.search_fields = enabledFields.join(',')
+    }
   }
   
   // Add sort parameters if set
@@ -447,12 +555,14 @@ async function loadBenchmarks() {
         filterUsername.value = response.benchmarks[0].User.Username
       }
     } else {
+      const enabledFields = getEnabledSearchFields()
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
         searchQuery.value,
         sortByParam,
-        sortOrderParam
+        sortOrderParam,
+        enabledFields
       )
     }
 
@@ -501,12 +611,30 @@ function goToCustomPage() {
 }
 
 function handleSearch() {
-  currentPage.value = 1
-  filterUserId.value = null
-  filterUsername.value = ''
-  // Update URL - this will remove user_id and add search if present
+  // This is now only called on form submit (Enter key), but we use auto-search via watch
+  // Keep it for backwards compatibility but make it do the same as auto-search
+  if (searchQuery.value.length >= 3 || searchQuery.value.length === 0) {
+    currentPage.value = 1
+    filterUserId.value = null
+    filterUsername.value = ''
+    updateURL()
+    loadBenchmarks()
+  }
+}
+
+function handleSearchFieldsChange() {
+  // Update URL to persist checkbox selection
   updateURL()
-  loadBenchmarks()
+  
+  // If no checkboxes selected, just reload to show all benchmarks (keep search text)
+  if (!hasAnySearchFieldSelected.value) {
+    currentPage.value = 1
+    loadBenchmarks()
+  } else if (searchQuery.value && searchQuery.value.length >= 3) {
+    // If search query is present and long enough, reload with new field selection
+    currentPage.value = 1
+    loadBenchmarks()
+  }
 }
 
 function filterByUser(user) {
@@ -525,6 +653,14 @@ function clearFilter() {
   filterUsername.value = ''
   currentPage.value = 1
   searchQuery.value = ''
+  // Reset search fields to defaults
+  searchFields.value = {
+    title: true,
+    description: true,
+    user: false,
+    runName: false,
+    specifications: false
+  }
   // If on "My Benchmarks" page, go to regular benchmarks page
   if (isMyBenchmarksPage.value) {
     router.push('/')
@@ -550,6 +686,40 @@ function handleScroll() {
 function handleResize() {
   windowWidth.value = window.innerWidth
 }
+
+// Watch for search query changes and trigger automatic search with debounce
+watch(searchQuery, (newValue) => {
+  // Clear any existing timer
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  
+  // If search is empty, load all benchmarks immediately (but keep checkboxes as-is)
+  if (!newValue) {
+    if (isInitialized.value && !filterUserId.value) {
+      currentPage.value = 1
+      updateURL()
+      loadBenchmarks()
+    }
+    return
+  }
+  
+  // If checkboxes are disabled, don't search
+  if (!hasAnySearchFieldSelected.value) {
+    return
+  }
+  
+  // Only search if 3 or more characters
+  if (newValue.length >= 3) {
+    searchDebounceTimer = setTimeout(() => {
+      currentPage.value = 1
+      filterUserId.value = null
+      filterUsername.value = ''
+      updateURL()
+      loadBenchmarks()
+    }, 300) // 300ms debounce
+  }
+})
 
 onMounted(() => {
   // Initialize state from URL parameters
@@ -579,8 +749,22 @@ watch(() => route.query, (newQuery, oldQuery) => {
   
   // Handle search changes
   const newSearch = newQuery.search || ''
-  if (newSearch !== searchQuery.value) {
+  const newSearchFields = newQuery.search_fields || ''
+  const currentSearchFields = getEnabledSearchFields().join(',')
+  if (newSearch !== searchQuery.value || newSearchFields !== currentSearchFields) {
     searchQuery.value = newSearch
+    // Update search fields if they're specified in URL
+    // If not specified, preserve current checkbox state (don't reset)
+    if (newSearchFields && newSearchFields !== currentSearchFields) {
+      const fields = newSearchFields.split(',')
+      searchFields.value = {
+        title: fields.includes('title'),
+        description: fields.includes('description'),
+        user: fields.includes('user'),
+        runName: fields.includes('run_name'),
+        specifications: fields.includes('specifications')
+      }
+    }
     currentPage.value = 1
     loadBenchmarks()
     return
@@ -622,6 +806,14 @@ watch(() => route.path, (newPath, oldPath) => {
     searchQuery.value = ''
     sortKey.value = null
     sortDirection.value = 'asc'
+    // Reset search fields to defaults
+    searchFields.value = {
+      title: true,
+      description: true,
+      user: false,
+      runName: false,
+      specifications: false
+    }
     // Re-initialize from URL for the new path
     initializeFromURL()
     loadBenchmarks()
@@ -640,13 +832,29 @@ watch(() => route.path, (newPath, oldPath) => {
   border-color: #86b7fe;
 }
 
-.search-btn-icon {
-  background-color: transparent;
-  transition: background-color 0.3s ease;
+.search-input:disabled {
+  background-color: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
-.search-btn-icon:hover {
-  background-color: var(--bs-tertiary-bg);
+/* Search field checkboxes */
+.search-fields {
+  font-size: 0.9rem;
+}
+
+.search-fields .form-check {
+  margin-bottom: 0;
+}
+
+.search-fields .form-check-input {
+  cursor: pointer;
+}
+
+.search-fields .form-check-label {
+  cursor: pointer;
+  user-select: none;
 }
 
 /* Sort buttons */

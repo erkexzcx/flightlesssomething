@@ -14,6 +14,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -455,6 +456,64 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 	}
 
 	return metadata.RunCount, metadata.RunLabels, nil
+}
+
+// ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching.
+// It combines run labels from all runs into a comma-separated string and collects unique
+// specifications (OS, CPU, GPU, RAM, kernel, scheduler) across all runs into another
+// comma-separated string sorted alphabetically for deterministic output.
+//
+// Parameters:
+//   - benchmarkData: slice of BenchmarkData pointers containing run information
+//
+// Returns:
+//   - runNames: comma-separated string of unique run labels (e.g., "run1, run2, run3")
+//   - specifications: comma-separated string of unique specifications sorted alphabetically
+func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specifications string) {
+	// Extract run names - use a set to deduplicate
+	runLabelSet := make(map[string]bool)
+	var runLabelsOrdered []string
+	for _, data := range benchmarkData {
+		if data.Label != "" && !runLabelSet[data.Label] {
+			runLabelSet[data.Label] = true
+			runLabelsOrdered = append(runLabelsOrdered, data.Label)
+		}
+	}
+	runNames = strings.Join(runLabelsOrdered, ", ")
+	
+	// Extract specifications - collect unique values from all runs
+	specSet := make(map[string]bool)
+	for _, data := range benchmarkData {
+		if data.SpecOS != "" {
+			specSet[data.SpecOS] = true
+		}
+		if data.SpecCPU != "" {
+			specSet[data.SpecCPU] = true
+		}
+		if data.SpecGPU != "" {
+			specSet[data.SpecGPU] = true
+		}
+		if data.SpecRAM != "" {
+			specSet[data.SpecRAM] = true
+		}
+		if data.SpecLinuxKernel != "" {
+			specSet[data.SpecLinuxKernel] = true
+		}
+		if data.SpecLinuxScheduler != "" {
+			specSet[data.SpecLinuxScheduler] = true
+		}
+	}
+	
+	// Convert set to slice and sort for deterministic output
+	specs := make([]string, 0, len(specSet))
+	for spec := range specSet {
+		specs = append(specs, spec)
+	}
+	// Sort alphabetically for consistent ordering
+	sort.Strings(specs)
+	specifications = strings.Join(specs, ", ")
+	
+	return runNames, specifications
 }
 
 // DeleteBenchmarkData deletes benchmark data file and metadata from disk

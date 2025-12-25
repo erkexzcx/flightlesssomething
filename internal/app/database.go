@@ -84,38 +84,42 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
 			return nil, fmt.Errorf("failed to set schema version: %w", err)
 		}
-	} else if version > 0 && version < currentSchemaVersion {
-		// Handle incremental migrations for future versions (Format 3+ → newer Format 3+)
-		// This is where you would add logic for migrating from version 1→2, 2→3, etc.
-		// Example for future use:
-		// switch version {
-		// case 1:
-		//     if err := migrateFromV1ToV2(db, dataDir); err != nil {
-		//         return nil, fmt.Errorf("failed to migrate from v1 to v2: %w", err)
-		//     }
-		//     fallthrough
-		// case 2:
-		//     if err := migrateFromV2ToV3(db, dataDir); err != nil {
-		//         return nil, fmt.Errorf("failed to migrate from v2 to v3: %w", err)
-		//     }
-		//     // Continue for additional versions...
-		// }
-		// After all migrations, update to current version
-		// if err := setSchemaVersion(db, currentSchemaVersion); err != nil {
-		//     return nil, fmt.Errorf("failed to set schema version: %w", err)
-		// }
-		
-		// For now, log that we're on an older version but no migration is needed yet
-		// (since currentSchemaVersion is 1, this code path won't execute until version 2+ is added)
-		log.Printf("Database is at version %d, current version is %d. No incremental migrations defined yet.", version, currentSchemaVersion)
 	} else if version > currentSchemaVersion {
 		// Database is from a newer version of the application - this shouldn't happen
 		return nil, fmt.Errorf("database version %d is newer than supported version %d - please upgrade the application", version, currentSchemaVersion)
 	}
 
-	// Auto-migrate the schema (this is safe for both new and existing databases)
+	// Auto-migrate the schema BEFORE running data migrations
+	// This ensures columns exist before migration code tries to use them
 	if err := db.AutoMigrate(&User{}, &Benchmark{}, &AuditLog{}, &APIToken{}, &SchemaVersion{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	}
+
+	// Run data migrations after schema is updated
+	if version > 0 && version < currentSchemaVersion {
+		// Handle incremental migrations for future versions (Format 3+ → newer Format 3+)
+		log.Printf("Database is at version %d, current version is %d. Running data migrations...", version, currentSchemaVersion)
+		
+		if version == 1 {
+			log.Println("Populating new fields for version 2...")
+			if err := migrateFromV1ToV2(db); err != nil {
+				return nil, fmt.Errorf("failed to migrate from v1 to v2: %w", err)
+			}
+			// Update version to 2 after successful migration
+			if err := setSchemaVersion(db, 2); err != nil {
+				return nil, fmt.Errorf("failed to set schema version to 2: %w", err)
+			}
+			log.Println("Successfully migrated to version 2")
+		}
+		// Future migrations would go here as additional else-if blocks:
+		// else if version == 2 {
+		//     if err := migrateFromV2ToV3(db); err != nil {
+		//         return nil, fmt.Errorf("failed to migrate from v2 to v3: %w", err)
+		//     }
+		//     if err := setSchemaVersion(db, 3); err != nil {
+		//         return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
+		//     }
+		// }
 	}
 
 	// Ensure schema version is set for new databases
