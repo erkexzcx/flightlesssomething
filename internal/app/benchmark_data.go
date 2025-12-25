@@ -14,6 +14,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -457,7 +458,17 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 	return metadata.RunCount, metadata.RunLabels, nil
 }
 
-// ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching
+// ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching.
+// It combines run labels from all runs into a comma-separated string and collects unique
+// specifications (OS, CPU, GPU, RAM, kernel, scheduler) across all runs into another
+// comma-separated string sorted alphabetically for deterministic output.
+//
+// Parameters:
+//   - benchmarkData: slice of BenchmarkData pointers containing run information
+//
+// Returns:
+//   - runNames: comma-separated string of run labels (e.g., "run1, run2, run3")
+//   - specifications: comma-separated string of unique specifications sorted alphabetically
 func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string, specifications string) {
 	// Extract run names
 	var runLabels []string
@@ -497,13 +508,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string,
 		specs = append(specs, spec)
 	}
 	// Sort alphabetically for consistent ordering
-	for i := 0; i < len(specs); i++ {
-		for j := i + 1; j < len(specs); j++ {
-			if specs[i] > specs[j] {
-				specs[i], specs[j] = specs[j], specs[i]
-			}
-		}
-	}
+	sort.Strings(specs)
 	specifications = strings.Join(specs, ", ")
 	
 	return runNames, specifications

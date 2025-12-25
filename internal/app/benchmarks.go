@@ -31,8 +31,8 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		}
 		if search := c.Query("search"); search != "" {
 			// Get search fields from query parameter (comma-separated)
-			// Default to title,description,user if not specified
-			searchFieldsParam := c.DefaultQuery("search_fields", "title,description,user")
+			// Default to title,description to match frontend defaults
+			searchFieldsParam := c.DefaultQuery("search_fields", "title,description")
 			searchFields := strings.Split(searchFieldsParam, ",")
 			
 			// Build a map of enabled search fields

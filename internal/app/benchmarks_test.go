@@ -445,14 +445,15 @@ func TestHandleListBenchmarksSearch(t *testing.T) {
 			t.Fatal("Expected benchmarks array in response")
 		}
 		// Should find: "Rust Game Benchmark" (title), "Another Rust Test" (title),
-		// "Windows Performance" (description has "Rust"), and benchmarks by "rustfan" user
-		if len(benchmarksList) != 4 {
-			t.Errorf("Expected 4 benchmarks with 'Rust', got %d", len(benchmarksList))
+		// "Windows Performance" (description has "Rust")
+		// Note: With default search fields (title,description), does not include benchmarks by "rustfan" user
+		if len(benchmarksList) != 3 {
+			t.Errorf("Expected 3 benchmarks with 'Rust' in title/description, got %d", len(benchmarksList))
 		}
 	})
 
 	t.Run("single keyword in username", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/benchmarks?search=rustfan", nil)
+		req, err := http.NewRequest("GET", "/api/benchmarks?search=rustfan&search_fields=user", nil)
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
@@ -507,7 +508,7 @@ func TestHandleListBenchmarksSearch(t *testing.T) {
 	})
 
 	t.Run("multiple keywords - one in username, one in title", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/benchmarks?search=rustfan+win", nil)
+		req, err := http.NewRequest("GET", "/api/benchmarks?search=rustfan+win&search_fields=title,description,user", nil)
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
@@ -535,7 +536,7 @@ func TestHandleListBenchmarksSearch(t *testing.T) {
 	})
 
 	t.Run("case insensitive search", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/benchmarks?search=RUST", nil)
+		req, err := http.NewRequest("GET", "/api/benchmarks?search=RUST&search_fields=title,description,user", nil)
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
