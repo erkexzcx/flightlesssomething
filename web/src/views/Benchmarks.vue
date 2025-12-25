@@ -433,7 +433,7 @@ function updateURL() {
     query.page = currentPage.value
   }
   
-  // Add search parameter if present and at least one search field is selected
+  // Add search parameter only when search text exists, no user filter is active, and at least one search field is selected
   if (searchQuery.value && !filterUserId.value && hasAnySearchFieldSelected.value) {
     query.search = searchQuery.value
   }
@@ -557,11 +557,11 @@ async function loadBenchmarks() {
     } else {
       const enabledFields = getEnabledSearchFields()
       // Only use search query if at least one field is selected
-      const effectiveSearch = enabledFields.length > 0 ? searchQuery.value : ''
+      const searchQueryParam = enabledFields.length > 0 ? searchQuery.value : ''
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
-        effectiveSearch,
+        searchQueryParam,
         sortByParam,
         sortOrderParam,
         enabledFields
@@ -625,9 +625,9 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
-  // If no checkboxes selected, reload to show all benchmarks (ignore search text)
+  // If no checkboxes selected, reload all benchmarks (keep search text in disabled input)
   if (!hasAnySearchFieldSelected.value) {
-    // Keep search text but reload all benchmarks as if there were no filters
+    // Reload all benchmarks as if there were no filters
     currentPage.value = 1
     updateURL()
     loadBenchmarks()
