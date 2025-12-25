@@ -14,7 +14,7 @@
           type="search"
           v-model="searchQuery"
           class="form-control rounded search-input"
-          placeholder="Search (min 3 characters)..."
+          placeholder="Search benchmarks (min 3 chars)..."
           aria-label="Search"
           aria-describedby="search-addon"
           :disabled="route.query.user_id !== undefined || !hasAnySearchFieldSelected"
@@ -692,13 +692,18 @@ watch(searchQuery, (newValue) => {
     clearTimeout(searchDebounceTimer)
   }
   
-  // If search is empty or disabled, load all benchmarks immediately
-  if (!newValue || !hasAnySearchFieldSelected.value) {
+  // If search is empty, load all benchmarks immediately (but keep checkboxes as-is)
+  if (!newValue) {
     if (isInitialized.value && !filterUserId.value) {
       currentPage.value = 1
       updateURL()
       loadBenchmarks()
     }
+    return
+  }
+  
+  // If checkboxes are disabled, don't search
+  if (!hasAnySearchFieldSelected.value) {
     return
   }
   
