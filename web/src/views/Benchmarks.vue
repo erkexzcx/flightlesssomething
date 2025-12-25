@@ -433,8 +433,8 @@ function updateURL() {
     query.page = currentPage.value
   }
   
-  // Add search parameter if present
-  if (searchQuery.value && !filterUserId.value) {
+  // Add search parameter only when search text exists, no user filter is active, and at least one search field is selected
+  if (searchQuery.value && !filterUserId.value && hasAnySearchFieldSelected.value) {
     query.search = searchQuery.value
   }
   
@@ -556,10 +556,12 @@ async function loadBenchmarks() {
       }
     } else {
       const enabledFields = getEnabledSearchFields()
+      // Only use search query if at least one field is selected
+      const searchQueryParam = enabledFields.length > 0 ? searchQuery.value : ''
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
-        searchQuery.value,
+        searchQueryParam,
         sortByParam,
         sortOrderParam,
         enabledFields
@@ -623,15 +625,20 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
+  // If no checkboxes selected, reload all benchmarks (keep search text in disabled input)
+  if (!hasAnySearchFieldSelected.value) {
+    // Reload all benchmarks as if there were no filters
+    currentPage.value = 1
+    updateURL()
+    loadBenchmarks()
+    return
+  }
+  
   // Update URL to persist checkbox selection
   updateURL()
   
-  // If no checkboxes selected, just reload to show all benchmarks (keep search text)
-  if (!hasAnySearchFieldSelected.value) {
-    currentPage.value = 1
-    loadBenchmarks()
-  } else if (searchQuery.value && searchQuery.value.length >= 3) {
-    // If search query is present and long enough, reload with new field selection
+  // If search query is present and long enough, reload with new field selection
+  if (searchQuery.value && searchQuery.value.length >= 3) {
     currentPage.value = 1
     loadBenchmarks()
   }
@@ -696,7 +703,7 @@ watch(searchQuery, (newValue) => {
   
   // If search is empty, load all benchmarks immediately (but keep checkboxes as-is)
   if (!newValue) {
-    if (isInitialized.value && !filterUserId.value) {
+    if (isInitialized.value && !filterUserId.value && hasAnySearchFieldSelected.value) {
       currentPage.value = 1
       updateURL()
       loadBenchmarks()
@@ -752,7 +759,11 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const newSearchFields = newQuery.search_fields || ''
   const currentSearchFields = getEnabledSearchFields().join(',')
   if (newSearch !== searchQuery.value || newSearchFields !== currentSearchFields) {
-    searchQuery.value = newSearch
+    // Only update searchQuery if search fields are enabled or if there's a search in URL
+    // This preserves search text when all filters are disabled
+    if (newSearch || hasAnySearchFieldSelected.value) {
+      searchQuery.value = newSearch
+    }
     // Update search fields if they're specified in URL
     // If not specified, preserve current checkbox state (don't reset)
     if (newSearchFields && newSearchFields !== currentSearchFields) {
