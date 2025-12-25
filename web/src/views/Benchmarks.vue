@@ -764,9 +764,9 @@ watch(() => route.query, (newQuery, oldQuery) => {
     if (newSearch || hasAnySearchFieldSelected.value) {
       searchQuery.value = newSearch
     }
-    // Update search fields if they're specified in URL
-    // If not specified, preserve current checkbox state (don't reset)
-    if (newSearchFields && newSearchFields !== currentSearchFields) {
+    // Update search fields based on URL
+    if (newSearchFields) {
+      // Parse search fields from URL
       const fields = newSearchFields.split(',')
       searchFields.value = {
         title: fields.includes('title'),
@@ -774,6 +774,15 @@ watch(() => route.query, (newQuery, oldQuery) => {
         user: fields.includes('user'),
         runName: fields.includes('run_name'),
         specifications: fields.includes('specifications')
+      }
+    } else if (newSearchFields === '' && currentSearchFields !== '') {
+      // Reset to defaults when search_fields is explicitly empty in URL
+      searchFields.value = {
+        title: true,
+        description: true,
+        user: false,
+        runName: false,
+        specifications: false
       }
     }
     currentPage.value = 1

@@ -1,11 +1,11 @@
 <template>
   <nav class="navbar navbar-expand-lg bg-body-tertiary rounded" aria-label="Main navigation">
     <div class="container-fluid">
-      <router-link to="/benchmarks" class="navbar-brand" style="position: relative; display: inline-block;">
+      <a href="#" @click.prevent="handleHomeClick" class="navbar-brand" style="position: relative; display: inline-block;">
         <i class="fa-solid fa-dove"></i>
         FlightlessSomething
         <small style="font-size: 0.5em; color: gray; position: absolute; top: 3.1em; left: 2.65em;">{{ appStore.version }}</small>
-      </router-link>
+      </a>
 
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -89,6 +89,12 @@ import { useRouter } from 'vue-router'
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const router = useRouter()
+
+function handleHomeClick() {
+  // Navigate to benchmarks page with explicitly empty query parameters
+  // This ensures both search query and filters are reset
+  router.push({ path: '/benchmarks', query: {} })
+}
 
 async function handleLogout() {
   try {
