@@ -74,7 +74,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 						orValues = append(orValues, "%"+keyword+"%")
 					}
 					
-					// Combine OR conditions and apply to query
+					// Only apply search if at least one field is enabled
 					if len(orConditions) > 0 {
 						orClause := strings.Join(orConditions, " OR ")
 						query = query.Where(orClause, orValues...)

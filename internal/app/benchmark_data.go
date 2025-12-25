@@ -491,10 +491,18 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string,
 		}
 	}
 	
-	// Convert set to comma-separated string
+	// Convert set to slice and sort for deterministic output
 	var specs []string
 	for spec := range specSet {
 		specs = append(specs, spec)
+	}
+	// Sort alphabetically for consistent ordering
+	for i := 0; i < len(specs); i++ {
+		for j := i + 1; j < len(specs); j++ {
+			if specs[i] > specs[j] {
+				specs[i], specs[j] = specs[j], specs[i]
+			}
+		}
 	}
 	specifications = strings.Join(specs, ", ")
 	

@@ -612,10 +612,11 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
+  // Update URL to persist checkbox selection even without active search
+  updateURL()
   // If search query is present, reload benchmarks with new field selection
   if (searchQuery.value) {
     currentPage.value = 1
-    updateURL()
     loadBenchmarks()
   }
 }
