@@ -623,13 +623,23 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
-  // Update URL to persist checkbox selection
-  updateURL()
-  
-  // If no checkboxes selected, don't reload (search is disabled)
+  // If no checkboxes selected, clear search and reload to show all benchmarks
   if (!hasAnySearchFieldSelected.value) {
+    if (searchQuery.value) {
+      searchQuery.value = ''
+      currentPage.value = 1
+      // Update URL after clearing search query
+      updateURL()
+      loadBenchmarks()
+    } else {
+      // Just update URL to persist checkbox selection
+      updateURL()
+    }
     return
   }
+  
+  // Update URL to persist checkbox selection
+  updateURL()
   
   // If search query is present and long enough, reload with new field selection
   if (searchQuery.value && searchQuery.value.length >= 3) {
