@@ -16,7 +16,27 @@
     <div v-else-if="benchmark">
       <!-- Header with actions -->
       <div class="benchmark-header mb-3">
-        <!-- Action buttons (shown first on mobile) -->
+        <!-- Title and metadata -->
+        <div class="benchmark-title-section">
+          <h2>{{ benchmark.Title }}</h2>
+          <p class="text-muted">
+            By 
+            <router-link 
+              v-if="benchmark.User"
+              :to="{ path: '/benchmarks', query: { user_id: benchmark.User.ID } }"
+              class="username-link"
+            >
+              <strong>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></strong>
+            </router-link>
+            <strong v-else>Unknown</strong> •
+            Created {{ formatRelativeDate(benchmark.CreatedAt) }}
+            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt">
+              • Updated {{ formatRelativeDate(benchmark.UpdatedAt) }}
+            </span>
+          </p>
+        </div>
+        
+        <!-- Action buttons -->
         <div class="btn-group benchmark-actions" role="group">
           <!-- Owner-only buttons -->
           <template v-if="isOwner">
@@ -51,26 +71,6 @@
               <i class="fa-solid fa-trash"></i> {{ deleting ? 'Deleting...' : 'Delete' }}
             </button>
           </template>
-        </div>
-        
-        <!-- Title and metadata -->
-        <div class="benchmark-title-section">
-          <h2>{{ benchmark.Title }}</h2>
-          <p class="text-muted">
-            By 
-            <router-link 
-              v-if="benchmark.User"
-              :to="{ path: '/benchmarks', query: { user_id: benchmark.User.ID } }"
-              class="username-link"
-            >
-              <strong>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></strong>
-            </router-link>
-            <strong v-else>Unknown</strong> •
-            Created {{ formatRelativeDate(benchmark.CreatedAt) }}
-            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt">
-              • Updated {{ formatRelativeDate(benchmark.UpdatedAt) }}
-            </span>
-          </p>
         </div>
       </div>
 
@@ -667,11 +667,16 @@ onMounted(() => {
 /* Mobile responsive: stack buttons above title */
 @media (max-width: 768px) {
   .benchmark-header {
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: stretch;
   }
   
+  .benchmark-title-section {
+    order: 2; /* Move title below buttons on mobile */
+  }
+  
   .benchmark-actions {
+    order: 1; /* Move buttons above title on mobile */
     margin-bottom: 1rem;
     width: 100%;
   }
