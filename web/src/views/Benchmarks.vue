@@ -626,9 +626,8 @@ function handleSearchFieldsChange() {
   // Update URL to persist checkbox selection
   updateURL()
   
-  // If no checkboxes selected, clear search and show all benchmarks
+  // If no checkboxes selected, just reload to show all benchmarks (keep search text)
   if (!hasAnySearchFieldSelected.value) {
-    searchQuery.value = ''
     currentPage.value = 1
     loadBenchmarks()
   } else if (searchQuery.value && searchQuery.value.length >= 3) {
