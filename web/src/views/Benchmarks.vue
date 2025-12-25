@@ -841,7 +841,6 @@ watch(() => route.path, (newPath, oldPath) => {
 
 /* Search field checkboxes */
 .search-fields {
-  font-size: 0.9rem;
 }
 
 .search-fields .form-check {
