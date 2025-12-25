@@ -438,11 +438,14 @@ function updateURL() {
     query.search = searchQuery.value
   }
   
-  // Always add search_fields parameter to persist checkbox state
+  // Add search_fields parameter only when different from defaults
   if (!filterUserId.value) {
     const enabledFields = getEnabledSearchFields()
-    if (enabledFields.length > 0) {
-      query.search_fields = enabledFields.join(',')
+    const defaultFields = 'title,description'
+    const currentFieldsStr = enabledFields.join(',')
+    // Only add to URL if not default to keep URL clean
+    if (currentFieldsStr && currentFieldsStr !== defaultFields) {
+      query.search_fields = currentFieldsStr
     }
   }
   
@@ -775,8 +778,8 @@ watch(() => route.query, (newQuery, oldQuery) => {
         runName: fields.includes('run_name'),
         specifications: fields.includes('specifications')
       }
-    } else if (newSearchFields === '' && currentSearchFields !== '') {
-      // Reset to defaults when search_fields is explicitly empty in URL
+    } else if (newSearchFields === '' && currentSearchFields !== '' && currentSearchFields !== 'title,description') {
+      // Reset to defaults when search_fields is not in URL and current is not default
       searchFields.value = {
         title: true,
         description: true,
