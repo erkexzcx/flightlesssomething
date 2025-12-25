@@ -623,17 +623,18 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
-  // If no checkboxes selected, clear search and reload to show all benchmarks
+  // If no checkboxes selected, handle search state appropriately
   if (!hasAnySearchFieldSelected.value) {
-    if (searchQuery.value) {
+    const hadSearch = searchQuery.value !== ''
+    if (hadSearch) {
+      // Clear search query and reload to show all benchmarks
       searchQuery.value = ''
       currentPage.value = 1
-      // Update URL after clearing search query
-      updateURL()
+    }
+    // Update URL to persist checkbox selection and clear search parameter
+    updateURL()
+    if (hadSearch) {
       loadBenchmarks()
-    } else {
-      // Just update URL to persist checkbox selection
-      updateURL()
     }
     return
   }
