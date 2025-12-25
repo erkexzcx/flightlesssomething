@@ -626,12 +626,13 @@ function handleSearchFieldsChange() {
   // Update URL to persist checkbox selection
   updateURL()
   
-  // If no checkboxes selected, just reload to show all benchmarks (keep search text)
+  // If no checkboxes selected, don't reload (search is disabled)
   if (!hasAnySearchFieldSelected.value) {
-    currentPage.value = 1
-    loadBenchmarks()
-  } else if (searchQuery.value && searchQuery.value.length >= 3) {
-    // If search query is present and long enough, reload with new field selection
+    return
+  }
+  
+  // If search query is present and long enough, reload with new field selection
+  if (searchQuery.value && searchQuery.value.length >= 3) {
     currentPage.value = 1
     loadBenchmarks()
   }
@@ -696,7 +697,7 @@ watch(searchQuery, (newValue) => {
   
   // If search is empty, load all benchmarks immediately (but keep checkboxes as-is)
   if (!newValue) {
-    if (isInitialized.value && !filterUserId.value) {
+    if (isInitialized.value && !filterUserId.value && hasAnySearchFieldSelected.value) {
       currentPage.value = 1
       updateURL()
       loadBenchmarks()
