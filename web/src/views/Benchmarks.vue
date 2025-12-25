@@ -830,8 +830,10 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .search-input:disabled {
-  background-color: #e9ecef;
+  background-color: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
   cursor: not-allowed;
+  opacity: 0.65;
 }
 
 /* Search field checkboxes */
