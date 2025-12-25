@@ -61,7 +61,7 @@ export const api = {
 
   // Benchmark endpoints
   benchmarks: {
-    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '') {
+    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '', searchFields = []) {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -74,6 +74,9 @@ export const api = {
       }
       if (sortOrder) {
         params.append('sort_order', sortOrder)
+      }
+      if (searchFields.length > 0) {
+        params.append('search_fields', searchFields.join(','))
       }
       return fetchJSON(`/api/benchmarks?${params}`)
     },

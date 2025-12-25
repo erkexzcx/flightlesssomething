@@ -457,6 +457,50 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 	return metadata.RunCount, metadata.RunLabels, nil
 }
 
+// ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching
+func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string, specifications string) {
+	// Extract run names
+	var runLabels []string
+	for _, data := range benchmarkData {
+		if data.Label != "" {
+			runLabels = append(runLabels, data.Label)
+		}
+	}
+	runNames = strings.Join(runLabels, ", ")
+	
+	// Extract specifications - collect unique values from all runs
+	specSet := make(map[string]bool)
+	for _, data := range benchmarkData {
+		if data.SpecOS != "" {
+			specSet[data.SpecOS] = true
+		}
+		if data.SpecCPU != "" {
+			specSet[data.SpecCPU] = true
+		}
+		if data.SpecGPU != "" {
+			specSet[data.SpecGPU] = true
+		}
+		if data.SpecRAM != "" {
+			specSet[data.SpecRAM] = true
+		}
+		if data.SpecLinuxKernel != "" {
+			specSet[data.SpecLinuxKernel] = true
+		}
+		if data.SpecLinuxScheduler != "" {
+			specSet[data.SpecLinuxScheduler] = true
+		}
+	}
+	
+	// Convert set to comma-separated string
+	var specs []string
+	for spec := range specSet {
+		specs = append(specs, spec)
+	}
+	specifications = strings.Join(specs, ", ")
+	
+	return runNames, specifications
+}
+
 // DeleteBenchmarkData deletes benchmark data file and metadata from disk
 func DeleteBenchmarkData(benchmarkID uint) error {
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))

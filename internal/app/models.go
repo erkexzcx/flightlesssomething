@@ -40,6 +40,10 @@ type Benchmark struct {
 	UserID      uint
 	Title       string `gorm:"size:100"`
 	Description string `gorm:"size:5000"`
+	
+	// Searchable metadata extracted from benchmark data files
+	RunNames       string `gorm:"type:text"` // Comma-separated list of run labels for search
+	Specifications string `gorm:"type:text"` // Concatenated specifications (OS, CPU, GPU, etc.) for search
 
 	CreatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of CreatedAt
 	UpdatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of UpdatedAt

@@ -30,19 +30,55 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			query = query.Where("user_id = ?", userID)
 		}
 		if search := c.Query("search"); search != "" {
+			// Get search fields from query parameter (comma-separated)
+			// Default to title,description,user if not specified
+			searchFieldsParam := c.DefaultQuery("search_fields", "title,description,user")
+			searchFields := strings.Split(searchFieldsParam, ",")
+			
+			// Build a map of enabled search fields
+			enabledFields := make(map[string]bool)
+			for _, field := range searchFields {
+				enabledFields[strings.TrimSpace(field)] = true
+			}
+			
 			// Split search query into keywords
 			keywords := strings.Fields(search)
 			
-			// For each keyword, search in title, description, and username
-			// All keywords must match (AND logic), but each keyword can match any field (OR logic)
+			// For each keyword, search in enabled fields
+			// All keywords must match (AND logic), but each keyword can match any enabled field (OR logic)
 			for _, keyword := range keywords {
 				keyword = strings.TrimSpace(keyword)
 				if keyword != "" {
-					// Search in benchmarks table (title, description) and users table (username)
-					query = query.Where(
-						"benchmarks.title LIKE ? OR benchmarks.description LIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?)",
-						"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
-					)
+					// Build OR conditions for this keyword across enabled fields
+					var orConditions []string
+					var orValues []interface{}
+					
+					if enabledFields["title"] {
+						orConditions = append(orConditions, "benchmarks.title LIKE ?")
+						orValues = append(orValues, "%"+keyword+"%")
+					}
+					if enabledFields["description"] {
+						orConditions = append(orConditions, "benchmarks.description LIKE ?")
+						orValues = append(orValues, "%"+keyword+"%")
+					}
+					if enabledFields["user"] {
+						orConditions = append(orConditions, "EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?)")
+						orValues = append(orValues, "%"+keyword+"%")
+					}
+					if enabledFields["run_name"] {
+						orConditions = append(orConditions, "benchmarks.run_names LIKE ?")
+						orValues = append(orValues, "%"+keyword+"%")
+					}
+					if enabledFields["specifications"] {
+						orConditions = append(orConditions, "benchmarks.specifications LIKE ?")
+						orValues = append(orValues, "%"+keyword+"%")
+					}
+					
+					// Combine OR conditions and apply to query
+					if len(orConditions) > 0 {
+						orClause := strings.Join(orConditions, " OR ")
+						query = query.Where(orClause, orValues...)
+					}
 				}
 			}
 		}
@@ -253,6 +289,15 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Extract and update searchable metadata
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		benchmark.RunNames = runNames
+		benchmark.Specifications = specifications
+		if err := db.DB.Save(&benchmark).Error; err != nil {
+			// Log error but don't fail - this is just for search optimization
+			fmt.Printf("Warning: failed to update searchable metadata: %v\n", err)
+		}
+
 		// Reload benchmark with User to return complete data
 		if err := db.DB.Preload("User").First(&benchmark, benchmark.ID).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load benchmark"})
@@ -354,6 +399,11 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update labels"})
 				return
 			}
+
+			// Update searchable metadata after label changes
+			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+			benchmark.RunNames = runNames
+			benchmark.Specifications = specifications
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -560,6 +610,11 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Update searchable metadata after deleting run
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		benchmark.RunNames = runNames
+		benchmark.Specifications = specifications
+
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update benchmark"})
@@ -661,6 +716,11 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
 		}
+
+		// Update searchable metadata after adding runs
+		runNames, specifications := ExtractSearchableMetadata(existingData)
+		benchmark.RunNames = runNames
+		benchmark.Specifications = specifications
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
