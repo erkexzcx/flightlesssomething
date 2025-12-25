@@ -35,10 +35,21 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			searchFieldsParam := c.DefaultQuery("search_fields", "title,description")
 			searchFields := strings.Split(searchFieldsParam, ",")
 			
-			// Build a map of enabled search fields
+			// Build a map of enabled search fields - validate against allowlist
+			validFields := map[string]bool{
+				"title":          true,
+				"description":    true,
+				"user":           true,
+				"run_name":       true,
+				"specifications": true,
+			}
 			enabledFields := make(map[string]bool)
 			for _, field := range searchFields {
-				enabledFields[strings.TrimSpace(field)] = true
+				field = strings.TrimSpace(field)
+				// Only add valid fields to prevent SQL injection
+				if validFields[field] {
+					enabledFields[field] = true
+				}
 			}
 			
 			// Split search query into keywords
@@ -295,7 +306,7 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		benchmark.Specifications = specifications
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			// Log error but don't fail - this is just for search optimization
-			fmt.Printf("Warning: failed to update searchable metadata: %v\n", err)
+			fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, err)
 		}
 
 		// Reload benchmark with User to return complete data
