@@ -198,8 +198,8 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, er
 		// Skip len(headerMap) amount of lines
 		for i := 0; i < len(headerMap); i++ {
 			if !scanner.Scan() {
-				if err := scanner.Err(); err != nil {
-					return nil, fmt.Errorf("failed to skip afterburner header lines: %w", err)
+				if scanErr := scanner.Err(); scanErr != nil {
+					return nil, fmt.Errorf("failed to skip afterburner header lines: %w", scanErr)
 				}
 				return nil, fmt.Errorf("unexpected end of file while skipping afterburner header lines (expected %d lines, got %d)", len(headerMap), i)
 			}
@@ -257,8 +257,8 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 
 	// First line identifies file format
 	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("failed to read first line: %w", err)
+		if scanErr := scanner.Err(); scanErr != nil {
+			return nil, fmt.Errorf("failed to read first line: %w", scanErr)
 		}
 		return nil, errors.New("file is empty or failed to read first line")
 	}

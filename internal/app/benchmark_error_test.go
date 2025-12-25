@@ -47,7 +47,9 @@ func TestReadBenchmarkFiles_ErrorMessages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to write content: %v", err)
 			}
-			writer.Close()
+			if err = writer.Close(); err != nil {
+				t.Fatalf("Failed to close writer: %v", err)
+			}
 
 			// Parse the multipart form
 			reader := multipart.NewReader(body, writer.Boundary())
@@ -55,7 +57,11 @@ func TestReadBenchmarkFiles_ErrorMessages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read form: %v", err)
 			}
-			defer form.RemoveAll()
+			defer func() {
+				if removeErr := form.RemoveAll(); removeErr != nil {
+					t.Logf("Warning: failed to remove form files: %v", removeErr)
+				}
+			}()
 
 			// Call ReadBenchmarkFiles
 			_, err = ReadBenchmarkFiles(form.File["files"])
