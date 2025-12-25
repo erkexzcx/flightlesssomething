@@ -254,9 +254,11 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 
 		// Extract and populate searchable metadata (v2 schema)
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-		newBenchmark.RunNames = runNames
-		newBenchmark.Specifications = specifications
-		if err := newDB.Save(&newBenchmark).Error; err != nil {
+		// Use UpdateColumns to avoid updating the UpdatedAt timestamp during migration
+		if err := newDB.Model(&newBenchmark).UpdateColumns(map[string]interface{}{
+			"run_names":      runNames,
+			"specifications": specifications,
+		}).Error; err != nil {
 			log.Printf("    WARNING: Failed to update searchable metadata: %v", err)
 		}
 
@@ -420,9 +422,11 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 
 		// Extract and populate searchable metadata (v2 schema)
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-		newBenchmark.RunNames = runNames
-		newBenchmark.Specifications = specifications
-		if err := db.Save(&newBenchmark).Error; err != nil {
+		// Use UpdateColumns to avoid updating the UpdatedAt timestamp during migration
+		if err := db.Model(&newBenchmark).UpdateColumns(map[string]interface{}{
+			"run_names":      runNames,
+			"specifications": specifications,
+		}).Error; err != nil {
 			log.Printf("    WARNING: Failed to update searchable metadata: %v", err)
 		}
 
@@ -531,11 +535,12 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 		
 		// Extract searchable metadata
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-		benchmark.RunNames = runNames
-		benchmark.Specifications = specifications
 		
-		// Update benchmark record
-		if err := db.Save(benchmark).Error; err != nil {
+		// Update benchmark record using UpdateColumns to preserve UpdatedAt timestamp
+		if err := db.Model(benchmark).UpdateColumns(map[string]interface{}{
+			"run_names":      runNames,
+			"specifications": specifications,
+		}).Error; err != nil {
 			log.Printf("    ERROR: Failed to update benchmark: %v", err)
 			errorCount++
 			continue
