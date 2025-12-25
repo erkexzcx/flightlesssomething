@@ -95,7 +95,6 @@ func Start(config *Config, version string) error {
 	admin.PUT("/users/:id/ban", HandleBanUser(db))
 	admin.PUT("/users/:id/admin", HandleToggleUserAdmin(db))
 	admin.GET("/logs", HandleListAuditLogs(db))
-	admin.POST("/repopulate-search-metadata", HandleRepopulateSearchMetadata(db))
 
 	// Serve Vue.js SPA
 	setupSPA(r)
