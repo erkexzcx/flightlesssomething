@@ -19,8 +19,9 @@ const (
 	// Version history:
 	// - 0: Old schema (Format 1 and Format 2) - no schema_versions table, has ai_summary column
 	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
+	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 1
+	currentSchemaVersion = 2
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )
@@ -253,6 +254,14 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 			}
 		}
 
+		// Extract and populate searchable metadata (v2 schema)
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		newBenchmark.RunNames = runNames
+		newBenchmark.Specifications = specifications
+		if err := newDB.Save(&newBenchmark).Error; err != nil {
+			log.Printf("    WARNING: Failed to update searchable metadata: %v", err)
+		}
+
 		log.Printf("    Successfully migrated (%d runs)", len(benchmarkData))
 		successCount++
 	}
@@ -411,6 +420,14 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 			}
 		}
 
+		// Extract and populate searchable metadata (v2 schema)
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		newBenchmark.RunNames = runNames
+		newBenchmark.Specifications = specifications
+		if err := db.Save(&newBenchmark).Error; err != nil {
+			log.Printf("    WARNING: Failed to update searchable metadata: %v", err)
+		}
+
 		log.Printf("    Successfully migrated (%d runs)", len(benchmarkData))
 		successCount++
 	}
@@ -486,3 +503,60 @@ func createMetadataFileForMigration(dataDir string, benchmarkID uint, benchmarkD
 	gobEncoder := gob.NewEncoder(metaFile)
 	return gobEncoder.Encode(metadata)
 }
+
+// migrateFromV1ToV2 migrates from schema version 1 to version 2
+// This migration populates the RunNames and Specifications fields for all existing benchmarks
+func migrateFromV1ToV2(db *gorm.DB, dataDir string) error {
+	log.Println("Populating RunNames and Specifications for existing benchmarks...")
+	
+	// Get all benchmarks
+	var benchmarks []Benchmark
+	if err := db.Find(&benchmarks).Error; err != nil {
+		return fmt.Errorf("failed to fetch benchmarks: %w", err)
+	}
+	log.Printf("Found %d benchmarks to update", len(benchmarks))
+	
+	successCount := 0
+	errorCount := 0
+	
+	for i := range benchmarks {
+		benchmark := &benchmarks[i]
+		log.Printf("  [%d/%d] Updating benchmark: %s (ID: %d)", i+1, len(benchmarks), benchmark.Title, benchmark.ID)
+		
+		// Read benchmark data
+		benchmarkData, err := RetrieveBenchmarkData(benchmark.ID)
+		if err != nil {
+			log.Printf("    WARNING: Failed to read data file: %v", err)
+			errorCount++
+			continue
+		}
+		
+		// Extract searchable metadata
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		benchmark.RunNames = runNames
+		benchmark.Specifications = specifications
+		
+		// Update benchmark record
+		if err := db.Save(benchmark).Error; err != nil {
+			log.Printf("    ERROR: Failed to update benchmark: %v", err)
+			errorCount++
+			continue
+		}
+		
+		log.Printf("    Successfully updated (runs: %d, specs fields: %d chars)", len(benchmarkData), len(specifications))
+		successCount++
+	}
+	
+	log.Println("\n=== Migration Summary (v1 → v2) ===")
+	log.Printf("Benchmarks updated: %d", successCount)
+	log.Printf("Benchmarks failed: %d", errorCount)
+	log.Println("=====================================")
+	
+	if errorCount > 0 {
+		log.Printf("WARNING: %d benchmarks failed to update, but migration will continue", errorCount)
+	}
+	
+	log.Println("Migration from v1 to v2 completed successfully!")
+	return nil
+}
+
