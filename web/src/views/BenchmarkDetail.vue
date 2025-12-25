@@ -15,8 +15,9 @@
     <!-- Benchmark details -->
     <div v-else-if="benchmark">
       <!-- Header with actions -->
-      <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
+      <div class="benchmark-header mb-3">
+        <!-- Title and metadata -->
+        <div class="benchmark-title-section">
           <h2>{{ benchmark.Title }}</h2>
           <p class="text-muted">
             By 
@@ -36,7 +37,7 @@
         </div>
         
         <!-- Action buttons -->
-        <div class="btn-group" role="group">
+        <div class="btn-group benchmark-actions" role="group">
           <!-- Owner-only buttons -->
           <template v-if="isOwner">
             <button
@@ -644,6 +645,47 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Benchmark header layout */
+.benchmark-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: nowrap;
+}
+
+.benchmark-title-section {
+  flex: 1;
+  min-width: 0; /* Allow text to truncate if needed */
+}
+
+.benchmark-actions {
+  flex-shrink: 0; /* Prevent buttons from shrinking */
+  white-space: nowrap; /* Keep buttons on one line */
+}
+
+/* Mobile responsive: stack buttons above title */
+@media (max-width: 768px) {
+  .benchmark-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .benchmark-title-section {
+    order: 2; /* Move title below buttons on mobile */
+  }
+  
+  .benchmark-actions {
+    order: 1; /* Move buttons above title on mobile */
+    margin-bottom: 1rem;
+    width: 100%;
+  }
+  
+  .benchmark-actions .btn {
+    flex: 1; /* Make buttons equal width on mobile */
+  }
+}
+
 .card {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
