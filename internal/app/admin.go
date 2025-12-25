@@ -270,3 +270,52 @@ func HandleToggleUserAdmin(db *DBInstance) gin.HandlerFunc {
 		c.JSON(http.StatusOK, user)
 	}
 }
+
+// HandleRepopulateSearchMetadata re-populates RunNames and Specifications for all benchmarks (admin only)
+func HandleRepopulateSearchMetadata(db *DBInstance) gin.HandlerFunc {
+return func(c *gin.Context) {
+// Get all benchmarks
+var benchmarks []Benchmark
+if err := db.DB.Find(&benchmarks).Error; err != nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch benchmarks"})
+return
+}
+
+successCount := 0
+errorCount := 0
+var errors []string
+
+for i := range benchmarks {
+benchmark := &benchmarks[i]
+
+// Read benchmark data
+benchmarkData, err := RetrieveBenchmarkData(benchmark.ID)
+if err != nil {
+errorCount++
+errors = append(errors, fmt.Sprintf("Benchmark %d: failed to read data - %v", benchmark.ID, err))
+continue
+}
+
+// Extract searchable metadata
+runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+benchmark.RunNames = runNames
+benchmark.Specifications = specifications
+
+// Update benchmark record
+if err := db.DB.Save(benchmark).Error; err != nil {
+errorCount++
+errors = append(errors, fmt.Sprintf("Benchmark %d: failed to save - %v", benchmark.ID, err))
+continue
+}
+
+successCount++
+}
+
+c.JSON(http.StatusOK, gin.H{
+"total":        len(benchmarks),
+"updated":      successCount,
+"errors":       errorCount,
+"error_details": errors,
+})
+}
+}
