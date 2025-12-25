@@ -174,24 +174,18 @@ test('filters frames > median*3 in uncapped run', () => {
   assertTrue(filtered.length === 300, `Expected 300 frames, got ${filtered.length}`);
 });
 
-// Test 5: 97% FPS should be lower after filtering (capped run)
-test('97% FPS is lower/realistic after filtering in capped run', () => {
+// Test 5: 97% FPS should be realistic after filtering (capped run)
+test('97% FPS is realistic after filtering in capped run', () => {
   const fps60Capped = [
     ...Array(900).fill(59.5),
     ...Array(100).fill(200)  // Extreme outliers
   ];
   
-  // Without filtering (simulate old behavior)
-  const frametimes = fps60Capped.map(fps => 1000 / fps);
-  const sorted = [...frametimes].sort((a, b) => a - b);
-  const index = Math.round(0.03 * (sorted.length + 1));
-  const oldFPS97 = 1000 / sorted[index];
-  
   // With filtering (new behavior)
   const newFPS97 = calculatePercentileFPS(fps60Capped, 97);
   
-  // New 97% FPS should be lower and closer to 60
-  assertTrue(newFPS97 < oldFPS97, `New FPS (${newFPS97}) should be < old FPS (${oldFPS97})`);
+  // 97% FPS should be realistic and closer to the 60 FPS cap
+  assertTrue(newFPS97 > 50, `97% FPS (${newFPS97}) should be > 50`);
   assertTrue(newFPS97 <= 65, `97% FPS (${newFPS97}) should be <= 65 for 60 FPS cap`);
 });
 
