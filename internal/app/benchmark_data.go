@@ -44,7 +44,10 @@ func InitBenchmarksDir(dataDir string) error {
 // parseHeader parses the CSV header line and returns a map of column names to indices
 func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 	if !scanner.Scan() {
-		return nil, errors.New("failed to read header line")
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("failed to read header line: %w", err)
+		}
+		return nil, errors.New("unexpected end of file while reading header line")
 	}
 
 	headerLine := scanner.Text()
@@ -135,7 +138,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 		len(benchmarkData.DataGPUPower) == 0 &&
 		len(benchmarkData.DataRAMUsed) == 0 &&
 		len(benchmarkData.DataSwapUsed) == 0 {
-		return errors.New("empty file")
+		return errors.New("no valid benchmark data found in file (all data columns are empty)")
 	}
 
 	return nil
@@ -147,7 +150,10 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, er
 
 	// Second line should contain specs
 	if !scanner.Scan() {
-		return nil, errors.New("failed to read specs line")
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("failed to read specs line: %w", err)
+		}
+		return nil, errors.New("unexpected end of file while reading specs line")
 	}
 	record := strings.Split(scanner.Text(), ",")
 	switch fileType {
@@ -192,7 +198,10 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, er
 		// Skip len(headerMap) amount of lines
 		for i := 0; i < len(headerMap); i++ {
 			if !scanner.Scan() {
-				return nil, errors.New("failed to skip afterburner header lines")
+				if scanErr := scanner.Err(); scanErr != nil {
+					return nil, fmt.Errorf("failed to skip afterburner header lines: %w", scanErr)
+				}
+				return nil, fmt.Errorf("unexpected end of file while skipping afterburner header lines (expected %d lines, got %d)", len(headerMap), i)
 			}
 		}
 	}
@@ -224,7 +233,7 @@ func ReadBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error)
 	for _, fileHeader := range files {
 		benchmarkData, err := readSingleBenchmarkFile(fileHeader)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("file '%s': %w", fileHeader.Filename, err)
 		}
 		benchmarkDatas = append(benchmarkDatas, benchmarkData)
 	}
@@ -248,7 +257,10 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 
 	// First line identifies file format
 	if !scanner.Scan() {
-		return nil, errors.New("failed to read first line")
+		if scanErr := scanner.Err(); scanErr != nil {
+			return nil, fmt.Errorf("failed to read first line: %w", scanErr)
+		}
+		return nil, errors.New("file is empty or failed to read first line")
 	}
 	firstLine := scanner.Text()
 	firstLine = strings.TrimRight(firstLine, ", ")
@@ -256,7 +268,7 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 
 	fileType := detectFileType(firstLine)
 	if fileType == FileTypeUnknown {
-		return nil, errors.New("unsupported file format")
+		return nil, fmt.Errorf("unsupported file format (expected MangoHud CSV or Afterburner HML, got: '%.50s...')", firstLine)
 	}
 
 	benchmarkData, err := readBenchmarkFile(scanner, fileType)
