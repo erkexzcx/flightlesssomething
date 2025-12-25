@@ -787,7 +787,7 @@ watch(() => route.path, (newPath, oldPath) => {
 .benchmark-date-author {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   flex-shrink: 0;
   margin-left: 0.5rem;
 }
