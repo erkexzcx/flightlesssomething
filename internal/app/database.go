@@ -92,7 +92,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		switch version {
 		case 1:
 			log.Println("Migrating from version 1 to version 2...")
-			if err := migrateFromV1ToV2(db, dataDir); err != nil {
+			if err := migrateFromV1ToV2(db); err != nil {
 				return nil, fmt.Errorf("failed to migrate from v1 to v2: %w", err)
 			}
 			// Update version to 2 after successful migration

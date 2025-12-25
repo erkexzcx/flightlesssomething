@@ -99,8 +99,6 @@ func detectSchemaVersion(db *gorm.DB) (int, error) {
 }
 
 // setSchemaVersion sets the schema version in the database
-//
-//nolint:unparam // version parameter is for future extensibility
 func setSchemaVersion(db *gorm.DB, version int) error {
 	// Ensure the table exists
 	if err := db.AutoMigrate(&SchemaVersion{}); err != nil {
@@ -506,7 +504,7 @@ func createMetadataFileForMigration(dataDir string, benchmarkID uint, benchmarkD
 
 // migrateFromV1ToV2 migrates from schema version 1 to version 2
 // This migration populates the RunNames and Specifications fields for all existing benchmarks
-func migrateFromV1ToV2(db *gorm.DB, dataDir string) error {
+func migrateFromV1ToV2(db *gorm.DB) error {
 	log.Println("Populating RunNames and Specifications for existing benchmarks...")
 	
 	// Get all benchmarks

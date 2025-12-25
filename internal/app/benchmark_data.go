@@ -469,7 +469,7 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 // Returns:
 //   - runNames: comma-separated string of unique run labels (e.g., "run1, run2, run3")
 //   - specifications: comma-separated string of unique specifications sorted alphabetically
-func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string, specifications string) {
+func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specifications string) {
 	// Extract run names - use a set to deduplicate
 	runLabelSet := make(map[string]bool)
 	var runLabelsOrdered []string
@@ -505,7 +505,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames string,
 	}
 	
 	// Convert set to slice and sort for deterministic output
-	var specs []string
+	specs := make([]string, 0, len(specSet))
 	for spec := range specSet {
 		specs = append(specs, spec)
 	}
