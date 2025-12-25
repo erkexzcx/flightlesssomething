@@ -100,8 +100,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 		// Handle incremental migrations for future versions (Format 3+ → newer Format 3+)
 		log.Printf("Database is at version %d, current version is %d. Running data migrations...", version, currentSchemaVersion)
 		
-		switch version {
-		case 1:
+		if version == 1 {
 			log.Println("Populating new fields for version 2...")
 			if err := migrateFromV1ToV2(db); err != nil {
 				return nil, fmt.Errorf("failed to migrate from v1 to v2: %w", err)
@@ -111,15 +110,16 @@ func InitDB(dataDir string) (*DBInstance, error) {
 				return nil, fmt.Errorf("failed to set schema version to 2: %w", err)
 			}
 			log.Println("Successfully migrated to version 2")
-		// Future migrations would go here:
-		// case 2:
-		//     if err := migrateFromV2ToV3(db, dataDir); err != nil {
+		}
+		// Future migrations would go here as additional else-if blocks:
+		// else if version == 2 {
+		//     if err := migrateFromV2ToV3(db); err != nil {
 		//         return nil, fmt.Errorf("failed to migrate from v2 to v3: %w", err)
 		//     }
 		//     if err := setSchemaVersion(db, 3); err != nil {
 		//         return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
 		//     }
-		}
+		// }
 	}
 
 	// Ensure schema version is set for new databases

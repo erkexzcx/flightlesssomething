@@ -14,16 +14,11 @@
           type="search"
           v-model="searchQuery"
           class="form-control rounded search-input"
-          placeholder="Search title, description, or username..."
+          placeholder="Search (min 3 characters)..."
           aria-label="Search"
           aria-describedby="search-addon"
-          :disabled="route.query.user_id !== undefined"
+          :disabled="route.query.user_id !== undefined || !hasAnySearchFieldSelected"
         />
-        <span class="input-group-text border-0 search-btn-icon" id="search-addon">
-          <button type="submit" class="btn btn-link p-0 m-0" :disabled="route.query.user_id !== undefined">
-            <i class="fas fa-search"></i>
-          </button>
-        </span>
       </div>
       
       <!-- Search field checkboxes -->
