@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -174,6 +175,13 @@ func TestMigrationFromOldSchema(t *testing.T) {
 			}
 			if newBenchmark.Description != oldBenchmarks[i].Description {
 				t.Errorf("Benchmark %d: expected Description %s, got %s", i, oldBenchmarks[i].Description, newBenchmark.Description)
+			}
+			// Verify timestamps are preserved
+			if !newBenchmark.CreatedAt.Equal(oldBenchmarks[i].CreatedAt) {
+				t.Errorf("Benchmark %d: CreatedAt not preserved. Expected %v, got %v", i, oldBenchmarks[i].CreatedAt, newBenchmark.CreatedAt)
+			}
+			if !newBenchmark.UpdatedAt.Equal(oldBenchmarks[i].UpdatedAt) {
+				t.Errorf("Benchmark %d: UpdatedAt not preserved. Expected %v, got %v", i, oldBenchmarks[i].UpdatedAt, newBenchmark.UpdatedAt)
 			}
 		}
 	})
@@ -394,6 +402,86 @@ func TestInitDBWithMigration(t *testing.T) {
 		}
 		if version.Version != currentSchemaVersion {
 			t.Errorf("Expected schema version %d, got %d", currentSchemaVersion, version.Version)
+		}
+	})
+	
+	t.Run("preserves timestamps during migration", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "flightlesssomething.db")
+		db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+		if err != nil {
+			t.Fatalf("Failed to open database: %v", err)
+		}
+
+		// Create old schema
+		if err := db.AutoMigrate(&OldUser{}, &OldBenchmark{}); err != nil {
+			t.Fatalf("Failed to create old schema: %v", err)
+		}
+
+		// Create benchmarks directory
+		benchmarksDir := filepath.Join(tmpDir, "benchmarks")
+		if err := os.MkdirAll(benchmarksDir, 0o755); err != nil {
+			t.Fatalf("Failed to create benchmarks directory: %v", err)
+		}
+
+		// Add test user with specific past timestamp
+		pastTime := time.Now().Add(-48 * time.Hour)
+		oldUser := OldUser{
+			Model: gorm.Model{
+				CreatedAt: pastTime,
+				UpdatedAt: pastTime,
+			},
+			DiscordID: "123456",
+			Username:  "testuser",
+		}
+		if err := db.Create(&oldUser).Error; err != nil {
+			t.Fatalf("Failed to create old user: %v", err)
+		}
+
+		// Add test benchmark with different past timestamp
+		benchmarkTime := time.Now().Add(-24 * time.Hour)
+		oldBenchmark := OldBenchmark{
+			Model: gorm.Model{
+				CreatedAt: benchmarkTime,
+				UpdatedAt: benchmarkTime,
+			},
+			UserID:      oldUser.ID,
+			Title:       "Test Benchmark",
+			Description: "Test Description",
+		}
+		if err := db.Create(&oldBenchmark).Error; err != nil {
+			t.Fatalf("Failed to create old benchmark: %v", err)
+		}
+
+		// Run migration
+		if err := migrateFromOldSchema(db, tmpDir); err != nil {
+			t.Fatalf("Migration failed: %v", err)
+		}
+
+		// Verify user timestamps are preserved
+		var newUser User
+		if err := db.First(&newUser, oldUser.ID).Error; err != nil {
+			t.Fatalf("Failed to query migrated user: %v", err)
+		}
+
+		if !newUser.CreatedAt.Truncate(time.Second).Equal(pastTime.Truncate(time.Second)) {
+			t.Errorf("User CreatedAt not preserved. Expected %v, got %v", pastTime, newUser.CreatedAt)
+		}
+		if !newUser.UpdatedAt.Truncate(time.Second).Equal(pastTime.Truncate(time.Second)) {
+			t.Errorf("User UpdatedAt not preserved. Expected %v, got %v", pastTime, newUser.UpdatedAt)
+		}
+
+		// Verify benchmark timestamps are preserved
+		var newBenchmark Benchmark
+		if err := db.First(&newBenchmark, oldBenchmark.ID).Error; err != nil {
+			t.Fatalf("Failed to query migrated benchmark: %v", err)
+		}
+
+		if !newBenchmark.CreatedAt.Truncate(time.Second).Equal(benchmarkTime.Truncate(time.Second)) {
+			t.Errorf("Benchmark CreatedAt not preserved. Expected %v, got %v", benchmarkTime, newBenchmark.CreatedAt)
+		}
+		if !newBenchmark.UpdatedAt.Truncate(time.Second).Equal(benchmarkTime.Truncate(time.Second)) {
+			t.Errorf("Benchmark UpdatedAt not preserved. Expected %v, got %v", benchmarkTime, newBenchmark.UpdatedAt)
 		}
 	})
 }
