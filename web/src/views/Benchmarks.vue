@@ -436,7 +436,10 @@ function updateURL() {
   // Add search parameter if present
   if (searchQuery.value && !filterUserId.value) {
     query.search = searchQuery.value
-    // Add search_fields parameter
+  }
+  
+  // Always add search_fields parameter to persist checkbox state
+  if (!filterUserId.value) {
     const enabledFields = getEnabledSearchFields()
     if (enabledFields.length > 0) {
       query.search_fields = enabledFields.join(',')
@@ -751,9 +754,10 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const currentSearchFields = getEnabledSearchFields().join(',')
   if (newSearch !== searchQuery.value || newSearchFields !== currentSearchFields) {
     searchQuery.value = newSearch
-    // Update search fields if changed
-    if (newSearchFields !== currentSearchFields) {
-      const fields = newSearchFields ? newSearchFields.split(',') : []
+    // Update search fields if they're specified in URL
+    // If not specified, preserve current checkbox state (don't reset)
+    if (newSearchFields && newSearchFields !== currentSearchFields) {
+      const fields = newSearchFields.split(',')
       searchFields.value = {
         title: fields.includes('title'),
         description: fields.includes('description'),
