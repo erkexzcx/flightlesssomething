@@ -15,28 +15,9 @@
     <!-- Benchmark details -->
     <div v-else-if="benchmark">
       <!-- Header with actions -->
-      <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
-          <h2>{{ benchmark.Title }}</h2>
-          <p class="text-muted">
-            By 
-            <router-link 
-              v-if="benchmark.User"
-              :to="{ path: '/benchmarks', query: { user_id: benchmark.User.ID } }"
-              class="username-link"
-            >
-              <strong>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></strong>
-            </router-link>
-            <strong v-else>Unknown</strong> •
-            Created {{ formatRelativeDate(benchmark.CreatedAt) }}
-            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt">
-              • Updated {{ formatRelativeDate(benchmark.UpdatedAt) }}
-            </span>
-          </p>
-        </div>
-        
-        <!-- Action buttons -->
-        <div class="btn-group" role="group">
+      <div class="benchmark-header mb-3">
+        <!-- Action buttons (shown first on mobile) -->
+        <div class="btn-group benchmark-actions" role="group">
           <!-- Owner-only buttons -->
           <template v-if="isOwner">
             <button
@@ -70,6 +51,26 @@
               <i class="fa-solid fa-trash"></i> {{ deleting ? 'Deleting...' : 'Delete' }}
             </button>
           </template>
+        </div>
+        
+        <!-- Title and metadata -->
+        <div class="benchmark-title-section">
+          <h2>{{ benchmark.Title }}</h2>
+          <p class="text-muted">
+            By 
+            <router-link 
+              v-if="benchmark.User"
+              :to="{ path: '/benchmarks', query: { user_id: benchmark.User.ID } }"
+              class="username-link"
+            >
+              <strong>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></strong>
+            </router-link>
+            <strong v-else>Unknown</strong> •
+            Created {{ formatRelativeDate(benchmark.CreatedAt) }}
+            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt">
+              • Updated {{ formatRelativeDate(benchmark.UpdatedAt) }}
+            </span>
+          </p>
         </div>
       </div>
 
@@ -644,6 +645,42 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Benchmark header layout */
+.benchmark-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: nowrap;
+}
+
+.benchmark-title-section {
+  flex: 1;
+  min-width: 0; /* Allow text to truncate if needed */
+}
+
+.benchmark-actions {
+  flex-shrink: 0; /* Prevent buttons from shrinking */
+  white-space: nowrap; /* Keep buttons on one line */
+}
+
+/* Mobile responsive: stack buttons above title */
+@media (max-width: 768px) {
+  .benchmark-header {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  
+  .benchmark-actions {
+    margin-bottom: 1rem;
+    width: 100%;
+  }
+  
+  .benchmark-actions .btn {
+    flex: 1; /* Make buttons equal width on mobile */
+  }
+}
+
 .card {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
