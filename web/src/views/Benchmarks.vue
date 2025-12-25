@@ -350,10 +350,20 @@ const searchFields = ref({
   runName: false,
   specifications: false
 })
+let searchDebounceTimer = null
 
 // Computed property to check if we're on "My Benchmarks" page
 const isMyBenchmarksPage = computed(() => {
   return route.path === '/benchmarks/my'
+})
+
+// Computed property to check if any search field is selected
+const hasAnySearchFieldSelected = computed(() => {
+  return searchFields.value.title || 
+         searchFields.value.description || 
+         searchFields.value.user || 
+         searchFields.value.runName || 
+         searchFields.value.specifications
 })
 
 // Initialize state from URL query parameters
@@ -598,19 +608,28 @@ function goToCustomPage() {
 }
 
 function handleSearch() {
-  currentPage.value = 1
-  filterUserId.value = null
-  filterUsername.value = ''
-  // Update URL - this will remove user_id and add search if present
-  updateURL()
-  loadBenchmarks()
+  // This is now only called on form submit (Enter key), but we use auto-search via watch
+  // Keep it for backwards compatibility but make it do the same as auto-search
+  if (searchQuery.value.length >= 3 || searchQuery.value.length === 0) {
+    currentPage.value = 1
+    filterUserId.value = null
+    filterUsername.value = ''
+    updateURL()
+    loadBenchmarks()
+  }
 }
 
 function handleSearchFieldsChange() {
-  // Update URL to persist checkbox selection even without active search
+  // Update URL to persist checkbox selection
   updateURL()
-  // If search query is present, reload benchmarks with new field selection
-  if (searchQuery.value) {
+  
+  // If no checkboxes selected, clear search and show all benchmarks
+  if (!hasAnySearchFieldSelected.value) {
+    searchQuery.value = ''
+    currentPage.value = 1
+    loadBenchmarks()
+  } else if (searchQuery.value && searchQuery.value.length >= 3) {
+    // If search query is present and long enough, reload with new field selection
     currentPage.value = 1
     loadBenchmarks()
   }
@@ -665,6 +684,35 @@ function handleScroll() {
 function handleResize() {
   windowWidth.value = window.innerWidth
 }
+
+// Watch for search query changes and trigger automatic search with debounce
+watch(searchQuery, (newValue) => {
+  // Clear any existing timer
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  
+  // If search is empty or disabled, load all benchmarks immediately
+  if (!newValue || !hasAnySearchFieldSelected.value) {
+    if (isInitialized.value && !filterUserId.value) {
+      currentPage.value = 1
+      updateURL()
+      loadBenchmarks()
+    }
+    return
+  }
+  
+  // Only search if 3 or more characters
+  if (newValue.length >= 3) {
+    searchDebounceTimer = setTimeout(() => {
+      currentPage.value = 1
+      filterUserId.value = null
+      filterUsername.value = ''
+      updateURL()
+      loadBenchmarks()
+    }, 300) // 300ms debounce
+  }
+})
 
 onMounted(() => {
   // Initialize state from URL parameters
@@ -776,13 +824,9 @@ watch(() => route.path, (newPath, oldPath) => {
   border-color: #86b7fe;
 }
 
-.search-btn-icon {
-  background-color: transparent;
-  transition: background-color 0.3s ease;
-}
-
-.search-btn-icon:hover {
-  background-color: var(--bs-tertiary-bg);
+.search-input:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
 }
 
 /* Search field checkboxes */
