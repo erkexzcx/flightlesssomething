@@ -433,8 +433,8 @@ function updateURL() {
     query.page = currentPage.value
   }
   
-  // Add search parameter if present
-  if (searchQuery.value && !filterUserId.value) {
+  // Add search parameter if present and at least one search field is selected
+  if (searchQuery.value && !filterUserId.value && hasAnySearchFieldSelected.value) {
     query.search = searchQuery.value
   }
   
@@ -556,10 +556,12 @@ async function loadBenchmarks() {
       }
     } else {
       const enabledFields = getEnabledSearchFields()
+      // Only use search query if at least one field is selected
+      const effectiveSearch = enabledFields.length > 0 ? searchQuery.value : ''
       response = await api.benchmarks.list(
         currentPage.value,
         perPage.value,
-        searchQuery.value,
+        effectiveSearch,
         sortByParam,
         sortOrderParam,
         enabledFields
@@ -623,19 +625,12 @@ function handleSearch() {
 }
 
 function handleSearchFieldsChange() {
-  // If no checkboxes selected, handle search state appropriately
+  // If no checkboxes selected, reload to show all benchmarks (ignore search text)
   if (!hasAnySearchFieldSelected.value) {
-    const hadSearch = searchQuery.value !== ''
-    if (hadSearch) {
-      // Clear search query and reload to show all benchmarks
-      searchQuery.value = ''
-      currentPage.value = 1
-    }
-    // Update URL to persist checkbox selection and clear search parameter
+    // Keep search text but reload all benchmarks as if there were no filters
+    currentPage.value = 1
     updateURL()
-    if (hadSearch) {
-      loadBenchmarks()
-    }
+    loadBenchmarks()
     return
   }
   
@@ -764,7 +759,11 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const newSearchFields = newQuery.search_fields || ''
   const currentSearchFields = getEnabledSearchFields().join(',')
   if (newSearch !== searchQuery.value || newSearchFields !== currentSearchFields) {
-    searchQuery.value = newSearch
+    // Only update searchQuery if search fields are enabled or if there's a search in URL
+    // This preserves search text when all filters are disabled
+    if (newSearch || hasAnySearchFieldSelected.value) {
+      searchQuery.value = newSearch
+    }
     // Update search fields if they're specified in URL
     // If not specified, preserve current checkbox state (don't reset)
     if (newSearchFields && newSearchFields !== currentSearchFields) {
