@@ -26,7 +26,7 @@
 # Clean build (removes all artifacts)
 make clean
 
-# Build everything (web UI + server + migrate tool)
+# Build everything (web UI + server)
 make build
 
 # Build only web UI (required before server build)
@@ -36,14 +36,10 @@ make build-web
 # Build only server (requires web UI built first)
 make build-server
 # Creates internal/app/webfs_embed.go and embeds web/dist into the binary
-
-# Build only migration tool
-make build-migrate
 ```
 
 **Build artifacts:**
 - `server` - Main server binary (~36MB)
-- `migrate` - Migration tool binary
 - `web/dist/` - Compiled web UI assets (automatically embedded into server)
 - `internal/app/web/` and `internal/app/webfs_embed.go` - Temporary files (auto-cleaned after build)
 
@@ -81,13 +77,13 @@ cd web && npm test
 ```bash
 # Backend linting (must pass in CI)
 golangci-lint run --timeout=5m
-# Config: .golangci.yml (33 linters enabled, see file for details)
+# Config: .golangci.yml (19 linters enabled, see file for details)
 # Current status: 0 issues
 
 # Frontend linting (warnings acceptable, errors must be fixed)
 cd web && npm run lint
 # Auto-fix: npm run lint:fix
-# Current status: 590 warnings (style issues), 0 errors
+# Current status: 678 warnings (style issues), 0 errors
 ```
 
 ## Project Structure
@@ -96,21 +92,19 @@ cd web && npm run lint
 ```
 .env.example          # Environment variables template
 .gitignore           # Ignores: data/, *.db, web/node_modules, server, migrate
-.golangci.yml        # Go linting configuration (33 linters)
-Dockerfile           # Multi-stage build (golang:1.25-alpine + alpine)
+.golangci.yml        # Go linting configuration (19 linters)
+Dockerfile           # Multi-stage build (golang:1.25-trixie base)
 Makefile             # Build automation (build, clean, test targets)
 README.md            # Quick start guide
 backend_test.sh      # Integration test script (executable)
 docker-compose.yml   # Local development with Docker
 go.mod, go.sum       # Go dependencies (Go 1.25 required)
-test_migration.sh    # Database migration test script
 ```
 
 ### Directory Structure
 ```
 cmd/
-├── server/main.go   # Server entry point (~435 lines)
-└── migrate/main.go  # Migration tool entry point (~10KB)
+└── server/main.go   # Server entry point (~28 lines)
 
 internal/app/        # Core application code (~5,800 lines total)
 ├── config.go        # CLI flags and environment variable parsing
@@ -222,7 +216,7 @@ All flags can be set via environment variables with `FS_` prefix (e.g., `FS_BIND
    - Fix: Tests use unique database files (`setupTestDB` in test_helpers.go)
    - Each test should call `setupTestDB(t)` and `defer cleanupTestDB(t, db)`
 
-3. **Frontend linting shows 590 warnings**
+3. **Frontend linting shows 678 warnings**
    - Expected: These are style warnings (attribute ordering, formatting)
    - Action: Fix only errors (currently 0), warnings are acceptable
    - Use `npm run lint:fix` to auto-fix some issues
