@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -204,11 +206,55 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Check if data size exceeds the limit for browser loading
-		if benchmark.DataSizeBytes > maxDataSizeBytes {
-			sizeMB := float64(benchmark.DataSizeBytes) / (1024 * 1024)
+		dataSizeBytes := benchmark.DataSizeBytes
+		
+		// If size is not yet tracked (0), calculate it now for backward compatibility
+		if dataSizeBytes == 0 {
+			// Load the data to calculate its size
+			var data []*BenchmarkData
+			data, err = RetrieveBenchmarkData(uint(benchmarkID))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
+				return
+			}
+			
+			// Calculate size by encoding to gob
+			var buffer bytes.Buffer
+			gobEncoder := gob.NewEncoder(&buffer)
+			err = gobEncoder.Encode(data)
+			if err == nil {
+				dataSizeBytes = int64(buffer.Len())
+				
+				// Update the benchmark with calculated size for future requests
+				benchmark.DataSizeBytes = dataSizeBytes
+				err = db.DB.Save(&benchmark).Error
+				if err != nil {
+					// Log but don't fail - this is just an optimization
+					fmt.Printf("Warning: failed to save calculated data size for benchmark %d: %v\n", benchmarkID, err)
+				}
+			}
+			
+			// Check size limit
+			if dataSizeBytes > maxDataSizeBytes {
+				sizeMB := float64(dataSizeBytes) / (1024 * 1024)
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+					"error": fmt.Sprintf("Benchmark data is too large to load in browser (%.1f MB). Please use the download button to get the data as a ZIP file instead.", sizeMB),
+					"data_size_bytes": dataSizeBytes,
+				})
+				return
+			}
+			
+			// Data is already loaded, return it
+			c.JSON(http.StatusOK, data)
+			return
+		}
+		
+		// Size is tracked, check limit before loading
+		if dataSizeBytes > maxDataSizeBytes {
+			sizeMB := float64(dataSizeBytes) / (1024 * 1024)
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
 				"error": fmt.Sprintf("Benchmark data is too large to load in browser (%.1f MB). Please use the download button to get the data as a ZIP file instead.", sizeMB),
-				"data_size_bytes": benchmark.DataSizeBytes,
+				"data_size_bytes": dataSizeBytes,
 			})
 			return
 		}

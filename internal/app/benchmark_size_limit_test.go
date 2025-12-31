@@ -214,4 +214,70 @@ func TestHandleGetBenchmarkData_SizeLimit(t *testing.T) {
 			t.Errorf("Expected status 413 for benchmark 1 byte over limit, got %d. Body: %s", w.Code, w.Body.String())
 		}
 	})
+
+	// Test backward compatibility: benchmark with DataSizeBytes = 0 (legacy)
+	t.Run("legacy_benchmark_with_zero_size", func(t *testing.T) {
+		legacyBenchmark := Benchmark{
+			UserID:        user.ID,
+			Title:         "Legacy Benchmark",
+			Description:   "Legacy benchmark with DataSizeBytes = 0",
+			DataSizeBytes: 0, // Not yet calculated
+		}
+		if err := db.DB.Create(&legacyBenchmark).Error; err != nil {
+			t.Fatalf("Failed to create legacy benchmark: %v", err)
+		}
+
+		// Store small test data
+		testData := []*BenchmarkData{
+			{
+				Label:   "Legacy Run",
+				DataFPS: []float64{60.0, 61.0, 62.0},
+			},
+		}
+		if _, err := StoreBenchmarkData(testData, legacyBenchmark.ID); err != nil {
+			t.Fatalf("Failed to store legacy benchmark data: %v", err)
+		}
+
+		// Manually set DataSizeBytes back to 0 to simulate legacy data
+		legacyBenchmark.DataSizeBytes = 0
+		if err := db.DB.Save(&legacyBenchmark).Error; err != nil {
+			t.Fatalf("Failed to reset DataSizeBytes: %v", err)
+		}
+
+		router := setupTestRouter()
+		router.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+
+		req, err := http.NewRequest("GET", "/api/benchmarks/"+fmt.Sprint(legacyBenchmark.ID)+"/data", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Should still work - size is calculated on-the-fly
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for legacy benchmark, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		// Verify data was returned
+		var data []*BenchmarkData
+		if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		if len(data) != 1 {
+			t.Errorf("Expected 1 run, got %d", len(data))
+		}
+
+		// Verify that DataSizeBytes was updated in the database
+		var updatedBenchmark Benchmark
+		if err := db.DB.First(&updatedBenchmark, legacyBenchmark.ID).Error; err != nil {
+			t.Fatalf("Failed to fetch updated benchmark: %v", err)
+		}
+
+		if updatedBenchmark.DataSizeBytes == 0 {
+			t.Error("Expected DataSizeBytes to be calculated and saved, but it's still 0")
+		}
+	})
 }
