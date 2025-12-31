@@ -584,10 +584,10 @@ function countOccurrences(data) {
 function renderFPSComparisonChart() {
   if (!fpsAvgChart.value || !props.benchmarkData || props.benchmarkData.length === 0) return
   
-  const fpsDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] }))
-  const fpsAverages = fpsDataArrays.map(d => calculateAverageFPS(d.data))
+  const stats = fpsStats.value
+  if (!stats || stats.length === 0) return
   
-  if (fpsAverages.length === 0) return
+  const fpsAverages = stats.map(s => s.avg)
   
   // Determine baseline FPS
   let baselineFPS
@@ -601,8 +601,8 @@ function renderFPSComparisonChart() {
   // Calculate percentage differences from baseline (0% = baseline)
   const percentageFPSData = fpsAverages.map(fps => ((fps - baselineFPS) / baselineFPS) * 100)
 
-  const sortedData = fpsDataArrays.map((d, index) => ({
-    label: d.label,
+  const sortedData = stats.map((s, index) => ({
+    label: s.label,
     percentage: percentageFPSData[index]
   })).sort((a, b) => a.percentage - b.percentage)
 
@@ -667,10 +667,10 @@ function renderFPSComparisonChart() {
 function renderFrametimeComparisonChart() {
   if (!frametimeAvgChart.value || !props.benchmarkData || props.benchmarkData.length === 0) return
   
-  const frameTimeDataArrays = props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] }))
-  const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
+  const stats = frametimeStats.value
+  if (!stats || stats.length === 0) return
   
-  if (frametimeAverages.length === 0) return
+  const frametimeAverages = stats.map(s => s.avg)
   
   // Determine baseline frametime
   let baselineFrametime
@@ -684,8 +684,8 @@ function renderFrametimeComparisonChart() {
   // Calculate percentage differences from baseline (0% = baseline)
   const percentageData = frametimeAverages.map(ft => ((ft - baselineFrametime) / baselineFrametime) * 100)
 
-  const sortedData = frameTimeDataArrays.map((d, index) => ({
-    label: d.label,
+  const sortedData = stats.map((s, index) => ({
+    label: s.label,
     percentage: percentageData[index]
   })).sort((a, b) => a.percentage - b.percentage)
 
@@ -812,7 +812,26 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
   Highcharts.chart(element, options)
 }
 
-function prepareDataArrays() {
+// Computed properties to cache data arrays - only recalculated when benchmarkData changes
+const dataArrays = computed(() => {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) {
+    return {
+      fpsDataArrays: [],
+      frameTimeDataArrays: [],
+      cpuLoadDataArrays: [],
+      gpuLoadDataArrays: [],
+      cpuTempDataArrays: [],
+      cpuPowerDataArrays: [],
+      gpuTempDataArrays: [],
+      gpuCoreClockDataArrays: [],
+      gpuMemClockDataArrays: [],
+      gpuVRAMUsedDataArrays: [],
+      gpuPowerDataArrays: [],
+      ramUsedDataArrays: [],
+      swapUsedDataArrays: []
+    }
+  }
+  
   return {
     fpsDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
     frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
@@ -828,24 +847,79 @@ function prepareDataArrays() {
     ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
     swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
   }
-}
+})
+
+// Computed properties to cache statistical calculations for FPS data
+// These are expensive operations that should only run once per data change
+const fpsStats = computed(() => {
+  const arrays = dataArrays.value.fpsDataArrays
+  if (!arrays || arrays.length === 0) return null
+  
+  return arrays.map(d => ({
+    label: d.label,
+    data: d.data,
+    min: calculatePercentileFPS(d.data, 1),
+    avg: calculateAverageFPS(d.data),
+    max: calculatePercentileFPS(d.data, 97),
+    stddev: calculateStandardDeviation(d.data),
+    variance: calculateVariance(d.data),
+    filteredOutliers: filterOutliers(d.data),
+    densityData: countOccurrences(filterOutliers(d.data))
+  }))
+})
+
+// Computed properties to cache statistical calculations for frametime data
+const frametimeStats = computed(() => {
+  const arrays = dataArrays.value.frameTimeDataArrays
+  if (!arrays || arrays.length === 0) return null
+  
+  return arrays.map(d => ({
+    label: d.label,
+    data: d.data,
+    min: calculatePercentile(d.data, 1),
+    avg: calculateAverage(d.data),
+    max: calculatePercentile(d.data, 97),
+    stddev: calculateStandardDeviation(d.data),
+    variance: calculateVariance(d.data),
+    filteredOutliers: filterOutliers(d.data),
+    densityData: countOccurrences(filterOutliers(d.data))
+  }))
+})
+
+// Computed properties to cache average calculations for summary charts
+const summaryStats = computed(() => {
+  const arrays = dataArrays.value
+  if (!arrays) return null
+  
+  return {
+    fpsAverages: arrays.fpsDataArrays.map(d => calculateAverageFPS(d.data)),
+    frametimeAverages: arrays.frameTimeDataArrays.map(d => calculateAverage(d.data)),
+    cpuLoadAverages: arrays.cpuLoadDataArrays.map(d => calculateAverage(d.data)),
+    gpuLoadAverages: arrays.gpuLoadDataArrays.map(d => calculateAverage(d.data)),
+    gpuCoreClockAverages: arrays.gpuCoreClockDataArrays.map(d => calculateAverage(d.data)),
+    gpuMemClockAverages: arrays.gpuMemClockDataArrays.map(d => calculateAverage(d.data)),
+    cpuPowerAverages: arrays.cpuPowerDataArrays.map(d => calculateAverage(d.data)),
+    gpuPowerAverages: arrays.gpuPowerDataArrays.map(d => calculateAverage(d.data))
+  }
+})
 
 function renderFPSTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
   
-  const { fpsDataArrays } = prepareDataArrays()
+  const { fpsDataArrays } = dataArrays.value
+  const stats = fpsStats.value
   
   // Create FPS charts
   createChart(fpsChart2.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
 
   // FPS Min/Max/Avg chart
-  if (fpsMinMaxAvgChart.value) {
+  if (fpsMinMaxAvgChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const categories = fpsDataArrays.map(d => d.label)
-    const minFPSData = fpsDataArrays.map(d => calculatePercentileFPS(d.data, 1))
-    const avgFPSData = fpsDataArrays.map(d => calculateAverageFPS(d.data))
-    const maxFPSData = fpsDataArrays.map(d => calculatePercentileFPS(d.data, 97))
+    const categories = stats.map(s => s.label)
+    const minFPSData = stats.map(s => s.min)
+    const avgFPSData = stats.map(s => s.avg)
+    const maxFPSData = stats.map(s => s.max)
 
     Highcharts.chart(fpsMinMaxAvgChart.value, {
       ...chartOpts,
@@ -866,12 +940,12 @@ function renderFPSTab() {
   }
 
   // FPS Density chart
-  if (fpsDensityChart.value) {
+  if (fpsDensityChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const densityData = fpsDataArrays.map(d => ({
-      name: d.label,
-      data: countOccurrences(filterOutliers(d.data))
+    const densityData = stats.map(s => ({
+      name: s.label,
+      data: s.densityData
     }))
 
     Highcharts.chart(fpsDensityChart.value, {
@@ -890,12 +964,12 @@ function renderFPSTab() {
   renderFPSComparisonChart()
 
   // FPS Stability chart
-  if (fpsStddevVarianceChart.value) {
+  if (fpsStddevVarianceChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const categories = fpsDataArrays.map(d => d.label)
-    const standardDeviations = fpsDataArrays.map(d => calculateStandardDeviation(d.data))
-    const variances = fpsDataArrays.map(d => calculateVariance(d.data))
+    const categories = stats.map(s => s.label)
+    const standardDeviations = stats.map(s => s.stddev)
+    const variances = stats.map(s => s.variance)
 
     Highcharts.chart(fpsStddevVarianceChart.value, {
       ...chartOpts,
@@ -918,18 +992,19 @@ function renderFPSTab() {
 function renderFrametimeTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
   
-  const { frameTimeDataArrays } = prepareDataArrays()
+  const { frameTimeDataArrays } = dataArrays.value
+  const stats = frametimeStats.value
   
   createChart(frameTimeChart2.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
 
   // Frametime Min/Max/Avg chart
-  if (frametimeMinMaxAvgChart.value) {
+  if (frametimeMinMaxAvgChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const categories = frameTimeDataArrays.map(d => d.label)
-    const minData = frameTimeDataArrays.map(d => calculatePercentile(d.data, 1))
-    const avgData = frameTimeDataArrays.map(d => calculateAverage(d.data))
-    const maxData = frameTimeDataArrays.map(d => calculatePercentile(d.data, 97))
+    const categories = stats.map(s => s.label)
+    const minData = stats.map(s => s.min)
+    const avgData = stats.map(s => s.avg)
+    const maxData = stats.map(s => s.max)
 
     Highcharts.chart(frametimeMinMaxAvgChart.value, {
       ...chartOpts,
@@ -950,12 +1025,12 @@ function renderFrametimeTab() {
   }
 
   // Frametime Density chart
-  if (frametimeDensityChart.value) {
+  if (frametimeDensityChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const densityData = frameTimeDataArrays.map(d => ({
-      name: d.label,
-      data: countOccurrences(filterOutliers(d.data))
+    const densityData = stats.map(s => ({
+      name: s.label,
+      data: s.densityData
     }))
 
     Highcharts.chart(frametimeDensityChart.value, {
@@ -974,12 +1049,12 @@ function renderFrametimeTab() {
   renderFrametimeComparisonChart()
 
   // Frametime Stability chart
-  if (frametimeStddevVarianceChart.value) {
+  if (frametimeStddevVarianceChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
-    const categories = frameTimeDataArrays.map(d => d.label)
-    const standardDeviations = frameTimeDataArrays.map(d => calculateStandardDeviation(d.data))
-    const variances = frameTimeDataArrays.map(d => calculateVariance(d.data))
+    const categories = stats.map(s => s.label)
+    const standardDeviations = stats.map(s => s.stddev)
+    const variances = stats.map(s => s.variance)
 
     Highcharts.chart(frametimeStddevVarianceChart.value, {
       ...chartOpts,
@@ -1002,37 +1077,21 @@ function renderFrametimeTab() {
 function renderSummaryTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
   
-  const {
-    fpsDataArrays,
-    frameTimeDataArrays,
-    cpuLoadDataArrays,
-    gpuLoadDataArrays,
-    gpuCoreClockDataArrays,
-    gpuMemClockDataArrays,
-    cpuPowerDataArrays,
-    gpuPowerDataArrays
-  } = prepareDataArrays()
+  const arrays = dataArrays.value
+  const stats = summaryStats.value
+  
+  if (!stats) return
 
-  // Calculate averages for summary charts
-  const fpsAverages = fpsDataArrays.map(d => calculateAverageFPS(d.data))
-  const frametimeAverages = frameTimeDataArrays.map(d => calculateAverage(d.data))
-  const cpuLoadAverages = cpuLoadDataArrays.map(d => calculateAverage(d.data))
-  const gpuLoadAverages = gpuLoadDataArrays.map(d => calculateAverage(d.data))
-  const gpuCoreClockAverages = gpuCoreClockDataArrays.map(d => calculateAverage(d.data))
-  const gpuMemClockAverages = gpuMemClockDataArrays.map(d => calculateAverage(d.data))
-  const cpuPowerAverages = cpuPowerDataArrays.map(d => calculateAverage(d.data))
-  const gpuPowerAverages = gpuPowerDataArrays.map(d => calculateAverage(d.data))
-
-  // Create summary bar charts
+  // Create summary bar charts using pre-calculated averages
   const chartColors = Highcharts.getOptions().colors
-  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', fpsDataArrays.map(d => d.label), fpsAverages, chartColors)
-  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', frameTimeDataArrays.map(d => d.label), frametimeAverages, chartColors)
-  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', cpuLoadDataArrays.map(d => d.label), cpuLoadAverages, chartColors, 100)
-  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', gpuLoadDataArrays.map(d => d.label), gpuLoadAverages, chartColors, 100)
-  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', gpuCoreClockDataArrays.map(d => d.label), gpuCoreClockAverages, chartColors)
-  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', gpuMemClockDataArrays.map(d => d.label), gpuMemClockAverages, chartColors)
-  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', cpuPowerDataArrays.map(d => d.label), cpuPowerAverages, chartColors)
-  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', gpuPowerDataArrays.map(d => d.label), gpuPowerAverages, chartColors)
+  createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', arrays.fpsDataArrays.map(d => d.label), stats.fpsAverages, chartColors)
+  createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', arrays.frameTimeDataArrays.map(d => d.label), stats.frametimeAverages, chartColors)
+  createBarChart(cpuLoadSummaryChart.value, 'Average CPU Load', '%', arrays.cpuLoadDataArrays.map(d => d.label), stats.cpuLoadAverages, chartColors, 100)
+  createBarChart(gpuLoadSummaryChart.value, 'Average GPU Load', '%', arrays.gpuLoadDataArrays.map(d => d.label), stats.gpuLoadAverages, chartColors, 100)
+  createBarChart(gpuCoreClockSummaryChart.value, 'Average GPU Core Clock', 'MHz', arrays.gpuCoreClockDataArrays.map(d => d.label), stats.gpuCoreClockAverages, chartColors)
+  createBarChart(gpuMemClockSummaryChart.value, 'Average GPU Memory Clock', 'MHz', arrays.gpuMemClockDataArrays.map(d => d.label), stats.gpuMemClockAverages, chartColors)
+  createBarChart(cpuPowerSummaryChart.value, 'Average CPU Power', 'W', arrays.cpuPowerDataArrays.map(d => d.label), stats.cpuPowerAverages, chartColors)
+  createBarChart(gpuPowerSummaryChart.value, 'Average GPU Power', 'W', arrays.gpuPowerDataArrays.map(d => d.label), stats.gpuPowerAverages, chartColors)
 }
 
 function renderMoreMetricsTab() {
@@ -1052,7 +1111,7 @@ function renderMoreMetricsTab() {
     gpuPowerDataArrays,
     ramUsedDataArrays,
     swapUsedDataArrays
-  } = prepareDataArrays()
+  } = dataArrays.value
 
   // Create line charts
   createChart(fpsChart.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
