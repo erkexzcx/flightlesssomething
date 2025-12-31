@@ -298,7 +298,8 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			Description: req.Description,
 		}
 
-		if err := db.DB.Create(&benchmark).Error; err != nil {
+		err = db.DB.Create(&benchmark).Error
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create benchmark"})
 			return
 		}
