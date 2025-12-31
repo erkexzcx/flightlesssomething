@@ -28,10 +28,11 @@ const (
 	FileTypeAfterburner
 
 	// Data processing constants
-	precisionFactor = 100000
-	bytesToKB       = 1024
-	maxDataLines    = 100000
-	maxStringLength = 100
+	precisionFactor     = 100000
+	bytesToKB           = 1024
+	maxDataLines        = 100000
+	maxStringLength     = 100
+	maxDataSizeBytes    = 80 * 1024 * 1024 // 80MB uncompressed size limit for browser loading
 )
 
 var benchmarksDir string
@@ -297,13 +298,13 @@ func truncateString(s string) string {
 	return s
 }
 
-// StoreBenchmarkData stores benchmark data to disk
-func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error {
+// StoreBenchmarkData stores benchmark data to disk and returns the uncompressed size in bytes
+func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) (int64, error) {
 	// Store the full data
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
 	file, err := os.Create(filePath)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
@@ -316,25 +317,32 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	gobEncoder := gob.NewEncoder(&buffer)
 	err = gobEncoder.Encode(benchmarkData)
 	if err != nil {
-		return err
+		return 0, err
 	}
+
+	// Get uncompressed size before compression
+	uncompressedSize := int64(buffer.Len())
 
 	zstdEncoder, err := zstd.NewWriter(file, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = zstdEncoder.Write(buffer.Bytes())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := zstdEncoder.Close(); err != nil {
-		return fmt.Errorf("failed to close zstd encoder: %w", err)
+		return 0, fmt.Errorf("failed to close zstd encoder: %w", err)
 	}
 
 	// Store metadata separately for fast access
-	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
+	if err := storeBenchmarkMetadata(benchmarkData, benchmarkID); err != nil {
+		return 0, err
+	}
+
+	return uncompressedSize, nil
 }
 
 // storeBenchmarkMetadata stores lightweight metadata (run count and labels) separately

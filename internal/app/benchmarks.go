@@ -203,6 +203,16 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Check if data size exceeds the limit for browser loading
+		if benchmark.DataSizeBytes > maxDataSizeBytes {
+			sizeMB := float64(benchmark.DataSizeBytes) / (1024 * 1024)
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"error": fmt.Sprintf("Benchmark data is too large to load in browser (%.1f MB). Please use the download button to get the data as a ZIP file instead.", sizeMB),
+				"data_size_bytes": benchmark.DataSizeBytes,
+			})
+			return
+		}
+
 		data, err := RetrieveBenchmarkData(uint(benchmarkID))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
@@ -294,7 +304,8 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Store benchmark data
-		if err := StoreBenchmarkData(benchmarkData, benchmark.ID); err != nil {
+		dataSizeBytes, err := StoreBenchmarkData(benchmarkData, benchmark.ID)
+		if err != nil {
 			db.DB.Delete(&benchmark)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
@@ -304,6 +315,7 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		benchmark.DataSizeBytes = dataSizeBytes
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			// Log error but don't fail - this is just for search optimization
 			fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, err)
@@ -406,7 +418,8 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			}
 
 			// Store updated data
-			if err := StoreBenchmarkData(benchmarkData, uint(benchmarkID)); err != nil {
+			dataSizeBytes, err := StoreBenchmarkData(benchmarkData, uint(benchmarkID))
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update labels"})
 				return
 			}
@@ -415,6 +428,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 			benchmark.RunNames = runNames
 			benchmark.Specifications = specifications
+			benchmark.DataSizeBytes = dataSizeBytes
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -616,7 +630,8 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		benchmarkData = append(benchmarkData[:idx], benchmarkData[idx+1:]...)
 
 		// Store updated data
-		if err := StoreBenchmarkData(benchmarkData, uint(benchmarkID)); err != nil {
+		dataSizeBytes, err := StoreBenchmarkData(benchmarkData, uint(benchmarkID))
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update benchmark data"})
 			return
 		}
@@ -625,6 +640,7 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		benchmark.DataSizeBytes = dataSizeBytes
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -723,7 +739,8 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		existingData = append(existingData, newBenchmarkData...)
 
 		// Store combined data
-		if err := StoreBenchmarkData(existingData, uint(benchmarkID)); err != nil {
+		dataSizeBytes, err := StoreBenchmarkData(existingData, uint(benchmarkID))
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
 		}
@@ -732,6 +749,7 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(existingData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		benchmark.DataSizeBytes = dataSizeBytes
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
