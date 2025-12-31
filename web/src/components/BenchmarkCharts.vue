@@ -855,17 +855,20 @@ const fpsStats = computed(() => {
   const arrays = dataArrays.value.fpsDataArrays
   if (!arrays || arrays.length === 0) return null
   
-  return arrays.map(d => ({
-    label: d.label,
-    data: d.data,
-    min: calculatePercentileFPS(d.data, 1),
-    avg: calculateAverageFPS(d.data),
-    max: calculatePercentileFPS(d.data, 97),
-    stddev: calculateStandardDeviation(d.data),
-    variance: calculateVariance(d.data),
-    filteredOutliers: filterOutliers(d.data),
-    densityData: countOccurrences(filterOutliers(d.data))
-  }))
+  return arrays.map(d => {
+    const filtered = filterOutliers(d.data)
+    return {
+      label: d.label,
+      data: d.data,
+      min: calculatePercentileFPS(d.data, 1),
+      avg: calculateAverageFPS(d.data),
+      max: calculatePercentileFPS(d.data, 97),
+      stddev: calculateStandardDeviation(d.data),
+      variance: calculateVariance(d.data),
+      filteredOutliers: filtered,
+      densityData: countOccurrences(filtered)
+    }
+  })
 })
 
 // Computed properties to cache statistical calculations for frametime data
@@ -873,17 +876,20 @@ const frametimeStats = computed(() => {
   const arrays = dataArrays.value.frameTimeDataArrays
   if (!arrays || arrays.length === 0) return null
   
-  return arrays.map(d => ({
-    label: d.label,
-    data: d.data,
-    min: calculatePercentile(d.data, 1),
-    avg: calculateAverage(d.data),
-    max: calculatePercentile(d.data, 97),
-    stddev: calculateStandardDeviation(d.data),
-    variance: calculateVariance(d.data),
-    filteredOutliers: filterOutliers(d.data),
-    densityData: countOccurrences(filterOutliers(d.data))
-  }))
+  return arrays.map(d => {
+    const filtered = filterOutliers(d.data)
+    return {
+      label: d.label,
+      data: d.data,
+      min: calculatePercentile(d.data, 1),
+      avg: calculateAverage(d.data),
+      max: calculatePercentile(d.data, 97),
+      stddev: calculateStandardDeviation(d.data),
+      variance: calculateVariance(d.data),
+      filteredOutliers: filtered,
+      densityData: countOccurrences(filtered)
+    }
+  })
 })
 
 // Computed properties to cache average calculations for summary charts
