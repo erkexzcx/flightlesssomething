@@ -15,6 +15,12 @@ func TestHandleGetBenchmarkData_SizeLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
+	// Create a temporary directory for benchmark data
+	tmpDir := t.TempDir()
+	if err := InitBenchmarksDir(tmpDir); err != nil {
+		t.Fatalf("Failed to initialize benchmarks directory: %v", err)
+	}
+
 	// Create a test user
 	user := User{
 		Username:  "testuser",
