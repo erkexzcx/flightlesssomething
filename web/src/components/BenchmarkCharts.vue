@@ -750,9 +750,14 @@ async function calculateStatistics() {
   // Schedule calculations sequentially to avoid overwhelming the worker
   scheduleWork(() => {
     calculationProgress.value = 'Calculating FPS statistics...'
+    // Convert to plain objects to avoid cloning issues with Vue reactive objects
+    const plainArrays = arrays.fpsDataArrays.map(d => ({
+      label: d.label,
+      data: Array.from(d.data)
+    }))
     calculationWorker.postMessage({
       type: 'calculateFpsStats',
-      data: { fpsDataArrays: arrays.fpsDataArrays }
+      data: { fpsDataArrays: plainArrays }
     })
   })
   
@@ -761,9 +766,13 @@ async function calculateStatistics() {
   
   scheduleWork(() => {
     calculationProgress.value = 'Calculating Frametime statistics...'
+    const plainArrays = arrays.frameTimeDataArrays.map(d => ({
+      label: d.label,
+      data: Array.from(d.data)
+    }))
     calculationWorker.postMessage({
       type: 'calculateFrametimeStats',
-      data: { frametimeDataArrays: arrays.frameTimeDataArrays }
+      data: { frametimeDataArrays: plainArrays }
     })
   })
   
@@ -772,9 +781,20 @@ async function calculateStatistics() {
   
   scheduleWork(() => {
     calculationProgress.value = 'Calculating Summary statistics...'
+    // Convert all arrays to plain objects
+    const plainData = {
+      fpsDataArrays: arrays.fpsDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      frameTimeDataArrays: arrays.frameTimeDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      cpuLoadDataArrays: arrays.cpuLoadDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      gpuLoadDataArrays: arrays.gpuLoadDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      gpuCoreClockDataArrays: arrays.gpuCoreClockDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      gpuMemClockDataArrays: arrays.gpuMemClockDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      cpuPowerDataArrays: arrays.cpuPowerDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) })),
+      gpuPowerDataArrays: arrays.gpuPowerDataArrays.map(d => ({ label: d.label, data: Array.from(d.data) }))
+    }
     calculationWorker.postMessage({
       type: 'calculateSummaryStats',
-      data: arrays
+      data: plainData
     })
   })
 }
