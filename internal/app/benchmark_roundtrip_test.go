@@ -55,7 +55,7 @@ func TestCSVRoundTrip(t *testing.T) {
 
 	// Store the original data
 	benchmarkID := uint(456)
-	if _, storeErr := StoreBenchmarkData(originalData, benchmarkID); storeErr != nil {
+	if storeErr := StoreBenchmarkData(originalData, benchmarkID); storeErr != nil {
 		t.Fatalf("Failed to store benchmark data: %v", storeErr)
 	}
 

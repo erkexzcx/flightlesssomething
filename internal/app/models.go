@@ -44,7 +44,6 @@ type Benchmark struct {
 	// Searchable metadata extracted from benchmark data files
 	RunNames       string `gorm:"type:text"` // Comma-separated list of run labels for search
 	Specifications string `gorm:"type:text"` // Concatenated specifications (OS, CPU, GPU, etc.) for search
-	DataSizeBytes  int64  `gorm:"default:0"` // Uncompressed data size in bytes
 
 	CreatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of CreatedAt
 	UpdatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of UpdatedAt

@@ -251,7 +251,7 @@ func TestHandleDeleteBenchmarkRun(t *testing.T) {
 				DataFPS: []float64{80.0, 81.0},
 			},
 		}
-		_, err := StoreBenchmarkData(testData, benchmark.ID)
+		err := StoreBenchmarkData(testData, benchmark.ID)
 		if err != nil {
 			t.Fatalf("Failed to store test data: %v", err)
 		}
@@ -304,7 +304,7 @@ func TestHandleDeleteBenchmarkRun(t *testing.T) {
 				DataFPS: []float64{60.0, 61.0},
 			},
 		}
-		_, err := StoreBenchmarkData(testData, benchmark.ID)
+		err := StoreBenchmarkData(testData, benchmark.ID)
 		if err != nil {
 			t.Fatalf("Failed to store test data: %v", err)
 		}
@@ -365,7 +365,7 @@ func TestHandleDeleteBenchmarkRun(t *testing.T) {
 				DataFPS: []float64{60.0},
 			},
 		}
-		_, err := StoreBenchmarkData(testData, benchmark.ID)
+		err := StoreBenchmarkData(testData, benchmark.ID)
 		if err != nil {
 			t.Fatalf("Failed to store test data: %v", err)
 		}

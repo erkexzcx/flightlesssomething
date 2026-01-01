@@ -240,7 +240,7 @@ func TestRoundTripWithTestData(t *testing.T) {
 
 					// Store the data
 					benchmarkID := uint(12345)
-					if _, err := StoreBenchmarkData(originalData, benchmarkID); err != nil {
+					if err := StoreBenchmarkData(originalData, benchmarkID); err != nil {
 						t.Fatalf("Failed to store data: %v", err)
 					}
 

@@ -1,8 +1,6 @@
 package app
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -205,60 +203,6 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Check if data size exceeds the limit for browser loading
-		dataSizeBytes := benchmark.DataSizeBytes
-		
-		// If size is not yet tracked (0), calculate it now for backward compatibility
-		if dataSizeBytes == 0 {
-			// Load the data to calculate its size
-			var data []*BenchmarkData
-			data, err = RetrieveBenchmarkData(uint(benchmarkID))
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
-				return
-			}
-			
-			// Calculate size by encoding to gob
-			var buffer bytes.Buffer
-			gobEncoder := gob.NewEncoder(&buffer)
-			err = gobEncoder.Encode(data)
-			if err == nil {
-				dataSizeBytes = int64(buffer.Len())
-				
-				// Update the benchmark with calculated size for future requests
-				benchmark.DataSizeBytes = dataSizeBytes
-				err = db.DB.Save(&benchmark).Error
-				if err != nil {
-					// Log but don't fail - this is just an optimization
-					fmt.Printf("Warning: failed to save calculated data size for benchmark %d: %v\n", benchmarkID, err)
-				}
-			}
-			
-			// Check size limit
-			if dataSizeBytes > maxDataSizeBytes {
-				sizeMB := float64(dataSizeBytes) / (1024 * 1024)
-				c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-					"error": fmt.Sprintf("Benchmark data is too large to load in browser (%.1f MB). Please use the download button to get the data as a ZIP file instead.", sizeMB),
-					"data_size_bytes": dataSizeBytes,
-				})
-				return
-			}
-			
-			// Data is already loaded, return it
-			c.JSON(http.StatusOK, data)
-			return
-		}
-		
-		// Size is tracked, check limit before loading
-		if dataSizeBytes > maxDataSizeBytes {
-			sizeMB := float64(dataSizeBytes) / (1024 * 1024)
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-				"error": fmt.Sprintf("Benchmark data is too large to load in browser (%.1f MB). Please use the download button to get the data as a ZIP file instead.", sizeMB),
-				"data_size_bytes": dataSizeBytes,
-			})
-			return
-		}
-
 		data, err := RetrieveBenchmarkData(uint(benchmarkID))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
@@ -337,6 +281,15 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Check total data lines limit
+		totalLines := CountTotalDataLines(benchmarkData)
+		if totalLines > maxTotalDataLines {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("total data lines (%d) exceeds maximum allowed (%d)", totalLines, maxTotalDataLines),
+			})
+			return
+		}
+
 		// Create benchmark record
 		benchmark := Benchmark{
 			UserID:      uid,
@@ -344,15 +297,13 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			Description: req.Description,
 		}
 
-		err = db.DB.Create(&benchmark).Error
-		if err != nil {
+		if err := db.DB.Create(&benchmark).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create benchmark"})
 			return
 		}
 
 		// Store benchmark data
-		dataSizeBytes, err := StoreBenchmarkData(benchmarkData, benchmark.ID)
-		if err != nil {
+		if err := StoreBenchmarkData(benchmarkData, benchmark.ID); err != nil {
 			db.DB.Delete(&benchmark)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
@@ -362,7 +313,6 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
-		benchmark.DataSizeBytes = dataSizeBytes
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			// Log error but don't fail - this is just for search optimization
 			fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, err)
@@ -465,8 +415,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			}
 
 			// Store updated data
-			dataSizeBytes, err := StoreBenchmarkData(benchmarkData, uint(benchmarkID))
-			if err != nil {
+			if err := StoreBenchmarkData(benchmarkData, uint(benchmarkID)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update labels"})
 				return
 			}
@@ -475,7 +424,6 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 			benchmark.RunNames = runNames
 			benchmark.Specifications = specifications
-			benchmark.DataSizeBytes = dataSizeBytes
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -677,8 +625,7 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		benchmarkData = append(benchmarkData[:idx], benchmarkData[idx+1:]...)
 
 		// Store updated data
-		dataSizeBytes, err := StoreBenchmarkData(benchmarkData, uint(benchmarkID))
-		if err != nil {
+		if err := StoreBenchmarkData(benchmarkData, uint(benchmarkID)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update benchmark data"})
 			return
 		}
@@ -687,7 +634,6 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
-		benchmark.DataSizeBytes = dataSizeBytes
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -785,9 +731,17 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		// Append new runs to existing data
 		existingData = append(existingData, newBenchmarkData...)
 
+		// Check total data lines limit after combining
+		totalLines := CountTotalDataLines(existingData)
+		if totalLines > maxTotalDataLines {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("total data lines (%d) would exceed maximum allowed (%d)", totalLines, maxTotalDataLines),
+			})
+			return
+		}
+
 		// Store combined data
-		dataSizeBytes, err := StoreBenchmarkData(existingData, uint(benchmarkID))
-		if err != nil {
+		if err := StoreBenchmarkData(existingData, uint(benchmarkID)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
 		}
@@ -796,7 +750,6 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(existingData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
-		benchmark.DataSizeBytes = dataSizeBytes
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {

@@ -94,7 +94,7 @@ func TestStorageOperations(t *testing.T) {
 	benchmarkID := uint(1)
 
 	// Test storage
-	if _, err := StoreBenchmarkData(testData, benchmarkID); err != nil {
+	if err := StoreBenchmarkData(testData, benchmarkID); err != nil {
 		t.Fatalf("Failed to store benchmark data: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestMetadataOperations(t *testing.T) {
 	benchmarkID := uint(100)
 
 	// Store benchmark data (should also create metadata)
-	if _, err := StoreBenchmarkData(testData, benchmarkID); err != nil {
+	if err := StoreBenchmarkData(testData, benchmarkID); err != nil {
 		t.Fatalf("Failed to store benchmark data: %v", err)
 	}
 
@@ -222,7 +222,7 @@ func TestMetadataBackwardCompatibility(t *testing.T) {
 	benchmarkID := uint(200)
 
 	// Store data with metadata first
-	if _, err := StoreBenchmarkData(testData, benchmarkID); err != nil {
+	if err := StoreBenchmarkData(testData, benchmarkID); err != nil {
 		t.Fatalf("Failed to store: %v", err)
 	}
 

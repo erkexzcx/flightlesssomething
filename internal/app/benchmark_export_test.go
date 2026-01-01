@@ -52,7 +52,7 @@ func TestExportBenchmarkDataAsZip(t *testing.T) {
 
 	// Store the benchmark data
 	benchmarkID := uint(123)
-	if _, storeErr := StoreBenchmarkData(testData, benchmarkID); storeErr != nil {
+	if storeErr := StoreBenchmarkData(testData, benchmarkID); storeErr != nil {
 		t.Fatalf("Failed to store benchmark data: %v", storeErr)
 	}
 

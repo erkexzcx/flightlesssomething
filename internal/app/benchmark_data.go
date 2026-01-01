@@ -30,9 +30,9 @@ const (
 	// Data processing constants
 	precisionFactor     = 100000
 	bytesToKB           = 1024
-	maxDataLines        = 100000
+	maxDataLines        = 100000  // Per file limit
+	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
 	maxStringLength     = 100
-	maxDataSizeBytes    = 80 * 1024 * 1024 // 80MB uncompressed size limit for browser loading
 )
 
 var benchmarksDir string
@@ -298,13 +298,13 @@ func truncateString(s string) string {
 	return s
 }
 
-// StoreBenchmarkData stores benchmark data to disk and returns the uncompressed size in bytes
-func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) (int64, error) {
+// StoreBenchmarkData stores benchmark data to disk
+func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	// Store the full data
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
 	file, err := os.Create(filePath)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
@@ -317,32 +317,25 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) (int64
 	gobEncoder := gob.NewEncoder(&buffer)
 	err = gobEncoder.Encode(benchmarkData)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	// Get uncompressed size before compression
-	uncompressedSize := int64(buffer.Len())
 
 	zstdEncoder, err := zstd.NewWriter(file, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	_, err = zstdEncoder.Write(buffer.Bytes())
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if err := zstdEncoder.Close(); err != nil {
-		return 0, fmt.Errorf("failed to close zstd encoder: %w", err)
+		return fmt.Errorf("failed to close zstd encoder: %w", err)
 	}
 
 	// Store metadata separately for fast access
-	if err := storeBenchmarkMetadata(benchmarkData, benchmarkID); err != nil {
-		return 0, err
-	}
-
-	return uncompressedSize, nil
+	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
 }
 
 // storeBenchmarkMetadata stores lightweight metadata (run count and labels) separately
@@ -522,6 +515,38 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 	specifications = strings.Join(specs, ", ")
 	
 	return runNames, specifications
+}
+
+// CountTotalDataLines counts the total number of data lines across all benchmark runs.
+// It returns the maximum length among all data arrays, as that represents the number of data rows.
+func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
+	totalLines := 0
+	for _, data := range benchmarkData {
+		// Find the maximum length among all data arrays for this run
+		maxLen := 0
+		dataArrays := [][]float64{
+			data.DataFPS,
+			data.DataFrameTime,
+			data.DataCPULoad,
+			data.DataGPULoad,
+			data.DataCPUTemp,
+			data.DataCPUPower,
+			data.DataGPUTemp,
+			data.DataGPUCoreClock,
+			data.DataGPUMemClock,
+			data.DataGPUVRAMUsed,
+			data.DataGPUPower,
+			data.DataRAMUsed,
+			data.DataSwapUsed,
+		}
+		for _, arr := range dataArrays {
+			if len(arr) > maxLen {
+				maxLen = len(arr)
+			}
+		}
+		totalLines += maxLen
+	}
+	return totalLines
 }
 
 // DeleteBenchmarkData deletes benchmark data file and metadata from disk
