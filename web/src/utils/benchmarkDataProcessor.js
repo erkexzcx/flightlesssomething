@@ -62,6 +62,8 @@ function downsampleLTTB(data, threshold) {
 
 // Calculate density data for histogram/area charts
 // Filters outliers (1st-99th percentile) and counts occurrences
+// No arbitrary limit - natural bin count based on data range
+// (e.g., FPS 0-2000 = max 2000 bins, FrameTime 0-100 = max 100 bins)
 function calculateDensityData(values) {
   if (!values || values.length === 0) return []
   
@@ -78,27 +80,9 @@ function calculateDensityData(values) {
     counts[rounded] = (counts[rounded] || 0) + 1
   })
   
-  // Convert to array format [[value, count], ...]
-  let array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
-  
-  // Downsample if too many points (max 100 for density charts)
-  const MAX_DENSITY_POINTS = 100
-  while (array.length > MAX_DENSITY_POINTS) {
-    let minDiff = Infinity
-    let minIndex = -1
-    
-    for (let i = 0; i < array.length - 1; i++) {
-      const diff = array[i + 1][0] - array[i][0]
-      if (diff < minDiff) {
-        minDiff = diff
-        minIndex = i
-      }
-    }
-    
-    // Merge adjacent bins
-    array[minIndex][1] += array[minIndex + 1][1]
-    array.splice(minIndex + 1, 1)
-  }
+  // Convert to array format [[value, count], ...] and sort by value
+  // No downsampling - density data is small compared to downsampled series
+  const array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
   
   return array
 }
