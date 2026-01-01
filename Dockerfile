@@ -52,7 +52,7 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -tags netgo -o server ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.23
 
 WORKDIR /app
 
