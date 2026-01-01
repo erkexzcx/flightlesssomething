@@ -217,12 +217,18 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 		if offsetStr := c.Query("run_offset"); offsetStr != "" {
 			if parsedOffset, parseErr := strconv.Atoi(offsetStr); parseErr == nil && parsedOffset >= 0 {
 				runOffset = parsedOffset
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run_offset parameter (must be non-negative integer)"})
+				return
 			}
 		}
 		
 		if limitStr := c.Query("run_limit"); limitStr != "" {
 			if parsedLimit, parseErr := strconv.Atoi(limitStr); parseErr == nil && parsedLimit > 0 {
 				runLimit = parsedLimit
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run_limit parameter (must be positive integer)"})
+				return
 			}
 		}
 

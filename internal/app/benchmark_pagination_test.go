@@ -208,4 +208,56 @@ func TestHandleGetBenchmarkData_Pagination(t *testing.T) {
 			t.Errorf("Expected %d runs, got %d", expectedRuns, len(runs))
 		}
 	})
+
+	t.Run("returns error for invalid offset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/benchmarks/1/data?run_offset=invalid", nil)
+		w := httptest.NewRecorder()
+
+		r := gin.New()
+		r.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("returns error for negative offset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/benchmarks/1/data?run_offset=-5", nil)
+		w := httptest.NewRecorder()
+
+		r := gin.New()
+		r.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("returns error for invalid limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/benchmarks/1/data?run_limit=invalid", nil)
+		w := httptest.NewRecorder()
+
+		r := gin.New()
+		r.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("returns error for zero limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/benchmarks/1/data?run_limit=0", nil)
+		w := httptest.NewRecorder()
+
+		r := gin.New()
+		r.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
 }

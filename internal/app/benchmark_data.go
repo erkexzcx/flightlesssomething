@@ -685,6 +685,8 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 	}
 
 	// Pre-allocate row buffer to avoid repeated allocations
+	// Reusing the same slice prevents allocations and also ensures proper clearing
+	// of values when arrays have different lengths
 	row := make([]string, len(headers))
 	
 	// Write data rows
