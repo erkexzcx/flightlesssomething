@@ -90,13 +90,13 @@
     <div class="tab-content" id="chartTabsContent">
       <!-- FPS Tab -->
       <div class="tab-pane fade show active" id="fps" role="tabpanel">
-        <div v-if="!renderedTabs.fps" class="text-center my-5">
+        <div v-if="!renderedTabs.fps || calculatingStats" class="text-center my-5">
           <div class="spinner-border" role="status">
-            <span class="visually-hidden">Rendering charts...</span>
+            <span class="visually-hidden">{{ calculatingStats ? 'Calculating...' : 'Rendering charts...' }}</span>
           </div>
-          <p class="text-muted mt-2">Rendering FPS charts...</p>
+          <p class="text-muted mt-2">{{ calculatingStats ? calculationProgress : 'Rendering FPS charts...' }}</p>
         </div>
-        <div v-show="renderedTabs.fps">
+        <div v-show="renderedTabs.fps && !calculatingStats">
           <div ref="fpsChart2" style="height:250pt;"></div>
           <div ref="fpsMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="fpsDensityChart" style="height:250pt;"></div>
@@ -126,13 +126,13 @@
 
       <!-- Frametime Tab -->
       <div class="tab-pane fade" id="frametime" role="tabpanel">
-        <div v-if="!renderedTabs.frametime" class="text-center my-5">
+        <div v-if="!renderedTabs.frametime || calculatingStats" class="text-center my-5">
           <div class="spinner-border" role="status">
-            <span class="visually-hidden">Rendering charts...</span>
+            <span class="visually-hidden">{{ calculatingStats ? 'Calculating...' : 'Rendering charts...' }}</span>
           </div>
-          <p class="text-muted mt-2">Rendering Frametime charts...</p>
+          <p class="text-muted mt-2">{{ calculatingStats ? calculationProgress : 'Rendering Frametime charts...' }}</p>
         </div>
-        <div v-show="renderedTabs.frametime">
+        <div v-show="renderedTabs.frametime && !calculatingStats">
           <div ref="frameTimeChart2" style="height:250pt;"></div>
           <div ref="frametimeMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="frametimeDensityChart" style="height:250pt;"></div>
@@ -162,13 +162,13 @@
 
       <!-- Summary Tab -->
       <div class="tab-pane fade" id="summary" role="tabpanel">
-        <div v-if="!renderedTabs.summary" class="text-center my-5">
+        <div v-if="!renderedTabs.summary || calculatingStats" class="text-center my-5">
           <div class="spinner-border" role="status">
-            <span class="visually-hidden">Rendering charts...</span>
+            <span class="visually-hidden">{{ calculatingStats ? 'Calculating...' : 'Rendering charts...' }}</span>
           </div>
-          <p class="text-muted mt-2">Rendering Summary charts...</p>
+          <p class="text-muted mt-2">{{ calculatingStats ? calculationProgress : 'Rendering Summary charts...' }}</p>
         </div>
-        <div v-show="renderedTabs.summary">
+        <div v-show="renderedTabs.summary && !calculatingStats">
           <div class="row">
             <div class="col-md-6">
               <div ref="fpsSummaryChart" style="height:250pt;"></div>
@@ -206,13 +206,13 @@
 
       <!-- More Metrics Tab -->
       <div class="tab-pane fade" id="more-metrics" role="tabpanel">
-        <div v-if="!renderedTabs['more-metrics']" class="text-center my-5">
+        <div v-if="!renderedTabs['more-metrics'] || calculatingStats" class="text-center my-5">
           <div class="spinner-border" role="status">
-            <span class="visually-hidden">Rendering charts...</span>
+            <span class="visually-hidden">{{ calculatingStats ? 'Calculating...' : 'Rendering charts...' }}</span>
           </div>
-          <p class="text-muted mt-2">Rendering All Data charts...</p>
+          <p class="text-muted mt-2">{{ calculatingStats ? calculationProgress : 'Rendering All Data charts...' }}</p>
         </div>
-        <div v-show="renderedTabs['more-metrics']">
+        <div v-show="renderedTabs['more-metrics'] && !calculatingStats">
           <div ref="fpsChart" style="height:250pt;"></div>
           <div ref="frameTimeChart" style="height:250pt;"></div>
           <div ref="cpuLoadChart" style="height:250pt;"></div>
@@ -240,6 +240,7 @@ import HighchartsBoost from 'highcharts/modules/boost'
 import HighchartsExporting from 'highcharts/modules/exporting'
 import HighchartsExportData from 'highcharts/modules/export-data'
 import HighchartsFullScreen from 'highcharts/modules/full-screen'
+import BenchmarkWorker from '../workers/benchmark-calculations.worker.js?worker'
 
 // Initialize Highcharts modules
 HighchartsBoost(Highcharts)
@@ -249,6 +250,9 @@ HighchartsFullScreen(Highcharts)
 
 // Use app store for calculation mode
 const appStore = useAppStore()
+
+// Web Worker for async calculations
+let calculationWorker = null
 
 // Get theme-aware colors
 const getThemeColors = computed(() => {
@@ -287,6 +291,10 @@ const renderedTabs = ref({
   summary: false,
   'more-metrics': false
 })
+
+// Track calculation state
+const calculatingStats = ref(false)
+const calculationProgress = ref('')
 
 // Track selected baseline for comparison charts
 const fpsBaselineIndex = ref(null) // null means auto (slowest)
@@ -402,116 +410,6 @@ function decimateForLineChart(data, targetPoints = 2000) {
   }
   
   return decimated
-}
-
-function calculateAverage(data) {
-  if (!data || data.length === 0) return 0
-  return data.reduce((acc, value) => acc + value, 0) / data.length
-}
-
-// Calculate average FPS using harmonic mean (via frametimes)
-// This is the standard way to calculate average FPS
-// Formula: 1000 / (sum of frametimes / count)
-function calculateAverageFPS(fpsData) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (ms): frametime = 1000 / fps
-  // Handle edge case where FPS is 0 or negative by using a very large frametime
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // Calculate sum of frametimes
-  const sumFrametimes = frametimes.reduce((acc, ft) => acc + ft, 0)
-  
-  // Average frametime
-  const avgFrametime = sumFrametimes / frametimes.length
-  
-  // Convert back to FPS: 1000 / avgFrametime
-  return avgFrametime > 0 ? 1000 / avgFrametime : 0
-}
-
-function calculatePercentile(data, percentile) {
-  if (!data || data.length === 0) return 0
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
-}
-
-// Calculate percentile FPS using harmonic mean method (via frametimes)
-// All FPS data is processed without filtering - users should filter data before uploading
-function calculatePercentileFPS(fpsData, percentile) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (all frames included, no filtering applied)
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // IMPORTANT: Percentiles must be inverted when working with frametimes
-  // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
-  // - 1% low FPS (worst performance) = 99th percentile of frametimes (slowest frames)
-  // - 97th percentile FPS (good performance) = 3rd percentile of frametimes (fastest frames)
-  const invertedPercentile = 100 - percentile
-  const sorted = [...frametimes].sort((a, b) => a - b)
-  const n = sorted.length
-  
-  // Simple percentile calculation without interpolation
-  // Index = round((percentile / 100) * (n + 1))
-  const index = Math.round((invertedPercentile / 100) * (n + 1))
-  const clampedIndex = Math.max(0, Math.min(index, n - 1))
-  const frametimePercentile = sorted[clampedIndex]
-  
-  // Convert back to FPS
-  return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
-}
-
-function calculateStandardDeviation(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  const avgSquaredDiff = calculateAverage(squaredDiffs)
-  return Math.sqrt(avgSquaredDiff)
-}
-
-function calculateVariance(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  return calculateAverage(squaredDiffs)
-}
-
-function filterOutliers(data) {
-  if (!data || data.length === 0) return []
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted.slice(
-    Math.floor(sorted.length * OUTLIER_LOW_PERCENTILE), 
-    Math.ceil(sorted.length * OUTLIER_HIGH_PERCENTILE)
-  )
-}
-
-function countOccurrences(data) {
-  const counts = {}
-  data.forEach(value => {
-    const rounded = Math.round(value)
-    counts[rounded] = (counts[rounded] || 0) + 1
-  })
-
-  let array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
-
-  while (array.length > MAX_DENSITY_POINTS) {
-    let minDiff = Infinity
-    let minIndex = -1
-
-    for (let i = 0; i < array.length - 1; i++) {
-      const diff = array[i + 1][0] - array[i][0]
-      if (diff < minDiff) {
-        minDiff = diff
-        minIndex = i
-      }
-    }
-
-    array[minIndex][1] += array[minIndex + 1][1]
-    array[minIndex][0] = (array[minIndex][0] + array[minIndex + 1][0]) / 2
-    array.splice(minIndex + 1, 1)
-  }
-
-  return array
 }
 
 function renderFPSComparisonChart() {
@@ -782,71 +680,115 @@ const dataArrays = computed(() => {
   }
 })
 
-// Computed properties to cache statistical calculations for FPS data
-// These are expensive operations that should only run once per data change
-const fpsStats = computed(() => {
-  const arrays = dataArrays.value.fpsDataArrays
-  if (!arrays || arrays.length === 0) return null
-  
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
-    return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentileFPS(d.data, 1),
-      avg: calculateAverageFPS(d.data),
-      max: calculatePercentileFPS(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
-    }
-  })
-})
+// Statistical calculations - moved from computed to ref for async updates
+const fpsStats = ref(null)
+const frametimeStats = ref(null)
+const summaryStats = ref(null)
 
-// Computed properties to cache statistical calculations for frametime data
-const frametimeStats = computed(() => {
-  const arrays = dataArrays.value.frameTimeDataArrays
-  if (!arrays || arrays.length === 0) return null
-  
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
-    return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentile(d.data, 1),
-      avg: calculateAverage(d.data),
-      max: calculatePercentile(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
-    }
-  })
-})
-
-// Computed properties to cache average calculations for summary charts
-const summaryStats = computed(() => {
-  const arrays = dataArrays.value
-  if (!arrays) return null
-  
-  return {
-    fpsAverages: arrays.fpsDataArrays.map(d => calculateAverageFPS(d.data)),
-    frametimeAverages: arrays.frameTimeDataArrays.map(d => calculateAverage(d.data)),
-    cpuLoadAverages: arrays.cpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuLoadAverages: arrays.gpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuCoreClockAverages: arrays.gpuCoreClockDataArrays.map(d => calculateAverage(d.data)),
-    gpuMemClockAverages: arrays.gpuMemClockDataArrays.map(d => calculateAverage(d.data)),
-    cpuPowerAverages: arrays.cpuPowerDataArrays.map(d => calculateAverage(d.data)),
-    gpuPowerAverages: arrays.gpuPowerDataArrays.map(d => calculateAverage(d.data))
+// Initialize web worker and set up message handlers
+function initializeWorker() {
+  if (calculationWorker) {
+    calculationWorker.terminate()
   }
-})
+  
+  calculationWorker = new BenchmarkWorker()
+  
+  calculationWorker.onmessage = (e) => {
+    const { type, data, error } = e.data
+    
+    switch (type) {
+      case 'fpsStatsComplete':
+        fpsStats.value = data
+        calculationProgress.value = 'FPS calculations complete'
+        break
+      case 'frametimeStatsComplete':
+        frametimeStats.value = data
+        calculationProgress.value = 'Frametime calculations complete'
+        break
+      case 'summaryStatsComplete':
+        summaryStats.value = data
+        calculationProgress.value = 'Summary calculations complete'
+        calculatingStats.value = false
+        break
+      case 'error':
+        console.error('Worker error:', error)
+        calculatingStats.value = false
+        break
+    }
+  }
+  
+  calculationWorker.onerror = (error) => {
+    console.error('Worker error:', error)
+    calculatingStats.value = false
+  }
+}
+
+// Calculate statistics using the web worker
+async function calculateStatistics() {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) {
+    fpsStats.value = null
+    frametimeStats.value = null
+    summaryStats.value = null
+    return
+  }
+  
+  calculatingStats.value = true
+  calculationProgress.value = 'Starting calculations...'
+  
+  const arrays = dataArrays.value
+  
+  // Use requestIdleCallback to schedule worker tasks when browser is idle
+  // This prevents blocking the UI thread
+  const scheduleWork = (callback) => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(callback, { timeout: 100 })
+    } else {
+      setTimeout(callback, 0)
+    }
+  }
+  
+  // Schedule calculations sequentially to avoid overwhelming the worker
+  scheduleWork(() => {
+    calculationProgress.value = 'Calculating FPS statistics...'
+    calculationWorker.postMessage({
+      type: 'calculateFpsStats',
+      data: { fpsDataArrays: arrays.fpsDataArrays }
+    })
+  })
+  
+  // Wait a bit before next calculation
+  await new Promise(resolve => setTimeout(resolve, 10))
+  
+  scheduleWork(() => {
+    calculationProgress.value = 'Calculating Frametime statistics...'
+    calculationWorker.postMessage({
+      type: 'calculateFrametimeStats',
+      data: { frametimeDataArrays: arrays.frameTimeDataArrays }
+    })
+  })
+  
+  // Wait a bit before next calculation
+  await new Promise(resolve => setTimeout(resolve, 10))
+  
+  scheduleWork(() => {
+    calculationProgress.value = 'Calculating Summary statistics...'
+    calculationWorker.postMessage({
+      type: 'calculateSummaryStats',
+      data: arrays
+    })
+  })
+}
 
 function renderFPSTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
   
   const { fpsDataArrays } = dataArrays.value
   const stats = fpsStats.value
+  
+  // Wait for calculations if not ready yet
+  if (!stats) {
+    return
+  }
   
   // Create FPS charts
   createChart(fpsChart2.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
@@ -934,6 +876,11 @@ function renderFrametimeTab() {
   const { frameTimeDataArrays } = dataArrays.value
   const stats = frametimeStats.value
   
+  // Wait for calculations if not ready yet
+  if (!stats) {
+    return
+  }
+  
   createChart(frameTimeChart2.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
 
   // Frametime Min/Max/Avg chart
@@ -1019,6 +966,7 @@ function renderSummaryTab() {
   const arrays = dataArrays.value
   const stats = summaryStats.value
   
+  // Wait for calculations if not ready yet
   if (!stats) return
 
   // Create summary bar charts using pre-calculated averages
@@ -1138,12 +1086,12 @@ function updatePixelRatio() {
 }
 
 onMounted(() => {
-  // Only render the first tab (FPS) on mount
+  // Initialize the web worker
+  initializeWorker()
+  
+  // Calculate statistics if data is available
   if (props.benchmarkData && props.benchmarkData.length > 0) {
-    nextTick(() => {
-      renderFPSTab()
-      renderedTabs.value.fps = true
-    })
+    calculateStatistics()
   }
 
   // Listen for window resize events which may indicate DPI changes
@@ -1160,6 +1108,10 @@ onUnmounted(() => {
   if (updatePixelRatioTimeout) {
     clearTimeout(updatePixelRatioTimeout)
   }
+  // Terminate the worker
+  if (calculationWorker) {
+    calculationWorker.terminate()
+  }
 })
 
 watch(() => props.benchmarkData, () => {
@@ -1171,14 +1123,26 @@ watch(() => props.benchmarkData, () => {
     'more-metrics': false
   }
   
-  // Re-render the active tab
+  // Recalculate statistics with new data
   if (props.benchmarkData && props.benchmarkData.length > 0) {
+    calculateStatistics()
+  } else {
+    fpsStats.value = null
+    frametimeStats.value = null
+    summaryStats.value = null
+  }
+}, { deep: true })
+
+// Watch for stats completion and render the FPS tab (default)
+watch([fpsStats, frametimeStats, summaryStats], () => {
+  // Only render when all stats are ready
+  if (fpsStats.value && frametimeStats.value && summaryStats.value && !renderedTabs.value.fps) {
     nextTick(() => {
       renderFPSTab()
       renderedTabs.value.fps = true
     })
   }
-}, { deep: true })
+})
 
 // Watch for theme changes and re-render all rendered tabs
 watch(() => appStore.theme, () => {
