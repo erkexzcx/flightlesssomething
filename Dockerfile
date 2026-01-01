@@ -1,12 +1,23 @@
-# Build stage
-FROM golang:1.25-trixie AS builder
+# Web UI build stage
+FROM node:20-alpine AS web-builder
 
-# Install build dependencies (including Node.js for web UI)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+WORKDIR /build
+
+# Copy all web UI files
+COPY web ./
+
+# Install dependencies and build
+RUN npm ci --prefer-offline --no-audit
+RUN npm run build
+
+# Go build stage
+FROM golang:1.25-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
     git \
-    nodejs \
-    npm \
-    && rm -rf /var/lib/apt/lists/*
+    gcc \
+    musl-dev
 
 WORKDIR /build
 
@@ -17,8 +28,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the web UI
-RUN cd web && npm install && npm run build
+# Copy built web UI from web-builder stage
+COPY --from=web-builder /build/dist ./web/dist
 
 # Prepare web files for embedding
 RUN mkdir -p internal/app/web && \
@@ -41,7 +52,10 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -tags netgo -o server ./cmd/server
 
 # Runtime stage
-FROM gcr.io/distroless/base-debian13:latest
+FROM alpine:3.23
+
+# Install CA certificates for HTTPS/TLS connections (Discord OAuth, etc.)
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
