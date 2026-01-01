@@ -196,12 +196,14 @@ export function convertToLegacyFormat(processedRuns) {
   return processedRuns.map(run => {
     const legacy = {
       // Metadata (using capitalized keys for compatibility)
-      Label: run.label,
-      SpecOS: run.specOS,
-      SpecGPU: run.specGPU,
-      SpecCPU: run.specCPU,
-      SpecRAM: run.specRAM,
-      SpecOSSpecific: run.specOSSpecific
+      Label: run.label || run.Label || '',
+      SpecOS: run.specOS || run.SpecOS || '',
+      SpecGPU: run.specGPU || run.SpecGPU || '',
+      SpecCPU: run.specCPU || run.SpecCPU || '',
+      SpecRAM: run.specRAM || run.SpecRAM || '',
+      SpecOSSpecific: run.specOSSpecific || run.SpecOSSpecific || {},
+      SpecLinuxKernel: run.specLinuxKernel || run.SpecLinuxKernel || '',
+      SpecLinuxScheduler: run.specLinuxScheduler || run.SpecLinuxScheduler || ''
     }
 
     // Convert downsampled series back to simple arrays
@@ -213,7 +215,7 @@ export function convertToLegacyFormat(processedRuns) {
     ]
 
     metrics.forEach(metric => {
-      const series = run.series[metric] || []
+      const series = run.series?.[metric] || []
       // Convert [[x1, y1], [x2, y2], ...] to [y1, y2, ...]
       legacy[metric] = series.map(point => point[1])
     })
