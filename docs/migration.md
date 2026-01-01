@@ -132,8 +132,11 @@ The migration system is designed to be future-proof with three distinct database
 3. **Format 3+ (current and future)**: `flightlesssomething.db` with version tracking
    - **Detected by**: `schema_versions` table exists with version number
    - **Action**: Apply incremental migrations if version < currentSchemaVersion
-   - **Current version**: 1
-   - **Future**: Add migration logic for versions 2, 3, etc.
+   - **Current version**: 3
+   - **Version history**:
+     - Version 1: Initial schema with version tracking
+     - Version 2: Added RunNames and Specifications fields for enhanced search
+     - Version 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly)
 
 ### Migration Flow
 
@@ -165,6 +168,130 @@ database.db exists?
 - Schema version tracking prevents re-migration
 - Migration is idempotent - safe to re-run
 - Original IDs preserved for relationships and file associations
+
+## Storage Format Migration (V1 → V2)
+
+Starting from version 3 of the schema, benchmark data files are automatically migrated from V1 to V2 format on first startup. This migration improves memory efficiency when viewing large benchmarks.
+
+### What Gets Migrated
+
+The migration converts benchmark data files (`.bin`) from:
+- **V1 format**: Single gob-encoded array (requires loading entire dataset into memory)
+- **V2 format**: Header + individually-encoded runs (enables true streaming)
+
+### Automatic Migration Process
+
+When you start the server with schema version < 3:
+
+```
+Database is at version 2, current version is 3. Running data migrations...
+Migrating benchmark storage format from V1 to V2...
+=== Starting Benchmark Storage Format Migration (V1 → V2) ===
+Found 50 benchmark file(s) to check
+
+Processing benchmark 1...
+  Loading V1 format data...
+  Converting to V2 format (100 runs)...
+  Verifying conversion...
+  ✓ Successfully migrated to V2 format
+
+Processing benchmark 2...
+  Already in V2 format - skipping
+
+...
+
+=== Storage Migration Summary ===
+Total files found: 50
+Successfully migrated: 35
+Already V2 (skipped): 15
+Failed: 0
+==================================
+Storage format migration completed successfully!
+Successfully migrated to version 3
+```
+
+### Backup Files
+
+**During migration, backup files are automatically created:**
+
+Each benchmark data file is backed up as `<benchmark_id>.bin.v1.bak` before conversion. For example:
+```
+data/benchmarks/
+├── 1.bin           # V2 format (migrated)
+├── 1.bin.v1.bak    # V1 format (backup)
+├── 2.bin           # V2 format (migrated)
+├── 2.bin.v1.bak    # V1 format (backup)
+└── ...
+```
+
+**Backup cleanup:**
+- On **successful** migration: Backup file is automatically deleted
+- On **failed** migration: Backup is automatically restored, conversion retried
+- If backup deletion fails: Warning logged, but migration continues (backup remains on disk)
+
+### Restoring from Backup
+
+If you encounter issues after migration and need to restore the V1 format:
+
+#### Option 1: Manual Restoration (Recommended)
+
+1. **Stop the server** to prevent concurrent file access
+
+2. **Identify backup files:**
+   ```bash
+   cd /path/to/data/benchmarks
+   ls -lh *.v1.bak
+   ```
+
+3. **Restore specific benchmarks:**
+   ```bash
+   # For a specific benchmark (e.g., benchmark 42)
+   mv 42.bin.v1.bak 42.bin
+   ```
+
+4. **Restore all benchmarks:**
+   ```bash
+   # Restore all V1 backups
+   for f in *.v1.bak; do
+       mv "$f" "${f%.v1.bak}"
+   done
+   ```
+
+5. **Downgrade schema version** to prevent re-migration:
+   ```bash
+   sqlite3 /path/to/data/flightlesssomething.db
+   UPDATE schema_versions SET version = 2 WHERE version = 3;
+   .quit
+   ```
+
+6. **Restart the server** with the old version that supports V1 format
+
+#### Option 2: Prevent Migration (Before It Happens)
+
+If you want to skip the storage migration:
+
+1. **Before starting the updated server**, manually set schema version to 3:
+   ```bash
+   sqlite3 /path/to/data/flightlesssomething.db
+   UPDATE schema_versions SET version = 3;
+   .quit
+   ```
+
+2. Start the server - migration will be skipped since version is already 3
+
+3. Your V1 format files will continue to work (backward compatible)
+
+**Note:** V1 files have higher memory usage but are still supported via fallback reader.
+
+#### Option 3: Keep Both Versions
+
+You can keep both V1 backups and V2 files:
+
+1. **Don't delete backup files** - they remain harmless on disk
+2. V2 files are used by default
+3. Manually restore specific files if needed (see Option 1)
+
+Backup files only consume disk space and don't affect server operation.
 
 ## Post-Migration
 
@@ -228,12 +355,48 @@ This is rare but can happen with data corruption.
 
 You don't need extra disk space since the migration happens in-place. However, it's always recommended to have a backup of your data directory before migration.
 
+**Storage format migration:** Temporarily requires 2x disk space per benchmark file during conversion (original + V2 version), but backups are deleted after successful migration.
+
+### Storage Format Migration Issues
+
+**Problem:** Migration fails with "Failed to save V2 format"
+
+**Solution:** 
+1. Check disk space (need ~2x current benchmark data size temporarily)
+2. Check file permissions (write access to benchmarks directory)
+3. Check logs for specific error details
+4. Backup will be automatically restored on failure
+
+**Problem:** Want to revert to V1 format after migration
+
+**Solution:** See "Restoring from Backup" section above. Backups are kept if deletion fails, or you can manually restore before successful migration completes.
+
+**Problem:** Backup files remain after successful migration
+
+**Cause:** Backup deletion failed (permissions or disk full)
+
+**Solution:** These files are harmless and can be safely deleted:
+```bash
+cd /path/to/data/benchmarks
+rm *.v1.bak
+```
+
+**Problem:** High memory usage after migration
+
+**Cause:** Some V1 files might not have been migrated (check logs)
+
+**Solution:** 
+1. Check migration logs for which files were skipped
+2. Manually verify format of remaining files
+3. V1 files still work but use more memory (fallback reader)
+
 ### Re-running Migration
 
 If migration fails partway through, you can safely restart the server. The migration logic:
 - Checks if each user/benchmark already exists
 - Skips already-migrated items
 - Completes only the remaining items
+- Skips V2 files (checks format before migrating)
 
 ## Need Help?
 
