@@ -183,6 +183,13 @@ func HandleGetBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Populate run count and labels from metadata
+		count, labels, err := GetBenchmarkRunCount(benchmark.ID)
+		if err == nil {
+			benchmark.RunCount = count
+			benchmark.RunLabels = labels
+		}
+
 		c.JSON(http.StatusOK, benchmark)
 	}
 }
