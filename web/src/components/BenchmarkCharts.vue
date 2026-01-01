@@ -241,7 +241,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed, toRaw } from 'vue'
 import { useAppStore } from '../stores/app'
 import { getWorkerManager, terminateWorker } from '../utils/workerManager'
 import Highcharts from 'highcharts'
@@ -674,7 +674,8 @@ async function calculateStatistics() {
     
     // Use the worker to calculate all statistics at once
     // This offloads heavy computation to a separate thread
-    const result = await workerManager.calculateAll(dataArrays.value)
+    // Convert reactive object to plain object using toRaw to avoid "Proxy object could not be cloned" error
+    const result = await workerManager.calculateAll(toRaw(dataArrays.value))
     
     fpsStats.value = result.fpsStats
     frametimeStats.value = result.frametimeStats
