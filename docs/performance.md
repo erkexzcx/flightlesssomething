@@ -10,9 +10,8 @@ The application has been optimized to minimize RAM usage when handling large ben
 
 1. **Streaming data processing** - No intermediate buffers during compression/decompression
 2. **Concurrent compression/decompression** - Better CPU utilization with zstd
-3. **API pagination** - Fetch benchmark runs in batches instead of all at once
-4. **Optimized CSV export** - Buffered writing with reused allocations
-5. **Garbage collector tuning** - Configurable GC aggressiveness for memory-constrained environments
+3. **Optimized CSV export** - Buffered writing with reused allocations
+4. **Garbage collector tuning** - Configurable GC aggressiveness for memory-constrained environments
 
 ### Compiler Optimizations
 
@@ -73,35 +72,6 @@ ENV GOMEMLIMIT=800MiB
 
 **Supported units:** `B`, `KiB`, `MiB`, `GiB`
 
-### API Pagination for Large Datasets
-
-The `/api/benchmarks/:id/data` endpoint supports pagination to avoid loading all runs at once:
-
-**Query parameters:**
-- `run_offset` - Start index (0-based)
-- `run_limit` - Maximum number of runs to return
-
-**Example:**
-```bash
-# Get first 10 runs
-curl "http://localhost:5000/api/benchmarks/123/data?run_offset=0&run_limit=10"
-
-# Get next 10 runs
-curl "http://localhost:5000/api/benchmarks/123/data?run_offset=10&run_limit=10"
-```
-
-**Response format (when paginated):**
-```json
-{
-  "runs": [...],
-  "total_runs": 100,
-  "offset": 0,
-  "limit": 10
-}
-```
-
-**Backward compatibility:** Omitting pagination parameters returns all data (legacy behavior)
-
 ### Compression Improvements
 
 #### Storage
@@ -122,7 +92,6 @@ curl "http://localhost:5000/api/benchmarks/123/data?run_offset=10&run_limit=10"
 **After optimizations:**
 - Viewing benchmark: Load → Stream decompress → Decode → JSON marshal → Send
 - Exporting to ZIP: Load → Stream decompress → Decode → Buffered CSV → ZIP → Send
-- With pagination: Client controls batch size, reducing JSON marshal size
 
 ### Performance Tips
 
@@ -142,9 +111,8 @@ curl "http://localhost:5000/api/benchmarks/123/data?run_offset=10&run_limit=10"
    - Adjust `GOGC` based on observed patterns
 
 4. **For very large benchmarks (> 100 runs or > 100K data points):**
-   - Use API pagination on the client side
-   - Fetch runs in batches of 10-20
    - Consider splitting into multiple benchmark uploads
+   - Monitor server memory usage during operations
 
 ### Monitoring Memory Usage
 
@@ -165,8 +133,8 @@ curl http://localhost:5000/debug/pprof/heap
 ### Troubleshooting
 
 **Symptom:** High memory usage despite optimizations
-- **Check:** Are you fetching all benchmark data without pagination?
-- **Solution:** Use pagination with `run_limit` parameter
+- **Check:** Are you working with very large benchmarks?
+- **Solution:** Consider splitting large benchmarks into smaller uploads
 
 **Symptom:** Slow GC pauses affecting response times
 - **Check:** Is `GOGC` set too low (< 25)?
@@ -196,10 +164,9 @@ Potential future improvements:
 2. **Client-side filtering** - Allow filtering runs by label/index
 3. **Lazy loading** - Load metadata first, fetch full data on demand
 4. **Compression level tuning** - Per-benchmark compression based on size
-5. **HTTP/2 Server Push** - Push paginated chunks proactively
 
 ## See Also
 
 - [Testing Guide](testing.md) - Performance and load testing
 - [Deployment Guide](deployment.md) - Production deployment recommendations
-- [API Documentation](api.md) - API reference including pagination
+- [API Documentation](api.md) - API reference

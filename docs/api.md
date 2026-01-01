@@ -127,27 +127,12 @@ curl http://localhost:5000/api/benchmarks/1
 
 Get benchmark data in JSON format (no authentication required).
 
-**Query parameters** (optional, for large datasets):
-- `run_offset` (integer) - Starting run index (0-based, default: 0)
-- `run_limit` (integer) - Maximum number of runs to return (default: all)
-
-**Response format:**
-- Without pagination: Returns array of benchmark runs directly
-- With pagination: Returns object with `runs`, `total_runs`, `offset`, `limit`
-
-Examples:
+Example:
 ```bash
-# Get all benchmark data (default behavior)
 curl http://localhost:5000/api/benchmarks/1/data
-
-# Get first 10 runs (for large benchmarks)
-curl "http://localhost:5000/api/benchmarks/1/data?run_offset=0&run_limit=10"
-
-# Get next 10 runs
-curl "http://localhost:5000/api/benchmarks/1/data?run_offset=10&run_limit=10"
 ```
 
-Response (without pagination):
+Response:
 ```json
 [
   {
@@ -162,27 +147,6 @@ Response (without pagination):
   ...
 ]
 ```
-
-Response (with pagination):
-```json
-{
-  "runs": [
-    {
-      "Label": "run1",
-      "SpecOS": "Steam Runtime 3 (sniper)",
-      ...
-    }
-  ],
-  "total_runs": 100,
-  "offset": 0,
-  "limit": 10
-}
-```
-
-**Performance tips:**
-- For benchmarks with > 50 runs or > 50K data points, use pagination
-- Fetch runs in batches of 10-20 for optimal memory usage
-- See [Performance Guide](performance.md) for more details
 
 ---
 
