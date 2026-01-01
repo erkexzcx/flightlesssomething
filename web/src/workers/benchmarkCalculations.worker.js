@@ -31,7 +31,8 @@ function calculateAverageFPS(fpsData) {
 function calculatePercentile(data, percentile) {
   if (!data || data.length === 0) return 0
   const sorted = [...data].sort((a, b) => a - b)
-  return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
+  const index = Math.max(0, Math.ceil(percentile / 100 * sorted.length) - 1)
+  return sorted[index]
 }
 
 // Calculate percentile FPS using harmonic mean method (via frametimes)
