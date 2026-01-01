@@ -1,9 +1,45 @@
 <template>
   <div>
-    <!-- Loading state -->
+    <!-- Loading state with progress -->
     <div v-if="loading" class="text-center my-5">
       <div class="spinner-border" role="status">
         <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="text-muted mt-2">
+        <span v-if="downloadProgress && downloadProgress.loaded > 0">
+          Downloading benchmark data...
+          <span v-if="downloadProgress.total > 0">
+            {{ downloadProgress.percentage }}%
+            <br>
+            <small>({{ formatBytes(downloadProgress.loaded) }} / {{ formatBytes(downloadProgress.total) }})</small>
+          </span>
+          <span v-else>
+            <br>
+            <small>{{ formatBytes(downloadProgress.loaded) }} downloaded</small>
+          </span>
+        </span>
+        <span v-else>Loading benchmark...</span>
+      </p>
+      <!-- Progress bar -->
+      <div v-if="downloadProgress && downloadProgress.loaded > 0" class="progress mx-auto mt-3" style="max-width: 400px;">
+        <div 
+          v-if="downloadProgress.total > 0"
+          class="progress-bar progress-bar-striped progress-bar-animated" 
+          role="progressbar" 
+          :style="{ width: downloadProgress.percentage + '%' }"
+          :aria-valuenow="downloadProgress.percentage"
+          aria-valuemin="0" 
+          aria-valuemax="100"
+        >
+          {{ downloadProgress.percentage }}%
+        </div>
+        <div 
+          v-else
+          class="progress-bar progress-bar-striped progress-bar-animated w-100" 
+          role="progressbar"
+        >
+          Downloading...
+        </div>
       </div>
     </div>
 
@@ -243,51 +279,8 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state with progress -->
-          <div v-if="loadingData" class="text-center my-4">
-            <div class="spinner-border" role="status">
-              <span class="visually-hidden">Loading data...</span>
-            </div>
-            <p class="text-muted mt-2">
-              <span v-if="downloadProgress">
-                Downloading benchmark data...
-                <span v-if="downloadProgress.total > 0">
-                  {{ downloadProgress.percentage }}%
-                  <br>
-                  <small>({{ formatBytes(downloadProgress.loaded) }} / {{ formatBytes(downloadProgress.total) }})</small>
-                </span>
-                <span v-else>
-                  <br>
-                  <small>{{ formatBytes(downloadProgress.loaded) }} downloaded</small>
-                </span>
-              </span>
-              <span v-else>Preparing to download benchmark data...</span>
-            </p>
-            <!-- Progress bar -->
-            <div v-if="downloadProgress" class="progress mx-auto mt-3" style="max-width: 400px;">
-              <div 
-                v-if="downloadProgress.total > 0"
-                class="progress-bar progress-bar-striped progress-bar-animated" 
-                role="progressbar" 
-                :style="{ width: downloadProgress.percentage + '%' }"
-                :aria-valuenow="downloadProgress.percentage"
-                aria-valuemin="0" 
-                aria-valuemax="100"
-              >
-                {{ downloadProgress.percentage }}%
-              </div>
-              <div 
-                v-else
-                class="progress-bar progress-bar-striped progress-bar-animated w-100" 
-                role="progressbar"
-              >
-                Downloading...
-              </div>
-            </div>
-          </div>
-
           <!-- Error state -->
-          <div v-else-if="dataError" class="alert alert-warning" role="alert">
+          <div v-if="dataError" class="alert alert-warning" role="alert">
             <i class="fa-solid fa-exclamation-triangle"></i> {{ dataError }}
           </div>
 
@@ -476,6 +469,8 @@ async function loadBenchmark() {
   try {
     loading.value = true
     error.value = null
+    // Initialize progress state
+    downloadProgress.value = { loaded: 0, total: 0, percentage: 0 }
     
     const id = route.params.id
     benchmark.value = await api.benchmarks.get(id)
@@ -484,21 +479,19 @@ async function loadBenchmark() {
     editTitle.value = benchmark.value.Title
     editDescription.value = benchmark.value.Description || ''
     
-    // Load benchmark data
+    // Load benchmark data with progress tracking
     await loadBenchmarkData(id)
   } catch (err) {
     error.value = err.message || 'Failed to load benchmark'
   } finally {
     loading.value = false
+    downloadProgress.value = null
   }
 }
 
 async function loadBenchmarkData(id) {
   try {
-    loadingData.value = true
     dataError.value = null
-    // Initialize progress to show loading state immediately
-    downloadProgress.value = { loaded: 0, total: 0, percentage: 0 }
     
     // Load full data for accurate statistics (averages, percentiles, percentages)
     // The frontend chart component will downsample line charts as needed
@@ -510,9 +503,7 @@ async function loadBenchmarkData(id) {
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
-  } finally {
-    loadingData.value = false
-    downloadProgress.value = null
+    throw err // Re-throw to be caught by parent
   }
 }
 
