@@ -761,7 +761,10 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const newSearch = newQuery.search || ''
   const newSearchFields = newQuery.search_fields || ''
   const currentSearchFields = getEnabledSearchFields().join(',')
-  if (newSearch !== searchQuery.value || newSearchFields !== currentSearchFields) {
+  // Normalize empty search_fields to default to avoid false positives
+  const normalizedNewSearchFields = newSearchFields || 'title,description'
+  const normalizedCurrentSearchFields = currentSearchFields || 'title,description'
+  if (newSearch !== searchQuery.value || normalizedNewSearchFields !== normalizedCurrentSearchFields) {
     // Only update searchQuery if search fields are enabled or if there's a search in URL
     // This preserves search text when all filters are disabled
     if (newSearch || hasAnySearchFieldSelected.value) {
