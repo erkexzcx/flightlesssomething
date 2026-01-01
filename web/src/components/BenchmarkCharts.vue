@@ -1,7 +1,17 @@
 <template>
   <div>
-    <!-- Specifications Table -->
-    <div class="row mb-4" v-if="benchmarkData && benchmarkData.length > 0">
+    <!-- Loading state while preparing data -->
+    <div v-if="!componentReady" class="text-center my-5">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Preparing visualization...</span>
+      </div>
+      <p class="text-muted mt-2">Preparing benchmark visualization...</p>
+    </div>
+
+    <!-- Main content -->
+    <div v-show="componentReady">
+      <!-- Specifications Table -->
+      <div class="row mb-4" v-if="benchmarkData && benchmarkData.length > 0">
       <div class="col-12">
         <h5 class="text-center" style="font-size: 16px; font-weight: bold;">Specifications</h5>
         <div class="table-responsive">
@@ -229,6 +239,7 @@
         </div>
       </div>
     </div>
+    </div> <!-- End v-show="componentReady" -->
   </div>
 </template>
 
@@ -283,6 +294,9 @@ const props = defineProps({
     default: () => []
   }
 })
+
+// Track if component is ready to render
+const componentReady = ref(false)
 
 // Track which tabs have been rendered
 const renderedTabs = ref({
@@ -1109,10 +1123,18 @@ onMounted(() => {
   // Initialize the web worker
   initializeWorker()
   
-  // Calculate statistics if data is available
-  if (props.benchmarkData && props.benchmarkData.length > 0) {
-    calculateStatistics()
-  }
+  // Defer component rendering to next frame to prevent blocking
+  requestAnimationFrame(() => {
+    componentReady.value = true
+    
+    // Calculate statistics if data is available
+    if (props.benchmarkData && props.benchmarkData.length > 0) {
+      // Use a small delay to allow the UI to render first
+      setTimeout(() => {
+        calculateStatistics()
+      }, 50)
+    }
+  })
 
   // Listen for window resize events which may indicate DPI changes
   // This handles cases like:
@@ -1135,6 +1157,9 @@ onUnmounted(() => {
 })
 
 watch(() => props.benchmarkData, () => {
+  // Reset component state when data changes
+  componentReady.value = false
+  
   // Reset rendered tabs when data changes
   renderedTabs.value = {
     fps: false,
@@ -1143,14 +1168,21 @@ watch(() => props.benchmarkData, () => {
     'more-metrics': false
   }
   
-  // Recalculate statistics with new data
-  if (props.benchmarkData && props.benchmarkData.length > 0) {
-    calculateStatistics()
-  } else {
-    fpsStats.value = null
-    frametimeStats.value = null
-    summaryStats.value = null
-  }
+  // Defer rendering to next frame
+  requestAnimationFrame(() => {
+    componentReady.value = true
+    
+    // Recalculate statistics with new data
+    if (props.benchmarkData && props.benchmarkData.length > 0) {
+      setTimeout(() => {
+        calculateStatistics()
+      }, 50)
+    } else {
+      fpsStats.value = null
+      frametimeStats.value = null
+      summaryStats.value = null
+    }
+  })
 }, { deep: true })
 
 // Watch for stats completion and render the FPS tab (default)

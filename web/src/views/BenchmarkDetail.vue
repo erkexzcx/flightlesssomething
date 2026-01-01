@@ -243,12 +243,32 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state -->
+          <!-- Loading state with progress -->
           <div v-if="loadingData" class="text-center my-4">
             <div class="spinner-border" role="status">
               <span class="visually-hidden">Loading data...</span>
             </div>
-            <p class="text-muted mt-2">Loading benchmark data...</p>
+            <p class="text-muted mt-2">
+              <span v-if="downloadProgress">
+                Downloading benchmark data... {{ downloadProgress.percentage }}%
+                <br>
+                <small>({{ formatBytes(downloadProgress.loaded) }} / {{ formatBytes(downloadProgress.total) }})</small>
+              </span>
+              <span v-else>Loading benchmark data...</span>
+            </p>
+            <!-- Progress bar -->
+            <div v-if="downloadProgress" class="progress mx-auto mt-3" style="max-width: 400px;">
+              <div 
+                class="progress-bar progress-bar-striped progress-bar-animated" 
+                role="progressbar" 
+                :style="{ width: downloadProgress.percentage + '%' }"
+                :aria-valuenow="downloadProgress.percentage"
+                aria-valuemin="0" 
+                aria-valuemax="100"
+              >
+                {{ downloadProgress.percentage }}%
+              </div>
+            </div>
           </div>
 
           <!-- Error state -->
@@ -373,6 +393,7 @@ const runToDelete = ref(null)
 const benchmarkData = ref(null)
 const loadingData = ref(false)
 const dataError = ref(null)
+const downloadProgress = ref(null) // { loaded, total, percentage }
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
@@ -461,10 +482,13 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
+    downloadProgress.value = null
     
     // Load full data for accurate statistics (averages, percentiles, percentages)
     // The frontend chart component will downsample line charts as needed
-    benchmarkData.value = await api.benchmarks.getData(id)
+    benchmarkData.value = await api.benchmarks.getData(id, (progress) => {
+      downloadProgress.value = progress
+    })
     
     // Initialize edit labels from loaded data
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
@@ -472,6 +496,7 @@ async function loadBenchmarkData(id) {
     dataError.value = err.message || 'Failed to load benchmark data'
   } finally {
     loadingData.value = false
+    downloadProgress.value = null
   }
 }
 
@@ -615,6 +640,14 @@ async function handleUpdate() {
   } finally {
     updating.value = false
   }
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
 }
 
 function confirmDelete() {

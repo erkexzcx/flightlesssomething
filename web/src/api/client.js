@@ -128,8 +128,57 @@ export const api = {
       })
     },
 
-    async getData(id) {
-      return fetchJSON(`/api/benchmarks/${id}/data`)
+    async getData(id, onProgress) {
+      // Use custom fetch with progress tracking for large data downloads
+      const response = await fetch(API_BASE + `/api/benchmarks/${id}/data`, {
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new APIError(errorData.error || 'Failed to fetch data', response.status)
+      }
+
+      // Get content length for progress calculation
+      const contentLength = response.headers.get('content-length')
+      const total = contentLength ? parseInt(contentLength, 10) : 0
+
+      if (!total || !onProgress) {
+        // No progress tracking needed or possible
+        return response.json()
+      }
+
+      // Read response with progress tracking
+      const reader = response.body.getReader()
+      const chunks = []
+      let receivedLength = 0
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) break
+
+        chunks.push(value)
+        receivedLength += value.length
+
+        // Call progress callback
+        onProgress({
+          loaded: receivedLength,
+          total: total,
+          percentage: Math.round((receivedLength / total) * 100)
+        })
+      }
+
+      // Combine chunks and parse JSON
+      const chunksAll = new Uint8Array(receivedLength)
+      let position = 0
+      for (const chunk of chunks) {
+        chunksAll.set(chunk, position)
+        position += chunk.length
+      }
+
+      const text = new TextDecoder('utf-8').decode(chunksAll)
+      return JSON.parse(text)
     },
 
     getDataUrl(id) {
