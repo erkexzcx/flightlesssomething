@@ -3,6 +3,7 @@ package app
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"encoding/gob"
 	"encoding/json"
@@ -79,25 +80,29 @@ func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 }
 
 // parseData parses the data lines from the CSV file
-func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool) error {
+func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool, expectedLines int) error {
 	counter := 0
 	
-	// Pre-allocate slices with reasonable initial capacity to reduce reallocations
-	// Most benchmarks have at least 1000 data points, so start with that
-	const initialCapacity = 1000
-	benchmarkData.DataFPS = make([]float64, 0, initialCapacity)
-	benchmarkData.DataFrameTime = make([]float64, 0, initialCapacity)
-	benchmarkData.DataCPULoad = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPULoad = make([]float64, 0, initialCapacity)
-	benchmarkData.DataCPUTemp = make([]float64, 0, initialCapacity)
-	benchmarkData.DataCPUPower = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPUTemp = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPUCoreClock = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPUMemClock = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPUVRAMUsed = make([]float64, 0, initialCapacity)
-	benchmarkData.DataGPUPower = make([]float64, 0, initialCapacity)
-	benchmarkData.DataRAMUsed = make([]float64, 0, initialCapacity)
-	benchmarkData.DataSwapUsed = make([]float64, 0, initialCapacity)
+	// Pre-allocate slices with exact capacity based on actual line count
+	// This minimizes memory usage by allocating exactly what's needed
+	capacity := expectedLines
+	if capacity < 0 {
+		capacity = 0 // Safety check
+	}
+	
+	benchmarkData.DataFPS = make([]float64, 0, capacity)
+	benchmarkData.DataFrameTime = make([]float64, 0, capacity)
+	benchmarkData.DataCPULoad = make([]float64, 0, capacity)
+	benchmarkData.DataGPULoad = make([]float64, 0, capacity)
+	benchmarkData.DataCPUTemp = make([]float64, 0, capacity)
+	benchmarkData.DataCPUPower = make([]float64, 0, capacity)
+	benchmarkData.DataGPUTemp = make([]float64, 0, capacity)
+	benchmarkData.DataGPUCoreClock = make([]float64, 0, capacity)
+	benchmarkData.DataGPUMemClock = make([]float64, 0, capacity)
+	benchmarkData.DataGPUVRAMUsed = make([]float64, 0, capacity)
+	benchmarkData.DataGPUPower = make([]float64, 0, capacity)
+	benchmarkData.DataRAMUsed = make([]float64, 0, capacity)
+	benchmarkData.DataSwapUsed = make([]float64, 0, capacity)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -176,7 +181,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 }
 
 // readBenchmarkFile reads a single benchmark file
-func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, error) {
+func readBenchmarkFile(scanner *bufio.Scanner, fileType int, totalLines int) (*BenchmarkData, error) {
 	benchmarkData := &BenchmarkData{}
 
 	// Second line should contain specs
@@ -237,7 +242,14 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType int) (*BenchmarkData, er
 		}
 	}
 
-	err = parseData(scanner, headerMap, benchmarkData, fileType == FileTypeAfterburner)
+	// Calculate expected data lines
+	// Total lines - first line (format) - specs line - header line - afterburner extra headers
+	dataLines := totalLines - 3 // format, specs, header
+	if fileType == FileTypeAfterburner {
+		dataLines -= len(headerMap) // additional header lines for afterburner
+	}
+	
+	err = parseData(scanner, headerMap, benchmarkData, fileType == FileTypeAfterburner, dataLines)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +297,18 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		}
 	}()
 
-	scanner := bufio.NewScanner(file)
+	// Read the entire file content into memory for two-pass processing
+	// This allows us to count lines first for exact memory allocation
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Count total lines in the file for exact capacity allocation
+	// This minimizes memory waste by allocating the exact amount needed
+	lineCount := bytes.Count(content, []byte{'\n'})
+	
+	scanner := bufio.NewScanner(bytes.NewReader(content))
 
 	// First line identifies file format
 	if !scanner.Scan() {
@@ -303,7 +326,7 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		return nil, fmt.Errorf("unsupported file format (expected MangoHud CSV or Afterburner HML, got: '%.50s...')", firstLine)
 	}
 
-	benchmarkData, err := readBenchmarkFile(scanner, fileType)
+	benchmarkData, err := readBenchmarkFile(scanner, fileType, lineCount)
 	if err != nil {
 		return nil, err
 	}
