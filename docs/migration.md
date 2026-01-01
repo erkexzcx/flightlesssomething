@@ -132,8 +132,11 @@ The migration system is designed to be future-proof with three distinct database
 3. **Format 3+ (current and future)**: `flightlesssomething.db` with version tracking
    - **Detected by**: `schema_versions` table exists with version number
    - **Action**: Apply incremental migrations if version < currentSchemaVersion
-   - **Current version**: 1
-   - **Future**: Add migration logic for versions 2, 3, etc.
+   - **Current version**: 3
+   - **Version history**:
+     - Version 1: Initial schema with version tracking
+     - Version 2: Added RunNames and Specifications fields for enhanced search
+     - Version 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly)
 
 ### Migration Flow
 
@@ -165,6 +168,93 @@ database.db exists?
 - Schema version tracking prevents re-migration
 - Migration is idempotent - safe to re-run
 - Original IDs preserved for relationships and file associations
+
+## Storage Format Migration (V1 → V2)
+
+Starting from version 3 of the schema, benchmark data files are automatically migrated from V1 to V2 format on first startup. This migration improves memory efficiency when viewing large benchmarks.
+
+### What Gets Migrated
+
+The migration converts benchmark data files (`.bin`) from:
+- **V1 format**: Single gob-encoded array (requires loading entire dataset into memory)
+- **V2 format**: Header + individually-encoded runs (enables true streaming)
+
+### Automatic Migration Process
+
+When you start the server with schema version < 3:
+
+```
+Database is at version 2, current version is 3. Running data migrations...
+Migrating benchmark storage format from V1 to V2...
+=== Starting Benchmark Storage Format Migration (V1 → V2) ===
+Found 50 benchmark file(s) to check
+
+Processing benchmark 1...
+  Loading V1 format data...
+  Converting to V2 format (100 runs)...
+  Verifying conversion...
+  ✓ Successfully migrated to V2 format
+
+Processing benchmark 2...
+  Already in V2 format - skipping
+
+...
+
+=== Storage Migration Summary ===
+Total files found: 50
+Successfully migrated: 35
+Already V2 (skipped): 15
+Failed: 0
+==================================
+Storage format migration completed successfully!
+Successfully migrated to version 3
+```
+
+### Migration Safety
+
+**Important Notes:**
+
+- Migration is done **in-place** without creating backups for efficiency
+- **Make a backup of your data directory before upgrading** if you want to be able to roll back
+- Failed migrations will leave the file corrupted; having an external backup is recommended
+- V1 format files are overwritten during successful migration
+- The migration checks if files are already in V2 format and skips them
+
+### Rolling Back Migration
+
+If you need to revert to V1 format after migration:
+
+1. **Restore from your external backup:**
+   ```bash
+   # Stop the server first
+   cp -r /path/to/backup/data/benchmarks/* /path/to/data/benchmarks/
+   ```
+
+2. **Downgrade schema version** to prevent re-migration:
+   ```bash
+   sqlite3 /path/to/data/flightlesssomething.db
+   UPDATE schema_versions SET version = 2 WHERE version = 3;
+   .quit
+   ```
+
+3. **Restart with the previous server version**
+
+### Prevent Migration (Before It Happens)
+
+If you want to skip the storage migration and keep using V1 format:
+
+1. **Before starting the updated server**, manually set schema version to 3:
+   ```bash
+   sqlite3 /path/to/data/flightlesssomething.db
+   UPDATE schema_versions SET version = 3;
+   .quit
+   ```
+
+2. Start the server - migration will be skipped since version is already 3
+
+3. Your V1 format files will continue to work (backward compatible)
+
+**Note:** V1 files have higher memory usage but are still supported via fallback reader.
 
 ## Post-Migration
 
@@ -226,7 +316,30 @@ This is rare but can happen with data corruption.
 
 ### Disk Space
 
-You don't need extra disk space since the migration happens in-place. However, it's always recommended to have a backup of your data directory before migration.
+Migration happens in-place and doesn't require extra disk space. However, it's always recommended to have a backup of your data directory before migration.
+
+### Storage Format Migration Issues
+
+**Problem:** Migration fails with "Failed to save V2 format"
+
+**Solution:** 
+1. Check disk space (need enough space for the V2 file)
+2. Check file permissions (write access to benchmarks directory)
+3. Check logs for specific error details
+4. **Restore from your external backup** if migration corrupted files
+
+**Problem:** Want to revert to V1 format after migration
+
+**Solution:** See "Rolling Back Migration" section above. You'll need to restore from your external backup.
+
+**Problem:** High memory usage after migration
+
+**Cause:** Some V1 files might not have been migrated (check logs)
+
+**Solution:** 
+1. Check migration logs for which files were skipped or failed
+2. V1 files still work but use more memory (fallback reader)
+3. You can manually re-run migration by downgrading schema version to 2 and restarting
 
 ### Re-running Migration
 
@@ -234,6 +347,7 @@ If migration fails partway through, you can safely restart the server. The migra
 - Checks if each user/benchmark already exists
 - Skips already-migrated items
 - Completes only the remaining items
+- Skips V2 files (checks format before migrating)
 
 ## Need Help?
 
