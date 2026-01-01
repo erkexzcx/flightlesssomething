@@ -28,15 +28,18 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
 
   let loaded = 0
   const reader = response.body.getReader()
-  const chunks = []
+  const decoder = new TextDecoder()
+  let text = ''
 
   // Read the response body with progress tracking
+  // Stream directly to string to avoid memory overhead from Blob conversion
   while (true) {
     const { done, value } = await reader.read()
     
     if (done) break
     
-    chunks.push(value)
+    // Decode chunk directly to string instead of accumulating Uint8Arrays
+    text += decoder.decode(value, { stream: true })
     loaded += value.length
     
     // Report download progress
@@ -48,10 +51,9 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
       onDownloadProgress(-1)
     }
   }
-
-  // Combine chunks into a single string
-  const blob = new Blob(chunks)
-  const text = await blob.text()
+  
+  // Flush any remaining bytes from the decoder
+  text += decoder.decode()
 
   // Report download complete
   if (onDownloadProgress) {
@@ -86,25 +88,25 @@ function parseJSONInWorker(jsonString, onProgress) {
     const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
     // Simulate progress during parsing (since we can't track actual JSON.parse progress)
-    // Use a logarithmic-style progression that starts faster and slows down
+    // Use a smoother logarithmic-style progression
     let progressInterval
     if (onProgress) {
       let simulatedProgress = 0
       let updateCount = 0
       // Constants for logarithmic progression calculation
-      const INITIAL_SPEED = 15 // Higher = faster initial progress
-      const MIN_INCREMENT = 1  // Minimum progress increment per update
+      const INITIAL_SPEED = 8  // Slower initial progress for smoother feel
+      const MIN_INCREMENT = 0.5  // Smaller minimum increment for smoother updates
       const MAX_PROGRESS = 90  // Cap at 90%, final 10% happens when parsing completes
       
       progressInterval = setInterval(() => {
         updateCount++
-        // Logarithmic-style progression: fast start, slow end
+        // Logarithmic-style progression: gradual start, slow end
         // Formula: increment = max(MIN_INCREMENT, INITIAL_SPEED / sqrt(updateCount))
-        // This reaches ~70% in 2 seconds, then slows to ~85% by 5 seconds
+        // This provides smoother progression over longer time periods
         const increment = Math.max(MIN_INCREMENT, INITIAL_SPEED / Math.sqrt(updateCount))
         simulatedProgress = Math.min(simulatedProgress + increment, MAX_PROGRESS)
         onProgress(Math.round(simulatedProgress))
-      }, 100) // Update every 100ms for smoother progression
+      }, 200) // Update every 200ms for smoother, less jumpy progression
     }
 
     worker.addEventListener('message', (event) => {

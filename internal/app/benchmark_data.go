@@ -441,16 +441,26 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
 }
 
-// storeBenchmarkMetadata stores lightweight metadata (run count and labels) separately
+// storeBenchmarkMetadata stores lightweight metadata (run count, labels, and JSON size) separately
 func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	labels := make([]string, len(benchmarkData))
 	for i, data := range benchmarkData {
 		labels[i] = data.Label
 	}
 
+	// Calculate JSON size efficiently by streaming to a counting writer
+	// This avoids allocating the full JSON in memory
+	counter := &countingWriter{}
+	encoder := json.NewEncoder(counter)
+	if err := encoder.Encode(benchmarkData); err != nil {
+		// If JSON encoding fails, store 0 and log warning
+		fmt.Printf("Warning: failed to calculate JSON size for benchmark %d: %v\n", benchmarkID, err)
+	}
+	
 	metadata := BenchmarkMetadata{
 		RunCount:  len(benchmarkData),
 		RunLabels: labels,
+		JSONSize:  counter.count, // Store the JSON byte size from counting writer
 	}
 
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
@@ -468,6 +478,16 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 	// Use gob encoding for metadata (no need for compression, it's tiny)
 	gobEncoder := gob.NewEncoder(metaFile)
 	return gobEncoder.Encode(metadata)
+}
+
+// countingWriter counts bytes written without storing them
+type countingWriter struct {
+	count int64
+}
+
+func (c *countingWriter) Write(p []byte) (n int, err error) {
+	c.count += int64(len(p))
+	return len(p), nil
 }
 
 // RetrieveBenchmarkData retrieves benchmark data from disk
@@ -663,6 +683,13 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
 // This is optimized to read only metadata without loading the full benchmark data
 func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
+	runCount, labels, _, err := GetBenchmarkMetadata(benchmarkID)
+	return runCount, labels, err
+}
+
+// GetBenchmarkMetadata returns the full metadata for a benchmark including JSON size
+// This is optimized to read only metadata without loading the full benchmark data
+func GetBenchmarkMetadata(benchmarkID uint) (int, []string, *BenchmarkMetadata, error) {
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
 	metaFile, err := os.Open(metaPath)
 	if err != nil {
@@ -670,7 +697,7 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 		if os.IsNotExist(err) {
 			benchmarkData, retrieveErr := RetrieveBenchmarkData(benchmarkID)
 			if retrieveErr != nil {
-				return 0, nil, retrieveErr
+				return 0, nil, nil, retrieveErr
 			}
 
 			labels := make([]string, len(benchmarkData))
@@ -684,9 +711,10 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 				fmt.Printf("Warning: failed to store benchmark metadata: %v\n", storeErr)
 			}
 
-			return len(benchmarkData), labels, nil
+			// Return without metadata object since we couldn't load/create it
+			return len(benchmarkData), labels, nil, nil
 		}
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	defer func() {
 
@@ -704,10 +732,10 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 	gobDecoder := gob.NewDecoder(metaFile)
 	err = gobDecoder.Decode(&metadata)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 
-	return metadata.RunCount, metadata.RunLabels, nil
+	return metadata.RunCount, metadata.RunLabels, &metadata, nil
 }
 
 // ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching.

@@ -64,6 +64,7 @@ func (b *Benchmark) AfterFind(tx *gorm.DB) (err error) {
 type BenchmarkMetadata struct {
 	RunCount  int
 	RunLabels []string
+	JSONSize  int64 // Size of the JSON output in bytes (for Content-Length header)
 }
 
 // AuditLog represents an audit log entry for tracking user actions

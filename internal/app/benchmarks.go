@@ -204,6 +204,13 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Try to get metadata to set Content-Length header
+		_, _, metadata, err := GetBenchmarkMetadata(uint(benchmarkID))
+		if err == nil && metadata != nil && metadata.JSONSize > 0 {
+			// Set Content-Length header for accurate download progress
+			c.Header("Content-Length", strconv.FormatInt(metadata.JSONSize, 10))
+		}
+
 		// Stream benchmark data directly to response to minimize memory usage
 		if err := StreamBenchmarkDataAsJSON(uint(benchmarkID), c.Writer); err != nil {
 			// If streaming fails, we can't change status code (already sent headers)

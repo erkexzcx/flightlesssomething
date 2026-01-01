@@ -118,6 +118,10 @@ func InitDB(dataDir string) (*DBInstance, error) {
 			if err := MigrateBenchmarkStorageToV2(dataDir); err != nil {
 				return nil, fmt.Errorf("failed to migrate storage format to v2: %w", err)
 			}
+			log.Println("Regenerating metadata files with JSON size...")
+			if err := RegenerateMetadataWithJSONSize(dataDir); err != nil {
+				return nil, fmt.Errorf("failed to regenerate metadata: %w", err)
+			}
 			// Update version to 3 after successful migration
 			if err := setSchemaVersion(db, 3); err != nil {
 				return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
