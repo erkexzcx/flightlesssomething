@@ -54,6 +54,9 @@ RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
 # Runtime stage
 FROM alpine:3.23
 
+# Install CA certificates for HTTPS/TLS connections (Discord OAuth, etc.)
+RUN apk add --no-cache ca-certificates
+
 WORKDIR /app
 
 # Copy binary from builder
