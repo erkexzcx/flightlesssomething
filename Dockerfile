@@ -3,11 +3,11 @@ FROM node:20-alpine AS web-builder
 
 WORKDIR /build
 
-# Copy web UI files
-COPY web/package.json web/package-lock.json ./
-RUN npm install
-
+# Copy all web UI files
 COPY web ./
+
+# Install dependencies and build
+RUN npm ci --prefer-offline --no-audit
 RUN npm run build
 
 # Go build stage
