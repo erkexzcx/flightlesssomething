@@ -435,80 +435,13 @@ function calculatePercentile(data, percentile) {
   return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
 }
 
-// Helper function to calculate median
-function calculateMedian(data) {
-  if (!data || data.length === 0) return 0
-  const sorted = [...data].sort((a, b) => a - b)
-  const n = sorted.length
-  if (n % 2 === 0) {
-    return (sorted[n / 2 - 1] + sorted[n / 2]) / 2
-  } else {
-    return sorted[Math.floor(n / 2)]
-  }
-}
-
-// Helper function to detect if FPS data is capped (e.g., ~60 FPS cap)
-// Returns the detected cap value (e.g., 60) or null if not capped
-function detectFPSCap(fpsData) {
-  if (!fpsData || fpsData.length === 0) return null
-  
-  // Common FPS caps to check: 30, 60, 120, 144, 165, 240
-  const commonCaps = [30, 60, 120, 144, 165, 240]
-  
-  for (const cap of commonCaps) {
-    // Count frames within ±1 FPS of the cap
-    const countNearCap = fpsData.filter(fps => Math.abs(fps - cap) < 1).length
-    const percentageNearCap = countNearCap / fpsData.length
-    
-    // If >80% of frames are near this cap, consider it capped
-    if (percentageNearCap > 0.8) {
-      return cap
-    }
-  }
-  
-  return null
-}
-
-// Helper function to filter extreme outlier FPS frames
-// This removes non-gameplay frames like loading screens, menus, etc.
-function filterExtremeFrames(fpsData) {
-  if (!fpsData || fpsData.length === 0) return []
-  
-  // Detect if the run is capped at a specific FPS
-  const detectedCap = detectFPSCap(fpsData)
-  
-  let threshold
-  if (detectedCap !== null) {
-    // For capped runs: filter frames > cap × 1.5
-    threshold = detectedCap * 1.5
-  } else {
-    // For uncapped runs: filter frames > median × 3
-    const median = calculateMedian(fpsData)
-    threshold = median * 3
-  }
-  
-  // Filter out frames above the threshold
-  return fpsData.filter(fps => fps <= threshold)
-}
-
 // Calculate percentile FPS using harmonic mean method (via frametimes)
-// For high percentiles (e.g., 97%), extreme outliers are filtered to avoid inflation
+// All FPS data is processed without filtering - users should filter data before uploading
 function calculatePercentileFPS(fpsData, percentile) {
   if (!fpsData || fpsData.length === 0) return 0
   
-  // For high percentiles (>=90%), filter extreme frames to prevent
-  // non-gameplay frames (loading, menus) from inflating the value
-  let processedFpsData = fpsData
-  if (percentile >= 90) {
-    processedFpsData = filterExtremeFrames(fpsData)
-    // If filtering removed all data, fall back to original
-    if (processedFpsData.length === 0) {
-      processedFpsData = fpsData
-    }
-  }
-  
-  // Convert FPS to frametimes
-  const frametimes = processedFpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
+  // Convert FPS to frametimes (all frames included, no filtering applied)
+  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
   
   // IMPORTANT: Percentiles must be inverted when working with frametimes
   // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
