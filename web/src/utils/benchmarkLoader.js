@@ -82,7 +82,8 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
 function parseJSONInWorker(jsonString, onProgress) {
   return new Promise((resolve, reject) => {
     const worker = new JsonParserWorker()
-    const requestId = Math.random().toString(36).substring(7)
+    // Generate unique request ID to match responses
+    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
     // Simulate progress during parsing (since we can't track actual JSON.parse progress)
     // Use a logarithmic-style progression that starts faster and slows down
@@ -90,12 +91,18 @@ function parseJSONInWorker(jsonString, onProgress) {
     if (onProgress) {
       let simulatedProgress = 0
       let updateCount = 0
+      // Constants for logarithmic progression calculation
+      const INITIAL_SPEED = 15 // Higher = faster initial progress
+      const MIN_INCREMENT = 1  // Minimum progress increment per update
+      const MAX_PROGRESS = 90  // Cap at 90%, final 10% happens when parsing completes
+      
       progressInterval = setInterval(() => {
         updateCount++
         // Logarithmic-style progression: fast start, slow end
-        // Reaches ~70% in 2 seconds, then slows to ~85% by 5 seconds
-        const increment = Math.max(1, 15 / Math.sqrt(updateCount))
-        simulatedProgress = Math.min(simulatedProgress + increment, 90)
+        // Formula: increment = max(MIN_INCREMENT, INITIAL_SPEED / sqrt(updateCount))
+        // This reaches ~70% in 2 seconds, then slows to ~85% by 5 seconds
+        const increment = Math.max(MIN_INCREMENT, INITIAL_SPEED / Math.sqrt(updateCount))
+        simulatedProgress = Math.min(simulatedProgress + increment, MAX_PROGRESS)
         onProgress(Math.round(simulatedProgress))
       }, 100) // Update every 100ms for smoother progression
     }
