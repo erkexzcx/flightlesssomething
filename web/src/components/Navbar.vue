@@ -58,6 +58,11 @@
                     <i class="fa-solid fa-key"></i> API Tokens
                   </router-link>
                 </li>
+                <li>
+                  <router-link to="/settings" class="dropdown-item">
+                    <i class="fa-solid fa-gear"></i> Settings
+                  </router-link>
+                </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                   <a class="dropdown-item" href="#" @click.prevent="handleLogout">

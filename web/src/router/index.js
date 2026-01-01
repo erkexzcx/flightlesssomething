@@ -4,6 +4,7 @@ import Login from '../views/Login.vue'
 import BenchmarkCreate from '../views/BenchmarkCreate.vue'
 import BenchmarkDetail from '../views/BenchmarkDetail.vue'
 import APITokens from '../views/APITokens.vue'
+import Settings from '../views/Settings.vue'
 import Users from '../views/Users.vue'
 import Logs from '../views/Logs.vue'
 import { useAuthStore } from '../stores/auth'
@@ -48,6 +49,11 @@ const routes = [
     path: '/api-tokens',
     name: 'api-tokens',
     component: APITokens
+  },
+  {
+    path: '/settings',
+    name: 'settings',
+    component: Settings
   },
   {
     path: '/admin/users',
