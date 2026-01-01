@@ -11,8 +11,8 @@ import (
 )
 
 // TestUploadParsingMemoryUsage tests memory usage during file upload parsing
-// This demonstrates the optimization where we use file size for pre-allocation
-// instead of loading the entire file into memory
+// This demonstrates the two-pass optimization: first pass counts lines (streaming),
+// second pass parses with 100% accurate pre-allocation to eliminate all reallocations
 func TestUploadParsingMemoryUsage(t *testing.T) {
 	// Skip in short mode as this test analyzes memory
 	if testing.Short() {

@@ -82,12 +82,10 @@ func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool, expectedLines int) error {
 	counter := 0
 	
-	// Pre-allocate slices with capacity based on expected line count
-	// expectedLines is estimated from: (fileSize - 300 bytes) / 75 bytes per line
-	// This estimation is ~90-95% accurate for typical CSV files, minimizing both:
-	// - Memory waste from over-allocation
-	// - Performance cost from reallocation when capacity is exceeded
-	// Using append with pre-allocated capacity allows automatic growth if needed
+	// Pre-allocate slices with EXACT capacity based on actual line count
+	// Two-pass approach: first pass counts lines (streaming, no memory storage),
+	// second pass parses with exact pre-allocation to achieve 100% accuracy.
+	// This eliminates all reallocation overhead while keeping memory usage minimal.
 	capacity := expectedLines
 	if capacity < 0 {
 		capacity = 0 // Safety check
@@ -246,7 +244,7 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*Bench
 	}
 
 	// Calculate expected data lines for pre-allocation
-	// totalLines is estimated from file size: (fileSize - 300) / 75
+	// totalLines is EXACT count from first pass (streaming line count)
 	// Subtract header lines to get data line count for array pre-allocation
 	// Total lines - first line (format) - specs line - header line - afterburner extra headers
 	dataLines := totalLines - 3 // format, specs, header
@@ -295,7 +293,30 @@ func ReadBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error)
 }
 
 func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, error) {
+	// PASS 1: Count total lines in the file for 100% accurate pre-allocation
+	// This pass streams through the file without storing content, keeping memory usage minimal
 	file, err := fileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
+	
+	lineCount := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineCount++
+	}
+	if err := scanner.Err(); err != nil {
+		_ = file.Close() //nolint:errcheck // Error from counting, will report scan error
+		return nil, fmt.Errorf("failed to count lines: %w", err)
+	}
+	
+	// Close file after first pass
+	if err := file.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close file after counting: %w", err)
+	}
+	
+	// PASS 2: Reopen file and parse with exact pre-allocation
+	file, err = fileHeader.Open()
 	if err != nil {
 		return nil, err
 	}
@@ -305,36 +326,9 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
 		}
 	}()
-
-	// Use multipart file size to estimate data lines for pre-allocation
-	// This avoids loading the entire file into memory just to count lines
-	// 
-	// File structure:
-	// - Header overhead: ~300 bytes (format line, specs, column headers, afterburner extras)
-	// - Data lines: ~70-80 bytes per line on average (varies with number of columns and values)
-	// 
-	// Estimation formula: (fileSize - headerOverhead) / avgLineSize
-	// Conservative: (fileSize - 300) / 75 gives good pre-allocation without over-allocating
-	headerOverhead := int64(300)
-	avgLineSize := int64(75)
 	
-	// Protect against invalid file sizes or very small files
-	estimatedLines := 100 // Default minimum
-	if fileHeader.Size > headerOverhead {
-		estimatedLines = int((fileHeader.Size - headerOverhead) / avgLineSize)
-		if estimatedLines < 100 {
-			estimatedLines = 100 // Minimum reasonable size
-		}
-	}
-	// Cap at reasonable maximum to prevent excessive pre-allocation on corrupted/malicious files
-	if estimatedLines > 2000000 {
-		estimatedLines = 2000000 // ~150MB of data arrays
-	}
-	
-	// Create a buffered reader directly from the multipart file
-	// This allows single-pass streaming without loading entire file into memory
 	reader := bufio.NewReader(file)
-	scanner := bufio.NewScanner(reader)
+	scanner = bufio.NewScanner(reader)
 
 	// First line identifies file format
 	if !scanner.Scan() {
@@ -352,9 +346,8 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		return nil, fmt.Errorf("unsupported file format (expected MangoHud CSV or Afterburner HML, got: '%.50s...')", firstLine)
 	}
 
-	// Use estimated lines for pre-allocation
-	// The parser will adjust if actual count differs
-	benchmarkData, err := readBenchmarkFile(scanner, fileType, estimatedLines)
+	// Use exact line count for 100% accurate pre-allocation (no reallocation needed)
+	benchmarkData, err := readBenchmarkFile(scanner, fileType, lineCount)
 	if err != nil {
 		return nil, err
 	}
