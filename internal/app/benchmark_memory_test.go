@@ -82,8 +82,8 @@ func TestMemoryUsageWithLargeBenchmark(t *testing.T) {
 	}
 	t.Logf("Storage took: %v", time.Since(startStore))
 	
-	// Clear the benchmark data from memory
-	benchmarkData = nil
+	// Clear the benchmark data from memory and trigger GC
+	benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)
 	
@@ -123,8 +123,8 @@ func TestMemoryUsageWithLargeBenchmark(t *testing.T) {
 		}
 	}
 	
-	// Clear again
-	retrievedData = nil
+	// Clear again and trigger GC
+	retrievedData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)
 	
@@ -149,7 +149,7 @@ func TestMemoryUsageWithLargeBenchmark(t *testing.T) {
 		t.Logf("However, this test creates data in memory first, so baseline is already high")
 	}
 	
-	// Clean up test file
-	os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))
-	os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID))
+	// Clean up test files
+	_ = os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))
+	_ = os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID))
 }

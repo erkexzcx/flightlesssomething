@@ -186,7 +186,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 
 	successCount := 0
 	errorCount := 0
-	benchmarksDir := filepath.Join(dataDir, "benchmarks")
+	benchmarksDirPath := filepath.Join(dataDir, "benchmarks")
 
 	for i := range oldBenchmarks {
 		oldBenchmark := &oldBenchmarks[i]
@@ -228,7 +228,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 		}
 
 		// Verify benchmark data file exists
-		dataFile := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", oldBenchmark.ID))
+		dataFile := filepath.Join(benchmarksDirPath, fmt.Sprintf("%d.bin", oldBenchmark.ID))
 		if _, err := os.Stat(dataFile); os.IsNotExist(err) {
 			log.Printf("    WARNING: Data file not found: %s", dataFile)
 			errorCount++
@@ -244,7 +244,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 		}
 
 		// Create metadata file if it doesn't exist
-		metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", oldBenchmark.ID))
+		metaPath := filepath.Join(benchmarksDirPath, fmt.Sprintf("%d.meta", oldBenchmark.ID))
 		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
 			if err := createMetadataFileForMigration(dataDir, oldBenchmark.ID, benchmarkData); err != nil {
 				log.Printf("    ERROR: Failed to create metadata file: %v", err)

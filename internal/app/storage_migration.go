@@ -18,14 +18,14 @@ import (
 func MigrateBenchmarkStorageToV2(dataDir string) error {
 	log.Println("=== Starting Benchmark Storage Format Migration (V1 → V2) ===")
 	
-	benchmarksDir := filepath.Join(dataDir, "benchmarks")
-	if _, err := os.Stat(benchmarksDir); os.IsNotExist(err) {
+	benchmarksDirPath := filepath.Join(dataDir, "benchmarks")
+	if _, err := os.Stat(benchmarksDirPath); os.IsNotExist(err) {
 		log.Println("No benchmarks directory found - nothing to migrate")
 		return nil
 	}
 	
 	// Find all .bin files
-	files, err := filepath.Glob(filepath.Join(benchmarksDir, "*.bin"))
+	files, err := filepath.Glob(filepath.Join(benchmarksDirPath, "*.bin"))
 	if err != nil {
 		return fmt.Errorf("failed to list benchmark files: %w", err)
 	}
@@ -88,7 +88,7 @@ func MigrateBenchmarkStorageToV2(dataDir string) error {
 		}
 		
 		// Clear loaded data to help GC
-		benchmarkData = nil
+		benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 		runtime.GC()
 		
 		log.Printf("  ✓ Successfully migrated to V2 format")
@@ -117,7 +117,9 @@ func isBenchmarkFormatV2(benchmarkID uint) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	
 	// Set up decompression
 	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))

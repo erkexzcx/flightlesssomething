@@ -181,7 +181,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 }
 
 // readBenchmarkFile reads a single benchmark file
-func readBenchmarkFile(scanner *bufio.Scanner, fileType int, totalLines int) (*BenchmarkData, error) {
+func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*BenchmarkData, error) {
 	benchmarkData := &BenchmarkData{}
 
 	// Second line should contain specs
@@ -557,7 +557,7 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		// Old format - need to fall back to loading entire dataset
 		// Close and reopen to read from beginning
 		zstdDecoder.Close()
-		file.Close()
+		_ = file.Close()
 		
 		// Use legacy method which loads all data
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
@@ -819,7 +819,7 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	if err := gobDecoder.Decode(&header); err != nil {
 		// Old format - fall back to loading entire dataset
 		zstdDecoder.Close()
-		file.Close()
+		_ = file.Close()
 		
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
 		if err != nil {

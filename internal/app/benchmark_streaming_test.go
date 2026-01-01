@@ -72,8 +72,8 @@ func TestStreamingMemoryUsage(t *testing.T) {
 		t.Fatalf("Failed to store benchmark: %v", err)
 	}
 	
-	// Clear from memory
-	benchmarkData = nil
+	// Clear from memory and trigger GC
+	benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)
 	
@@ -144,9 +144,9 @@ func TestStreamingMemoryUsage(t *testing.T) {
 		t.Errorf("Expected to stream at least 1MB of JSON, got %d bytes", discard.bytesWritten)
 	}
 	
-	// Clean up
-	os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))
-	os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID))
+	// Clean up test files
+	_ = os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))
+	_ = os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID))
 }
 
 // discardWriter is a writer that counts bytes but doesn't store them
