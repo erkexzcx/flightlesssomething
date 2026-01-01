@@ -274,7 +274,7 @@
 
           <!-- Data visualization -->
           <div v-else-if="benchmarkData && benchmarkData.length > 0">
-            <BenchmarkCharts :benchmarkData="benchmarkData" />
+            <BenchmarkCharts :benchmarkData="convertToLegacyFormat(benchmarkData)" />
           </div>
 
           <!-- No data state -->
@@ -519,21 +519,6 @@ async function loadBenchmarkData(id) {
         console.error(`Error loading run ${runIndex}:`, error)
       }
     })
-    
-    // DEBUG: Log the data structure to verify it's correct
-    console.log('Loaded benchmark data:', benchmarkData.value)
-    if (benchmarkData.value && benchmarkData.value.length > 0) {
-      console.log('First run structure:', benchmarkData.value[0])
-      console.log('First run has series?', !!benchmarkData.value[0].series)
-      console.log('First run has stats?', !!benchmarkData.value[0].stats)
-      if (benchmarkData.value[0].series) {
-        console.log('FPS series length:', benchmarkData.value[0].series.FPS?.length)
-        console.log('FPS series sample:', benchmarkData.value[0].series.FPS?.slice(0, 3))
-      }
-      if (benchmarkData.value[0].stats) {
-        console.log('FPS stats:', benchmarkData.value[0].stats.FPS)
-      }
-    }
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
     editLabels.value = benchmarkData.value.map(d => d.label || '')
