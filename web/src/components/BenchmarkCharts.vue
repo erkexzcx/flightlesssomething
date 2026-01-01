@@ -235,6 +235,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useAppStore } from '../stores/app'
+import { getWorkerManager, terminateWorker } from '../utils/workerManager'
 import Highcharts from 'highcharts'
 import HighchartsBoost from 'highcharts/modules/boost'
 import HighchartsExporting from 'highcharts/modules/exporting'
@@ -249,6 +250,9 @@ HighchartsFullScreen(Highcharts)
 
 // Use app store for calculation mode
 const appStore = useAppStore()
+
+// Get worker manager instance
+const workerManager = getWorkerManager()
 
 // Get theme-aware colors
 const getThemeColors = computed(() => {
@@ -266,12 +270,6 @@ const getThemeColors = computed(() => {
     barBorderColor: isDark ? '#FFFFFF' : '#000000',
   }
 })
-
-// Constants for data processing
-const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
-const OUTLIER_HIGH_PERCENTILE = 0.97 // Remove top 3% outliers
-const MAX_DENSITY_POINTS = 100       // Maximum points for density charts
-const MAX_FRAMETIME_FOR_INVALID_FPS = 1000000  // Very large frametime for invalid FPS (0 or negative)
 
 const props = defineProps({
   benchmarkData: {
@@ -376,142 +374,6 @@ function formatOSSpecific(data) {
   if (data.SpecLinuxKernel) parts.push(data.SpecLinuxKernel)
   if (data.SpecLinuxScheduler) parts.push(data.SpecLinuxScheduler)
   return parts.length > 0 ? parts.join(' ') : '-'
-}
-
-// Simple decimation function for line charts to improve rendering performance
-// This keeps every Nth point to reduce the number of points rendered
-function decimateForLineChart(data, targetPoints = 2000) {
-  if (!data || data.length <= targetPoints) {
-    return data
-  }
-  
-  const step = Math.ceil(data.length / targetPoints)
-  const decimated = []
-  
-  // Always include first point
-  decimated.push(data[0])
-  
-  // Include every Nth point
-  for (let i = step; i < data.length - 1; i += step) {
-    decimated.push(data[i])
-  }
-  
-  // Always include last point
-  if (data.length > 1) {
-    decimated.push(data[data.length - 1])
-  }
-  
-  return decimated
-}
-
-function calculateAverage(data) {
-  if (!data || data.length === 0) return 0
-  return data.reduce((acc, value) => acc + value, 0) / data.length
-}
-
-// Calculate average FPS using harmonic mean (via frametimes)
-// This is the standard way to calculate average FPS
-// Formula: 1000 / (sum of frametimes / count)
-function calculateAverageFPS(fpsData) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (ms): frametime = 1000 / fps
-  // Handle edge case where FPS is 0 or negative by using a very large frametime
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // Calculate sum of frametimes
-  const sumFrametimes = frametimes.reduce((acc, ft) => acc + ft, 0)
-  
-  // Average frametime
-  const avgFrametime = sumFrametimes / frametimes.length
-  
-  // Convert back to FPS: 1000 / avgFrametime
-  return avgFrametime > 0 ? 1000 / avgFrametime : 0
-}
-
-function calculatePercentile(data, percentile) {
-  if (!data || data.length === 0) return 0
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
-}
-
-// Calculate percentile FPS using harmonic mean method (via frametimes)
-// All FPS data is processed without filtering - users should filter data before uploading
-function calculatePercentileFPS(fpsData, percentile) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (all frames included, no filtering applied)
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // IMPORTANT: Percentiles must be inverted when working with frametimes
-  // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
-  // - 1% low FPS (worst performance) = 99th percentile of frametimes (slowest frames)
-  // - 97th percentile FPS (good performance) = 3rd percentile of frametimes (fastest frames)
-  const invertedPercentile = 100 - percentile
-  const sorted = [...frametimes].sort((a, b) => a - b)
-  const n = sorted.length
-  
-  // Simple percentile calculation without interpolation
-  // Index = round((percentile / 100) * (n + 1))
-  const index = Math.round((invertedPercentile / 100) * (n + 1))
-  const clampedIndex = Math.max(0, Math.min(index, n - 1))
-  const frametimePercentile = sorted[clampedIndex]
-  
-  // Convert back to FPS
-  return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
-}
-
-function calculateStandardDeviation(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  const avgSquaredDiff = calculateAverage(squaredDiffs)
-  return Math.sqrt(avgSquaredDiff)
-}
-
-function calculateVariance(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  return calculateAverage(squaredDiffs)
-}
-
-function filterOutliers(data) {
-  if (!data || data.length === 0) return []
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted.slice(
-    Math.floor(sorted.length * OUTLIER_LOW_PERCENTILE), 
-    Math.ceil(sorted.length * OUTLIER_HIGH_PERCENTILE)
-  )
-}
-
-function countOccurrences(data) {
-  const counts = {}
-  data.forEach(value => {
-    const rounded = Math.round(value)
-    counts[rounded] = (counts[rounded] || 0) + 1
-  })
-
-  let array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
-
-  while (array.length > MAX_DENSITY_POINTS) {
-    let minDiff = Infinity
-    let minIndex = -1
-
-    for (let i = 0; i < array.length - 1; i++) {
-      const diff = array[i + 1][0] - array[i][0]
-      if (diff < minDiff) {
-        minDiff = diff
-        minIndex = i
-      }
-    }
-
-    array[minIndex][1] += array[minIndex + 1][1]
-    array[minIndex][0] = (array[minIndex][0] + array[minIndex + 1][0]) / 2
-    array.splice(minIndex + 1, 1)
-  }
-
-  return array
 }
 
 function renderFPSComparisonChart() {
@@ -723,12 +585,11 @@ function createChart(element, title, description, unit, dataArrays, maxY = null)
   if (!element || !dataArrays || dataArrays.length === 0) return
   
   const options = getLineChartOptions(title, description, unit, maxY)
-  // Decimate data only for line chart rendering to improve performance
-  // Statistics are calculated from full data before this function is called
+  // Use pre-decimated data from worker for optimal performance
   const chartColors = Highcharts.getOptions().colors
   options.series = dataArrays.map((dataArray, index) => ({
     name: dataArray.label,
-    data: decimateForLineChart(dataArray.data || [], 2000),
+    data: dataArray.data || [],
     color: chartColors[index % chartColors.length]
   }))
   
@@ -745,7 +606,7 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
   Highcharts.chart(element, options)
 }
 
-// Computed properties to cache data arrays - only recalculated when benchmarkData changes
+// Reactive data arrays - populated synchronously from props
 const dataArrays = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) {
     return {
@@ -782,73 +643,64 @@ const dataArrays = computed(() => {
   }
 })
 
-// Computed properties to cache statistical calculations for FPS data
-// These are expensive operations that should only run once per data change
-const fpsStats = computed(() => {
-  const arrays = dataArrays.value.fpsDataArrays
-  if (!arrays || arrays.length === 0) return null
-  
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
-    return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentileFPS(d.data, 1),
-      avg: calculateAverageFPS(d.data),
-      max: calculatePercentileFPS(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
-    }
-  })
-})
+// Reactive refs for worker-calculated statistics
+// These are populated asynchronously by the Web Worker
+const fpsStats = ref(null)
+const frametimeStats = ref(null)
+const summaryStats = ref(null)
+const decimatedData = ref(null)
+const calculationsLoading = ref(false)
 
-// Computed properties to cache statistical calculations for frametime data
-const frametimeStats = computed(() => {
-  const arrays = dataArrays.value.frameTimeDataArrays
-  if (!arrays || arrays.length === 0) return null
-  
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
-    return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentile(d.data, 1),
-      avg: calculateAverage(d.data),
-      max: calculatePercentile(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
-    }
-  })
-})
-
-// Computed properties to cache average calculations for summary charts
-const summaryStats = computed(() => {
-  const arrays = dataArrays.value
-  if (!arrays) return null
-  
-  return {
-    fpsAverages: arrays.fpsDataArrays.map(d => calculateAverageFPS(d.data)),
-    frametimeAverages: arrays.frameTimeDataArrays.map(d => calculateAverage(d.data)),
-    cpuLoadAverages: arrays.cpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuLoadAverages: arrays.gpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuCoreClockAverages: arrays.gpuCoreClockDataArrays.map(d => calculateAverage(d.data)),
-    gpuMemClockAverages: arrays.gpuMemClockDataArrays.map(d => calculateAverage(d.data)),
-    cpuPowerAverages: arrays.cpuPowerDataArrays.map(d => calculateAverage(d.data)),
-    gpuPowerAverages: arrays.gpuPowerDataArrays.map(d => calculateAverage(d.data))
+// Calculate all statistics using Web Worker
+async function calculateStatistics() {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) {
+    fpsStats.value = null
+    frametimeStats.value = null
+    summaryStats.value = null
+    decimatedData.value = null
+    return
   }
-})
+
+  try {
+    calculationsLoading.value = true
+    
+    // Use the worker to calculate all statistics at once
+    // This offloads heavy computation to a separate thread
+    const result = await workerManager.calculateAll(dataArrays.value)
+    
+    fpsStats.value = result.fpsStats
+    frametimeStats.value = result.frametimeStats
+    summaryStats.value = result.summaryStats
+    decimatedData.value = result.decimatedData
+  } catch (error) {
+    console.error('Failed to calculate statistics:', error)
+    // Fallback: set to empty/null so rendering can proceed
+    fpsStats.value = []
+    frametimeStats.value = []
+    summaryStats.value = {
+      fpsAverages: [],
+      frametimeAverages: [],
+      cpuLoadAverages: [],
+      gpuLoadAverages: [],
+      gpuCoreClockAverages: [],
+      gpuMemClockAverages: [],
+      cpuPowerAverages: [],
+      gpuPowerAverages: []
+    }
+    decimatedData.value = dataArrays.value
+  } finally {
+    calculationsLoading.value = false
+  }
+}
 
 function renderFPSTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  if (!decimatedData.value || !fpsStats.value) return // Wait for worker calculations
   
-  const { fpsDataArrays } = dataArrays.value
+  const { fpsDataArrays } = decimatedData.value
   const stats = fpsStats.value
   
-  // Create FPS charts
+  // Create FPS charts using decimated data from worker
   createChart(fpsChart2.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
 
   // FPS Min/Max/Avg chart
@@ -930,8 +782,9 @@ function renderFPSTab() {
 
 function renderFrametimeTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  if (!decimatedData.value || !frametimeStats.value) return // Wait for worker calculations
   
-  const { frameTimeDataArrays } = dataArrays.value
+  const { frameTimeDataArrays } = decimatedData.value
   const stats = frametimeStats.value
   
   createChart(frameTimeChart2.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
@@ -1015,13 +868,12 @@ function renderFrametimeTab() {
 
 function renderSummaryTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  if (!summaryStats.value || !dataArrays.value) return // Wait for worker calculations
   
   const arrays = dataArrays.value
   const stats = summaryStats.value
-  
-  if (!stats) return
 
-  // Create summary bar charts using pre-calculated averages
+  // Create summary bar charts using pre-calculated averages from worker
   const chartColors = Highcharts.getOptions().colors
   createBarChart(fpsSummaryChart.value, 'Average FPS', 'fps', arrays.fpsDataArrays.map(d => d.label), stats.fpsAverages, chartColors)
   createBarChart(frametimeSummaryChart.value, 'Average Frametime', 'ms', arrays.frameTimeDataArrays.map(d => d.label), stats.frametimeAverages, chartColors)
@@ -1035,6 +887,7 @@ function renderSummaryTab() {
 
 function renderMoreMetricsTab() {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return
+  if (!decimatedData.value) return // Wait for worker calculations
   
   const {
     fpsDataArrays,
@@ -1050,9 +903,9 @@ function renderMoreMetricsTab() {
     gpuPowerDataArrays,
     ramUsedDataArrays,
     swapUsedDataArrays
-  } = dataArrays.value
+  } = decimatedData.value
 
-  // Create line charts
+  // Create line charts using pre-decimated data from worker
   createChart(fpsChart.value, 'FPS', 'More is better', 'fps', fpsDataArrays)
   createChart(frameTimeChart.value, 'Frametime', 'Less is better', 'ms', frameTimeDataArrays)
   createChart(cpuLoadChart.value, 'CPU Load', '', '%', cpuLoadDataArrays, 100)
@@ -1137,9 +990,12 @@ function updatePixelRatio() {
   }, 200) // 200ms debounce
 }
 
-onMounted(() => {
-  // Only render the first tab (FPS) on mount
+onMounted(async () => {
+  // Calculate statistics using Web Worker when component mounts
   if (props.benchmarkData && props.benchmarkData.length > 0) {
+    await calculateStatistics()
+    
+    // Render the first tab (FPS) after calculations are done
     nextTick(() => {
       renderFPSTab()
       renderedTabs.value.fps = true
@@ -1147,10 +1003,6 @@ onMounted(() => {
   }
 
   // Listen for window resize events which may indicate DPI changes
-  // This handles cases like:
-  // - Moving window between displays with different pixel densities
-  // - Browser zoom changes
-  // - Display settings changes
   window.addEventListener('resize', updatePixelRatio)
 })
 
@@ -1162,7 +1014,7 @@ onUnmounted(() => {
   }
 })
 
-watch(() => props.benchmarkData, () => {
+watch(() => props.benchmarkData, async () => {
   // Reset rendered tabs when data changes
   renderedTabs.value = {
     fps: false,
@@ -1171,8 +1023,11 @@ watch(() => props.benchmarkData, () => {
     'more-metrics': false
   }
   
-  // Re-render the active tab
+  // Recalculate statistics with new data
   if (props.benchmarkData && props.benchmarkData.length > 0) {
+    await calculateStatistics()
+    
+    // Re-render the active tab
     nextTick(() => {
       renderFPSTab()
       renderedTabs.value.fps = true
