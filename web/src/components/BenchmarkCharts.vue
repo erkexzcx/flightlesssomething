@@ -771,19 +771,19 @@ const dataArrays = computed(() => {
   const extractY = (series) => series.map(point => point[1])
   
   return {
-    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.FPS || []) })),
-    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.FrameTime || []) })),
-    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPULoad || []) })),
-    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPULoad || []) })),
-    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPUTemp || []) })),
-    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPUPower || []) })),
-    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUTemp || []) })),
-    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUCoreClock || []) })),
-    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUMemClock || []) })),
-    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUVRAMUsed || []) })),
-    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUPower || []) })),
-    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.RAMUsed || []) })),
-    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.SwapUsed || []) }))
+    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FPS || []) })),
+    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FrameTime || []) })),
+    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPULoad || []) })),
+    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPULoad || []) })),
+    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUTemp || []) })),
+    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUPower || []) })),
+    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUTemp || []) })),
+    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUCoreClock || []) })),
+    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUMemClock || []) })),
+    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUVRAMUsed || []) })),
+    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUPower || []) })),
+    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.RAMUsed || []) })),
+    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.SwapUsed || []) }))
   }
 })
 
@@ -794,7 +794,7 @@ const fpsStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return props.benchmarkData.map((run) => {
-    const stats = run.stats.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run.stats?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -818,7 +818,7 @@ const frametimeStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return props.benchmarkData.map((run) => {
-    const stats = run.stats.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run.stats?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -841,14 +841,14 @@ const summaryStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return {
-    fpsAverages: props.benchmarkData.map(run => run.stats.FPS?.avg || 0),
-    frametimeAverages: props.benchmarkData.map(run => run.stats.FrameTime?.avg || 0),
-    cpuLoadAverages: props.benchmarkData.map(run => run.stats.CPULoad?.avg || 0),
-    gpuLoadAverages: props.benchmarkData.map(run => run.stats.GPULoad?.avg || 0),
-    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats.GPUCoreClock?.avg || 0),
-    gpuMemClockAverages: props.benchmarkData.map(run => run.stats.GPUMemClock?.avg || 0),
-    cpuPowerAverages: props.benchmarkData.map(run => run.stats.CPUPower?.avg || 0),
-    gpuPowerAverages: props.benchmarkData.map(run => run.stats.GPUPower?.avg || 0)
+    fpsAverages: props.benchmarkData.map(run => run.stats?.FPS?.avg || 0),
+    frametimeAverages: props.benchmarkData.map(run => run.stats?.FrameTime?.avg || 0),
+    cpuLoadAverages: props.benchmarkData.map(run => run.stats?.CPULoad?.avg || 0),
+    gpuLoadAverages: props.benchmarkData.map(run => run.stats?.GPULoad?.avg || 0),
+    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats?.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: props.benchmarkData.map(run => run.stats?.GPUMemClock?.avg || 0),
+    cpuPowerAverages: props.benchmarkData.map(run => run.stats?.CPUPower?.avg || 0),
+    gpuPowerAverages: props.benchmarkData.map(run => run.stats?.GPUPower?.avg || 0)
   }
 })
 
