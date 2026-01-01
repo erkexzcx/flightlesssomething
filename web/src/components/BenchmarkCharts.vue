@@ -31,6 +31,73 @@
       </div>
     </div>
 
+    <!-- Filter Controls -->
+    <div class="filter-controls-bar mb-3" v-if="benchmarkData && benchmarkData.length > 0">
+      <div class="d-flex align-items-center">
+        <div class="form-check mb-0">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            id="tempFilterExtremeSpikes"
+            v-model="tempFilterExtremeSpikes"
+            @change="handleTempFilterChange"
+          >
+          <label class="form-check-label" for="tempFilterExtremeSpikes">
+            Filter extreme FPS spikes
+          </label>
+        </div>
+        <button 
+          type="button" 
+          class="btn btn-link btn-sm p-0 ms-2" 
+          @click="showFilterInfoModal = true"
+          title="More information"
+        >
+          <i class="fa-solid fa-info-circle"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter Info Modal -->
+    <div 
+      class="modal fade" 
+      :class="{ show: showFilterInfoModal }" 
+      :style="{ display: showFilterInfoModal ? 'block' : 'none' }"
+      tabindex="-1" 
+      @click.self="showFilterInfoModal = false"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-info-circle"></i> Filter Settings
+            </h5>
+            <button type="button" class="btn-close" @click="showFilterInfoModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <p>
+              The filter settings shown here are <strong>temporary</strong> and will reset to your saved preferences when you reload the page.
+            </p>
+            <p class="mb-0">
+              To make permanent changes to filter settings, visit the 
+              <router-link to="/settings" @click="showFilterInfoModal = false">Settings page</router-link>.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="showFilterInfoModal = false">Close</button>
+            <router-link to="/settings" class="btn btn-primary" @click="showFilterInfoModal = false">
+              Go to Settings
+            </router-link>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div 
+      class="modal-backdrop fade" 
+      :class="{ show: showFilterInfoModal }" 
+      v-if="showFilterInfoModal"
+      @click="showFilterInfoModal = false"
+    ></div>
+
     <!-- Tabs for different chart categories -->
     <ul class="nav nav-tabs" id="chartTabs" role="tablist">
       <li class="nav-item" role="presentation">
@@ -292,6 +359,26 @@ const renderedTabs = ref({
 const fpsBaselineIndex = ref(null) // null means auto (slowest)
 const frametimeBaselineIndex = ref(null) // null means auto (fastest)
 
+// Temporary filter setting (not persisted, resets to appStore value on component mount/reload)
+const tempFilterExtremeSpikes = ref(appStore.filterExtremeSpikes)
+const showFilterInfoModal = ref(false)
+
+// Handler for temporary filter changes
+function handleTempFilterChange() {
+  // Re-render affected tabs when temporary filter changes
+  nextTick(() => {
+    if (renderedTabs.value.fps) {
+      renderFPSTab()
+    }
+    if (renderedTabs.value.frametime) {
+      renderFrametimeTab()
+    }
+    if (renderedTabs.value.summary) {
+      renderSummaryTab()
+    }
+  })
+}
+
 // Refs for chart containers
 const fpsChart = ref(null)
 const fpsChart2 = ref(null)
@@ -498,9 +585,9 @@ function calculatePercentileFPS(fpsData, percentile) {
   
   // For high percentiles (>=90%), filter extreme frames to prevent
   // non-gameplay frames (loading, menus) from inflating the value
-  // Only apply filtering if the user has enabled it in settings
+  // Use the temporary filter setting (which defaults to appStore value but can be changed per-page)
   let processedFpsData = fpsData
-  if (percentile >= 90 && appStore.filterExtremeSpikes) {
+  if (percentile >= 90 && tempFilterExtremeSpikes.value) {
     processedFpsData = filterExtremeFrames(fpsData)
     // If filtering removed all data, fall back to original
     if (processedFpsData.length === 0) {
@@ -1253,8 +1340,11 @@ watch(() => appStore.theme, () => {
   reRenderAllTabs()
 })
 
-// Watch for filter setting changes and re-render affected tabs
-watch(() => appStore.filterExtremeSpikes, () => {
+// Watch for filter setting changes from Settings page and update temporary filter
+watch(() => appStore.filterExtremeSpikes, (newValue) => {
+  // Sync temporary filter with Settings page changes
+  tempFilterExtremeSpikes.value = newValue
+  
   nextTick(() => {
     if (renderedTabs.value.fps) {
       renderFPSTab()
@@ -1305,5 +1395,32 @@ watch(() => appStore.filterExtremeSpikes, () => {
 
 .baseline-selector .form-select {
   max-width: 300px;
+}
+
+/* Filter controls bar */
+.filter-controls-bar {
+  padding: 0.75rem 1rem;
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+}
+
+.filter-controls-bar .btn-link {
+  color: var(--bs-info);
+  text-decoration: none;
+}
+
+.filter-controls-bar .btn-link:hover {
+  color: var(--bs-info);
+  text-decoration: underline;
+}
+
+/* Modal styling */
+.modal.show {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop.show {
+  opacity: 0.5;
 }
 </style>
