@@ -210,65 +210,38 @@ Storage format migration completed successfully!
 Successfully migrated to version 3
 ```
 
-### Backup Files
+### Migration Safety
 
-**During migration, backup files are automatically created:**
+**Important Notes:**
 
-Each benchmark data file is backed up as `<benchmark_id>.bin.v1.bak` before conversion. For example:
-```
-data/benchmarks/
-├── 1.bin           # V2 format (migrated)
-├── 1.bin.v1.bak    # V1 format (backup)
-├── 2.bin           # V2 format (migrated)
-├── 2.bin.v1.bak    # V1 format (backup)
-└── ...
-```
+- Migration is done **in-place** without creating backups for efficiency
+- **Make a backup of your data directory before upgrading** if you want to be able to roll back
+- Failed migrations will leave the file corrupted; having an external backup is recommended
+- V1 format files are overwritten during successful migration
+- The migration checks if files are already in V2 format and skips them
 
-**Backup cleanup:**
-- On **successful** migration: Backup file is automatically deleted
-- On **failed** migration: Backup is automatically restored, conversion retried
-- If backup deletion fails: Warning logged, but migration continues (backup remains on disk)
+### Rolling Back Migration
 
-### Restoring from Backup
+If you need to revert to V1 format after migration:
 
-If you encounter issues after migration and need to restore the V1 format:
-
-#### Option 1: Manual Restoration (Recommended)
-
-1. **Stop the server** to prevent concurrent file access
-
-2. **Identify backup files:**
+1. **Restore from your external backup:**
    ```bash
-   cd /path/to/data/benchmarks
-   ls -lh *.v1.bak
+   # Stop the server first
+   cp -r /path/to/backup/data/benchmarks/* /path/to/data/benchmarks/
    ```
 
-3. **Restore specific benchmarks:**
-   ```bash
-   # For a specific benchmark (e.g., benchmark 42)
-   mv 42.bin.v1.bak 42.bin
-   ```
-
-4. **Restore all benchmarks:**
-   ```bash
-   # Restore all V1 backups
-   for f in *.v1.bak; do
-       mv "$f" "${f%.v1.bak}"
-   done
-   ```
-
-5. **Downgrade schema version** to prevent re-migration:
+2. **Downgrade schema version** to prevent re-migration:
    ```bash
    sqlite3 /path/to/data/flightlesssomething.db
    UPDATE schema_versions SET version = 2 WHERE version = 3;
    .quit
    ```
 
-6. **Restart the server** with the old version that supports V1 format
+3. **Restart with the previous server version**
 
-#### Option 2: Prevent Migration (Before It Happens)
+### Prevent Migration (Before It Happens)
 
-If you want to skip the storage migration:
+If you want to skip the storage migration and keep using V1 format:
 
 1. **Before starting the updated server**, manually set schema version to 3:
    ```bash
@@ -282,16 +255,6 @@ If you want to skip the storage migration:
 3. Your V1 format files will continue to work (backward compatible)
 
 **Note:** V1 files have higher memory usage but are still supported via fallback reader.
-
-#### Option 3: Keep Both Versions
-
-You can keep both V1 backups and V2 files:
-
-1. **Don't delete backup files** - they remain harmless on disk
-2. V2 files are used by default
-3. Manually restore specific files if needed (see Option 1)
-
-Backup files only consume disk space and don't affect server operation.
 
 ## Post-Migration
 
@@ -353,42 +316,30 @@ This is rare but can happen with data corruption.
 
 ### Disk Space
 
-You don't need extra disk space since the migration happens in-place. However, it's always recommended to have a backup of your data directory before migration.
-
-**Storage format migration:** Temporarily requires 2x disk space per benchmark file during conversion (original + V2 version), but backups are deleted after successful migration.
+Migration happens in-place and doesn't require extra disk space. However, it's always recommended to have a backup of your data directory before migration.
 
 ### Storage Format Migration Issues
 
 **Problem:** Migration fails with "Failed to save V2 format"
 
 **Solution:** 
-1. Check disk space (need ~2x current benchmark data size temporarily)
+1. Check disk space (need enough space for the V2 file)
 2. Check file permissions (write access to benchmarks directory)
 3. Check logs for specific error details
-4. Backup will be automatically restored on failure
+4. **Restore from your external backup** if migration corrupted files
 
 **Problem:** Want to revert to V1 format after migration
 
-**Solution:** See "Restoring from Backup" section above. Backups are kept if deletion fails, or you can manually restore before successful migration completes.
-
-**Problem:** Backup files remain after successful migration
-
-**Cause:** Backup deletion failed (permissions or disk full)
-
-**Solution:** These files are harmless and can be safely deleted:
-```bash
-cd /path/to/data/benchmarks
-rm *.v1.bak
-```
+**Solution:** See "Rolling Back Migration" section above. You'll need to restore from your external backup.
 
 **Problem:** High memory usage after migration
 
 **Cause:** Some V1 files might not have been migrated (check logs)
 
 **Solution:** 
-1. Check migration logs for which files were skipped
-2. Manually verify format of remaining files
-3. V1 files still work but use more memory (fallback reader)
+1. Check migration logs for which files were skipped or failed
+2. V1 files still work but use more memory (fallback reader)
+3. You can manually re-run migration by downgrading schema version to 2 and restarting
 
 ### Re-running Migration
 

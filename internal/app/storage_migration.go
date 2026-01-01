@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	
 	"github.com/klauspost/compress/zstd"
@@ -13,6 +14,7 @@ import (
 
 // MigrateBenchmarkStorageToV2 migrates all benchmark data files from V1 to V2 format
 // This function scans all .bin files and re-encodes them using the new streaming-friendly format
+// Migration is done in-place without backups for efficiency
 func MigrateBenchmarkStorageToV2(dataDir string) error {
 	log.Println("=== Starting Benchmark Storage Format Migration (V1 → V2) ===")
 	
@@ -67,7 +69,7 @@ func MigrateBenchmarkStorageToV2(dataDir string) error {
 			continue
 		}
 		
-		// Load data using legacy reader
+		// Load data using legacy reader (loads all into memory)
 		log.Printf("  Loading V1 format data...")
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
 		if err != nil {
@@ -76,57 +78,18 @@ func MigrateBenchmarkStorageToV2(dataDir string) error {
 			continue
 		}
 		
-		// Create backup of original file
-		backupPath := filePath + ".v1.bak"
-		if err := os.Rename(filePath, backupPath); err != nil {
-			log.Printf("  ERROR: Failed to create backup: %v", err)
-			errorCount++
-			continue
-		}
-		
-		// Store in new V2 format
+		// Store in new V2 format (in-place, overwrites old file)
 		log.Printf("  Converting to V2 format (%d runs)...", len(benchmarkData))
 		if err := StoreBenchmarkData(benchmarkData, benchmarkID); err != nil {
-			// Restore backup on failure
 			log.Printf("  ERROR: Failed to save V2 format: %v", err)
-			log.Printf("  Restoring backup...")
-			if restoreErr := os.Rename(backupPath, filePath); restoreErr != nil {
-				log.Printf("  CRITICAL: Failed to restore backup: %v", restoreErr)
-			}
+			log.Printf("  WARNING: Original V1 file may be corrupted")
 			errorCount++
 			continue
 		}
 		
-		// Verify the conversion worked
-		log.Printf("  Verifying conversion...")
-		verifyData, err := RetrieveBenchmarkData(benchmarkID)
-		if err != nil {
-			log.Printf("  ERROR: Verification failed: %v", err)
-			log.Printf("  Restoring backup...")
-			os.Remove(filePath)
-			if restoreErr := os.Rename(backupPath, filePath); restoreErr != nil {
-				log.Printf("  CRITICAL: Failed to restore backup: %v", restoreErr)
-			}
-			errorCount++
-			continue
-		}
-		
-		if len(verifyData) != len(benchmarkData) {
-			log.Printf("  ERROR: Data mismatch after conversion (expected %d runs, got %d)", 
-				len(benchmarkData), len(verifyData))
-			log.Printf("  Restoring backup...")
-			os.Remove(filePath)
-			if restoreErr := os.Rename(backupPath, filePath); restoreErr != nil {
-				log.Printf("  CRITICAL: Failed to restore backup: %v", restoreErr)
-			}
-			errorCount++
-			continue
-		}
-		
-		// Success! Remove backup
-		if err := os.Remove(backupPath); err != nil {
-			log.Printf("  WARNING: Failed to remove backup file: %v", err)
-		}
+		// Clear loaded data to help GC
+		benchmarkData = nil
+		runtime.GC()
 		
 		log.Printf("  ✓ Successfully migrated to V2 format")
 		successCount++

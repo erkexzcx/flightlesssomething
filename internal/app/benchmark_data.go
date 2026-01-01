@@ -81,6 +81,23 @@ func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 // parseData parses the data lines from the CSV file
 func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool) error {
 	counter := 0
+	
+	// Pre-allocate slices with reasonable initial capacity to reduce reallocations
+	// Most benchmarks have at least 1000 data points, so start with that
+	const initialCapacity = 1000
+	benchmarkData.DataFPS = make([]float64, 0, initialCapacity)
+	benchmarkData.DataFrameTime = make([]float64, 0, initialCapacity)
+	benchmarkData.DataCPULoad = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPULoad = make([]float64, 0, initialCapacity)
+	benchmarkData.DataCPUTemp = make([]float64, 0, initialCapacity)
+	benchmarkData.DataCPUPower = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPUTemp = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPUCoreClock = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPUMemClock = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPUVRAMUsed = make([]float64, 0, initialCapacity)
+	benchmarkData.DataGPUPower = make([]float64, 0, initialCapacity)
+	benchmarkData.DataRAMUsed = make([]float64, 0, initialCapacity)
+	benchmarkData.DataSwapUsed = make([]float64, 0, initialCapacity)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -242,7 +259,8 @@ func detectFileType(firstLine string) int {
 
 // ReadBenchmarkFiles reads and parses multiple benchmark files
 func ReadBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error) {
-	benchmarkDatas := make([]*BenchmarkData, 0)
+	// Pre-allocate slice with exact capacity to avoid reallocations
+	benchmarkDatas := make([]*BenchmarkData, 0, len(files))
 
 	for _, fileHeader := range files {
 		benchmarkData, err := readSingleBenchmarkFile(fileHeader)
