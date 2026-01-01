@@ -3,7 +3,6 @@ package app
 import (
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"encoding/csv"
 	"encoding/gob"
 	"errors"
@@ -309,23 +308,27 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 		}
 	}()
 
-	var buffer bytes.Buffer
-	gobEncoder := gob.NewEncoder(&buffer)
-	err = gobEncoder.Encode(benchmarkData)
+	// Use higher compression concurrency and better compression level for storage
+	// SpeedDefault provides good balance between compression ratio and speed
+	zstdEncoder, err := zstd.NewWriter(file, 
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderConcurrency(2))
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := zstdEncoder.Close(); err != nil {
+			fmt.Printf("Warning: failed to close zstd encoder: %v\n", err)
+		}
+	}()
 
-	zstdEncoder, err := zstd.NewWriter(file, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	if err != nil {
+	// Stream directly from gob encoder to zstd encoder (no intermediate buffer)
+	gobEncoder := gob.NewEncoder(zstdEncoder)
+	if err := gobEncoder.Encode(benchmarkData); err != nil {
 		return err
 	}
 
-	_, err = zstdEncoder.Write(buffer.Bytes())
-	if err != nil {
-		return err
-	}
-
+	// Ensure all data is flushed before metadata write
 	if err := zstdEncoder.Close(); err != nil {
 		return fmt.Errorf("failed to close zstd encoder: %w", err)
 	}
@@ -387,20 +390,16 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 
 	}()
 
-	zstdDecoder, err := zstd.NewReader(file)
+	// Use concurrent decompression for better performance with large files
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
 	if err != nil {
 		return nil, err
 	}
 	defer zstdDecoder.Close()
 
-	var buffer bytes.Buffer
-	_, err = buffer.ReadFrom(zstdDecoder)
-	if err != nil {
-		return nil, err
-	}
-
+	// Stream directly to gob decoder to avoid intermediate buffer allocation
 	var benchmarkData []*BenchmarkData
-	gobDecoder := gob.NewDecoder(&buffer)
+	gobDecoder := gob.NewDecoder(zstdDecoder)
 	err = gobDecoder.Decode(&benchmarkData)
 	return benchmarkData, err
 }
@@ -638,8 +637,13 @@ func sanitizeFilename(filename string) string {
 
 // writeBenchmarkDataAsCSV writes benchmark data to a writer in MangoHud CSV format
 func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
-	csvWriter := csv.NewWriter(writer)
-	defer csvWriter.Flush()
+	// Use buffered writer for better performance
+	bufWriter := bufio.NewWriterSize(writer, 64*1024) // 64KB buffer
+	csvWriter := csv.NewWriter(bufWriter)
+	defer func() {
+		csvWriter.Flush()
+		bufWriter.Flush()
+	}()
 
 	// Write the header line (MangoHud format)
 	if err := csvWriter.Write([]string{"os", "cpu", "gpu", "ram", "kernel", "driver", "cpuscheduler"}); err != nil {
@@ -689,9 +693,11 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 		}
 	}
 
+	// Pre-allocate row buffer to avoid repeated allocations
+	row := make([]string, len(headers))
+	
 	// Write data rows
 	for i := 0; i < maxLen; i++ {
-		row := make([]string, len(headers))
 		for j, arr := range dataArrays {
 			if i < len(arr) {
 				row[j] = strconv.FormatFloat(arr[i], 'f', -1, 64)

@@ -209,6 +209,54 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Support optional pagination for large datasets to reduce memory usage
+		// Query parameters: run_offset, run_limit
+		runOffset := 0
+		runLimit := len(data) // default: return all runs
+		
+		if offsetStr := c.Query("run_offset"); offsetStr != "" {
+			if parsedOffset, parseErr := strconv.Atoi(offsetStr); parseErr == nil && parsedOffset >= 0 {
+				runOffset = parsedOffset
+			}
+		}
+		
+		if limitStr := c.Query("run_limit"); limitStr != "" {
+			if parsedLimit, parseErr := strconv.Atoi(limitStr); parseErr == nil && parsedLimit > 0 {
+				runLimit = parsedLimit
+			}
+		}
+
+		// Apply pagination if specified
+		totalRuns := len(data)
+		if runOffset >= totalRuns {
+			// Return empty result if offset is beyond available data
+			c.JSON(http.StatusOK, gin.H{
+				"runs":       []*BenchmarkData{},
+				"total_runs": totalRuns,
+				"offset":     runOffset,
+				"limit":      runLimit,
+			})
+			return
+		}
+
+		// Calculate the slice bounds
+		endIdx := runOffset + runLimit
+		if endIdx > totalRuns {
+			endIdx = totalRuns
+		}
+
+		// Return paginated data if pagination was requested
+		if runOffset > 0 || runLimit < totalRuns {
+			c.JSON(http.StatusOK, gin.H{
+				"runs":       data[runOffset:endIdx],
+				"total_runs": totalRuns,
+				"offset":     runOffset,
+				"limit":      runLimit,
+			})
+			return
+		}
+
+		// Return all data for backward compatibility when no pagination params
 		c.JSON(http.StatusOK, data)
 	}
 }
