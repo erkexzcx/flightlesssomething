@@ -789,7 +789,7 @@ const dataArrays = computed(() => {
 
 // Computed properties using PRE-CALCULATED statistics from FULL data
 // Statistics are calculated during incremental loading from full datasets (before downsampling)
-// This ensures 100% accuracy for bar charts and density panels
+// This ensures 100% accuracy for bar charts and percentile panels
 const fpsStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
@@ -804,10 +804,15 @@ const fpsStats = computed(() => {
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data  
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
-      stddev: 0,  // Not pre-calculated, would need to be added to processor if needed
-      variance: 0, // Not pre-calculated, would need to be added to processor if needed
+      // NOTE: stddev/variance not pre-calculated in processor to save memory
+      // These would need to be added to benchmarkDataProcessor.js if needed
+      stddev: 0,  
+      variance: 0,
       filteredOutliers: filtered,
-      densityData: countOccurrences(filtered) // Density from downsampled data (visual approximation)
+      // NOTE: Density chart uses downsampled data (2000 points max)
+      // This is a visual approximation - accuracy is good enough for distribution visualization
+      // True accuracy would require keeping all data points which defeats the memory optimization
+      densityData: countOccurrences(filtered)
     }
   })
 })
@@ -827,10 +832,12 @@ const frametimeStats = computed(() => {
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
-      stddev: 0,  // Not pre-calculated
-      variance: 0, // Not pre-calculated
+      // NOTE: stddev/variance not pre-calculated to save memory
+      stddev: 0,  
+      variance: 0,
       filteredOutliers: filtered,
-      densityData: countOccurrences(filtered) // Density from downsampled data (visual approximation)
+      // NOTE: Density chart uses downsampled data - visual approximation
+      densityData: countOccurrences(filtered)
     }
   })
 })
