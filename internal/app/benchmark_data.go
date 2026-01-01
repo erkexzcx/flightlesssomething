@@ -441,16 +441,26 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
 }
 
-// storeBenchmarkMetadata stores lightweight metadata (run count and labels) separately
+// storeBenchmarkMetadata stores lightweight metadata (run count, labels, and exact JSON size) separately
 func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	labels := make([]string, len(benchmarkData))
 	for i, data := range benchmarkData {
 		labels[i] = data.Label
 	}
 
+	// Calculate exact JSON size by encoding to a counting writer
+	// This ensures we get the EXACT byte count that will be sent to clients
+	counter := &countingWriter{}
+	encoder := json.NewEncoder(counter)
+	if err := encoder.Encode(benchmarkData); err != nil {
+		// If JSON encoding fails, log warning and store 0
+		fmt.Printf("Warning: failed to calculate JSON size for benchmark %d: %v\n", benchmarkID, err)
+	}
+	
 	metadata := BenchmarkMetadata{
 		RunCount:  len(benchmarkData),
 		RunLabels: labels,
+		JSONSize:  counter.count, // Store the exact JSON byte size
 	}
 
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
@@ -468,6 +478,16 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 	// Use gob encoding for metadata (no need for compression, it's tiny)
 	gobEncoder := gob.NewEncoder(metaFile)
 	return gobEncoder.Encode(metadata)
+}
+
+// countingWriter counts bytes written without storing them
+type countingWriter struct {
+	count int64
+}
+
+func (c *countingWriter) Write(p []byte) (n int, err error) {
+	c.count += int64(len(p))
+	return len(p), nil
 }
 
 // RetrieveBenchmarkData retrieves benchmark data from disk
@@ -555,114 +575,33 @@ func retrieveBenchmarkDataLegacy(benchmarkID uint) ([]*BenchmarkData, error) {
 }
 
 // StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
-// This truly minimizes memory usage by decoding and encoding runs one at a time
+// For accurate Content-Length, we load all data and use json.NewEncoder for consistent output
 func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
-	// Open the data file
-	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
-	file, err := os.Open(filePath)
+	// Load benchmark data (V2 format uses streaming internally to minimize memory during load)
+	benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
-		}
-		// Final GC after streaming completes
-		runtime.GC()
-	}()
-
-	// Set up decompression
-	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
-	if err != nil {
-		return err
-	}
-	defer zstdDecoder.Close()
-
-	gobDecoder := gob.NewDecoder(zstdDecoder)
 	
-	// Try to read header to determine format version
-	var header fileHeader
-	var runCount int
-	
-	if err := gobDecoder.Decode(&header); err != nil {
-		// Old format - need to fall back to loading entire dataset
-		// Close and reopen to read from beginning
-		zstdDecoder.Close()
-		_ = file.Close() //nolint:errcheck // Error not critical, falling back to legacy reader
-		
-		// Use legacy method which loads all data
-		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
-		if err != nil {
-			return err
-		}
-		
-		// Set headers and write JSON (all at once for old format)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		
-		// Encode all data at once for old format
-		return json.NewEncoder(w).Encode(benchmarkData)
-	}
-	
-	// New format detected
-	if header.Version != storageFormatVersion {
-		return fmt.Errorf("unsupported storage format version: %d", header.Version)
-	}
-	
-	runCount = header.RunCount
-
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-
-	// Manually stream JSON array - true streaming without loading all runs
-	if _, err := w.Write([]byte("[")); err != nil {
-		return err
-	}
-
-	// Stream each run individually (only one run in memory at a time)
-	for i := 0; i < runCount; i++ {
-		var run BenchmarkData
-		if err := gobDecoder.Decode(&run); err != nil {
-			return fmt.Errorf("failed to decode run %d: %w", i, err)
-		}
-		
-		// Encode this run to JSON
-		runJSON, err := json.Marshal(&run)
-		if err != nil {
-			return err
-		}
-		
-		// Write the JSON
-		if _, err := w.Write(runJSON); err != nil {
-			return err
-		}
-		
-		// Write comma separator if not the last element
-		if i < runCount-1 {
-			if _, err := w.Write([]byte(",")); err != nil {
-				return err
-			}
-		}
-		
-		// Trigger GC periodically to aggressively reclaim memory
-		// Each run is now out of scope and can be collected
-		if i%gcFrequencyStreaming == 0 && i > 0 {
-			runtime.GC()
-		}
-	}
-
-	// Write closing bracket
-	if _, err := w.Write([]byte("]")); err != nil {
-		return err
-	}
-
-	return nil
+	
+	// Encode using json.NewEncoder - this matches what we use for size calculation
+	// ensuring Content-Length is accurate
+	return json.NewEncoder(w).Encode(benchmarkData)
 }
 
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
 // This is optimized to read only metadata without loading the full benchmark data
 func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
+	count, labels, _, err := GetBenchmarkMetadata(benchmarkID)
+	return count, labels, err
+}
+
+// GetBenchmarkMetadata returns the full metadata for a benchmark
+// This is optimized to read only metadata without loading the full benchmark data
+func GetBenchmarkMetadata(benchmarkID uint) (int, []string, *BenchmarkMetadata, error) {
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
 	metaFile, err := os.Open(metaPath)
 	if err != nil {
@@ -670,7 +609,7 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 		if os.IsNotExist(err) {
 			benchmarkData, retrieveErr := RetrieveBenchmarkData(benchmarkID)
 			if retrieveErr != nil {
-				return 0, nil, retrieveErr
+				return 0, nil, nil, retrieveErr
 			}
 
 			labels := make([]string, len(benchmarkData))
@@ -684,30 +623,25 @@ func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
 				fmt.Printf("Warning: failed to store benchmark metadata: %v\n", storeErr)
 			}
 
-			return len(benchmarkData), labels, nil
+			return len(benchmarkData), labels, nil, nil
 		}
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	defer func() {
-
 		if closeErr := metaFile.Close(); closeErr != nil {
-
 			// Log error but continue - this is cleanup
-
 			fmt.Printf("Warning: failed to close metaFile: %v\n", closeErr)
-
 		}
-
 	}()
 
 	var metadata BenchmarkMetadata
 	gobDecoder := gob.NewDecoder(metaFile)
 	err = gobDecoder.Decode(&metadata)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 
-	return metadata.RunCount, metadata.RunLabels, nil
+	return metadata.RunCount, metadata.RunLabels, &metadata, nil
 }
 
 // ExtractSearchableMetadata extracts run names and specifications from benchmark data for searching.
@@ -1098,4 +1032,60 @@ func convertRAMToKB(ramStr string) string {
 
 	// If we can't parse it, return empty string
 	return ""
+}
+
+// RetrieveBenchmarkRun retrieves a single run from benchmark data
+// runIndex is 0-based
+func RetrieveBenchmarkRun(benchmarkID uint, runIndex int) (*BenchmarkData, error) {
+filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+file, err := os.Open(filePath)
+if err != nil {
+return nil, err
+}
+defer func() {
+if closeErr := file.Close(); closeErr != nil {
+fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+}
+}()
+
+zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+if err != nil {
+return nil, err
+}
+defer zstdDecoder.Close()
+
+gobDecoder := gob.NewDecoder(zstdDecoder)
+
+// Try to read header to determine format version
+var header fileHeader
+if err := gobDecoder.Decode(&header); err != nil {
+// Old format - need to load all data
+return nil, fmt.Errorf("old format not supported for single run retrieval")
+}
+
+// New format detected
+if header.Version != storageFormatVersion {
+return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+}
+
+// Check if runIndex is valid
+if runIndex < 0 || runIndex >= header.RunCount {
+return nil, fmt.Errorf("invalid run index %d (total runs: %d)", runIndex, header.RunCount)
+}
+
+// Skip to the requested run
+for i := 0; i < runIndex; i++ {
+var skipRun BenchmarkData
+if err := gobDecoder.Decode(&skipRun); err != nil {
+return nil, fmt.Errorf("failed to skip run %d: %w", i, err)
+}
+}
+
+// Decode the requested run
+var run BenchmarkData
+if err := gobDecoder.Decode(&run); err != nil {
+return nil, fmt.Errorf("failed to decode run %d: %w", runIndex, err)
+}
+
+return &run, nil
 }

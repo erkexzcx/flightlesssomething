@@ -20,7 +20,7 @@ const (
 	// - 0: Old schema (Format 1 and Format 2) - no schema_versions table, has ai_summary column
 	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
 	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
-	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format)
+	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format) + regenerate metadata with JSON size
 	// Future versions should increment this and add migration logic in InitDB
 	currentSchemaVersion = 3
 	// Maximum description length in new schema
@@ -564,3 +564,62 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 	return nil
 }
 
+
+// RegenerateMetadataWithJSONSize regenerates all .meta files to include JSON size
+// This enables accurate Content-Length headers for benchmark downloads
+func RegenerateMetadataWithJSONSize(dataDir string) error {
+	benchmarksDirPath := filepath.Join(dataDir, "benchmarks")
+	
+	log.Println("Starting metadata regeneration with JSON size...")
+	
+	// Find all .bin files
+	files, err := filepath.Glob(filepath.Join(benchmarksDirPath, "*.bin"))
+	if err != nil {
+		return fmt.Errorf("failed to list benchmark files: %w", err)
+	}
+	
+	successCount := 0
+	errorCount := 0
+	
+	for _, binFile := range files {
+		// Extract benchmark ID from filename
+		var benchmarkID uint
+		_, err := fmt.Sscanf(filepath.Base(binFile), "%d.bin", &benchmarkID)
+		if err != nil {
+			log.Printf("    WARNING: Skipping invalid filename: %s", filepath.Base(binFile))
+			continue
+		}
+		
+		log.Printf("    Regenerating metadata for benchmark %d...", benchmarkID)
+		
+		// Load benchmark data
+		benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
+		if err != nil {
+			log.Printf("    ERROR: Failed to load benchmark %d: %v", benchmarkID, err)
+			errorCount++
+			continue
+		}
+		
+		// Regenerate metadata with JSON size
+		if err := storeBenchmarkMetadata(benchmarkData, benchmarkID); err != nil {
+			log.Printf("    ERROR: Failed to store metadata for benchmark %d: %v", benchmarkID, err)
+			errorCount++
+			continue
+		}
+		
+		log.Printf("    Successfully regenerated metadata (runs: %d)", len(benchmarkData))
+		successCount++
+	}
+	
+	log.Println("\n=== Metadata Regeneration Summary ===")
+	log.Printf("Benchmarks updated: %d", successCount)
+	log.Printf("Benchmarks failed: %d", errorCount)
+	log.Println("======================================")
+	
+	if errorCount > 0 {
+		log.Printf("WARNING: %d benchmarks failed to update, but migration will continue", errorCount)
+	}
+	
+	log.Println("Metadata regeneration completed!")
+	return nil
+}

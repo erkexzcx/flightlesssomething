@@ -183,6 +183,13 @@ func HandleGetBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Populate run count and labels from metadata
+		count, labels, err := GetBenchmarkRunCount(benchmark.ID)
+		if err == nil {
+			benchmark.RunCount = count
+			benchmark.RunLabels = labels
+		}
+
 		c.JSON(http.StatusOK, benchmark)
 	}
 }
@@ -204,7 +211,15 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Stream benchmark data directly to response to minimize memory usage
+		// Get metadata to set accurate Content-Length header
+		_, _, metadata, err := GetBenchmarkMetadata(uint(benchmarkID))
+		if err == nil && metadata != nil && metadata.JSONSize > 0 {
+			// Set Content-Length header for accurate download progress
+			c.Header("Content-Length", strconv.FormatInt(metadata.JSONSize, 10))
+		}
+
+		// Stream benchmark data directly to response
+		// We use json.NewEncoder which produces consistent output with the size calculation
 		if err := StreamBenchmarkDataAsJSON(uint(benchmarkID), c.Writer); err != nil {
 			// If streaming fails, we can't change status code (already sent headers)
 			// Log the error for debugging
@@ -776,4 +791,39 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			"total_run_count": len(existingData),
 		})
 	}
+}
+
+// HandleGetBenchmarkRun returns a single run from a benchmark
+func HandleGetBenchmarkRun(db *DBInstance) gin.HandlerFunc {
+return func(c *gin.Context) {
+id := c.Param("id")
+benchmarkID, err := strconv.ParseUint(id, 10, 32)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+return
+}
+
+runIndexStr := c.Param("runIndex")
+runIndex, err := strconv.Atoi(runIndexStr)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run index"})
+return
+}
+
+// Verify benchmark exists
+var benchmark Benchmark
+if dbErr := db.DB.First(&benchmark, benchmarkID).Error; dbErr != nil {
+c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
+return
+}
+
+// Retrieve the single run
+run, err := RetrieveBenchmarkRun(uint(benchmarkID), runIndex)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+return
+}
+
+c.JSON(http.StatusOK, run)
+}
 }

@@ -53,45 +53,46 @@ func MigrateBenchmarkStorageToV2(dataDir string) error {
 			continue
 		}
 		
-		log.Printf("Processing benchmark %d...", benchmarkID)
-		
 		// Check if already in V2 format
 		isV2, err := isBenchmarkFormatV2(benchmarkID)
 		if err != nil {
-			log.Printf("  ERROR: Failed to check format: %v", err)
+			log.Printf("Benchmark %d: ERROR - Failed to check format: %v", benchmarkID, err)
 			errorCount++
 			continue
 		}
 		
 		if isV2 {
-			log.Printf("  Already in V2 format - skipping")
+			log.Printf("Benchmark %d: Already in V2 format - skipped", benchmarkID)
 			skipCount++
 			continue
 		}
 		
 		// Load data using legacy reader (loads all into memory)
-		log.Printf("  Loading V1 format data...")
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
 		if err != nil {
-			log.Printf("  ERROR: Failed to load data: %v", err)
+			log.Printf("Benchmark %d: ERROR - Failed to load V1 data: %v", benchmarkID, err)
 			errorCount++
 			continue
 		}
 		
+		runCount := len(benchmarkData)
+		
 		// Store in new V2 format (in-place, overwrites old file)
-		log.Printf("  Converting to V2 format (%d runs)...", len(benchmarkData))
 		if err := StoreBenchmarkData(benchmarkData, benchmarkID); err != nil {
-			log.Printf("  ERROR: Failed to save V2 format: %v", err)
-			log.Printf("  WARNING: Original V1 file may be corrupted")
+			log.Printf("Benchmark %d: ERROR - Failed to save V2: %v", benchmarkID, err)
 			errorCount++
 			continue
 		}
+		
+		// Note: StoreBenchmarkData already calls storeBenchmarkMetadata internally
+		// which now includes JSON size calculation, so metadata is already generated
+		
+		log.Printf("Benchmark %d: ✓ Migrated to V2 format (%d runs)", benchmarkID, runCount)
 		
 		// Clear loaded data to help GC
 		benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 		runtime.GC()
 		
-		log.Printf("  ✓ Successfully migrated to V2 format")
 		successCount++
 	}
 	

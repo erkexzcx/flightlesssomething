@@ -18,11 +18,11 @@
             </thead>
             <tbody>
               <tr v-for="(data, index) in benchmarkData" :key="index">
-                <th scope="row">{{ data.Label }}</th>
-                <td>{{ data.SpecOS || '-' }}</td>
-                <td>{{ data.SpecGPU || '-' }}</td>
-                <td>{{ data.SpecCPU || '-' }}</td>
-                <td>{{ data.SpecRAM || '-' }}</td>
+                <th scope="row">{{ data.label }}</th>
+                <td>{{ data.specOS || '-' }}</td>
+                <td>{{ data.specGPU || '-' }}</td>
+                <td>{{ data.specCPU || '-' }}</td>
+                <td>{{ data.specRAM || '-' }}</td>
                 <td>{{ formatOSSpecific(data) }}</td>
               </tr>
             </tbody>
@@ -115,7 +115,7 @@
                 :key="index" 
                 :value="index"
               >
-                {{ data.Label }}
+                {{ data.label }}
               </option>
             </select>
           </div>
@@ -151,7 +151,7 @@
                 :key="index" 
                 :value="index"
               >
-                {{ data.Label }}
+                {{ data.label }}
               </option>
             </select>
           </div>
@@ -373,8 +373,9 @@ Highcharts.setOptions({
 // Helper functions
 function formatOSSpecific(data) {
   const parts = []
-  if (data.SpecLinuxKernel) parts.push(data.SpecLinuxKernel)
-  if (data.SpecLinuxScheduler) parts.push(data.SpecLinuxScheduler)
+  // Processed data uses specOSSpecific object
+  if (data.specOSSpecific?.SpecLinuxKernel) parts.push(data.specOSSpecific.SpecLinuxKernel)
+  if (data.specOSSpecific?.SpecLinuxScheduler) parts.push(data.specOSSpecific.SpecLinuxScheduler)
   return parts.length > 0 ? parts.join(' ') : '-'
 }
 
@@ -765,80 +766,89 @@ const dataArrays = computed(() => {
     }
   }
   
+  // Processed data structure: d.series.FPS = [[x1, y1], [x2, y2], ...]
+  // We only need the Y values for compatibility with existing chart code
+  const extractY = (series) => series.map(point => point[1])
+  
   return {
-    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
-    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
-    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] })),
-    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] })),
-    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] })),
-    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] })),
-    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] })),
-    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] })),
-    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] })),
-    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] })),
-    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] })),
-    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
-    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
+    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FPS || []) })),
+    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FrameTime || []) })),
+    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPULoad || []) })),
+    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPULoad || []) })),
+    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUTemp || []) })),
+    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUPower || []) })),
+    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUTemp || []) })),
+    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUCoreClock || []) })),
+    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUMemClock || []) })),
+    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUVRAMUsed || []) })),
+    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUPower || []) })),
+    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.RAMUsed || []) })),
+    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.SwapUsed || []) }))
   }
 })
 
-// Computed properties to cache statistical calculations for FPS data
-// These are expensive operations that should only run once per data change
+// Computed properties using PRE-CALCULATED statistics from FULL data
+// Statistics are calculated during incremental loading from full datasets (before downsampling)
+// This ensures 100% accuracy for bar charts and percentile panels
 const fpsStats = computed(() => {
-  const arrays = dataArrays.value.fpsDataArrays
-  if (!arrays || arrays.length === 0) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
+  return props.benchmarkData.map((run) => {
+    const stats = run.stats?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
+    
     return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentileFPS(d.data, 1),
-      avg: calculateAverageFPS(d.data),
-      max: calculatePercentileFPS(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
+      label: run.label,
+      data: seriesData, // Downsampled data for line charts ONLY
+      min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
+      avg: stats.avg,  // Use pre-calculated average from FULL data  
+      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      // NOTE: stddev/variance not pre-calculated in processor to save memory
+      // These would need to be added to benchmarkDataProcessor.js if needed
+      stddev: 0,  
+      variance: 0,
+      // Use pre-calculated density from FULL data (calculated during download from all points)
+      densityData: stats.density
     }
   })
 })
 
-// Computed properties to cache statistical calculations for frametime data
+// Computed properties using PRE-CALCULATED statistics from FULL data
 const frametimeStats = computed(() => {
-  const arrays = dataArrays.value.frameTimeDataArrays
-  if (!arrays || arrays.length === 0) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
+  return props.benchmarkData.map((run) => {
+    const stats = run.stats?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
+    
     return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentile(d.data, 1),
-      avg: calculateAverage(d.data),
-      max: calculatePercentile(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
-      filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
+      label: run.label,
+      data: seriesData, // Downsampled data for line charts ONLY
+      min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
+      avg: stats.avg,  // Use pre-calculated average from FULL data
+      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      // NOTE: stddev/variance not pre-calculated to save memory
+      stddev: 0,  
+      variance: 0,
+      // Use pre-calculated density from FULL data (calculated during download from all points)
+      densityData: stats.density
     }
   })
 })
 
-// Computed properties to cache average calculations for summary charts
+// Computed properties using PRE-CALCULATED averages from FULL data for summary charts
 const summaryStats = computed(() => {
-  const arrays = dataArrays.value
-  if (!arrays) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return {
-    fpsAverages: arrays.fpsDataArrays.map(d => calculateAverageFPS(d.data)),
-    frametimeAverages: arrays.frameTimeDataArrays.map(d => calculateAverage(d.data)),
-    cpuLoadAverages: arrays.cpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuLoadAverages: arrays.gpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuCoreClockAverages: arrays.gpuCoreClockDataArrays.map(d => calculateAverage(d.data)),
-    gpuMemClockAverages: arrays.gpuMemClockDataArrays.map(d => calculateAverage(d.data)),
-    cpuPowerAverages: arrays.cpuPowerDataArrays.map(d => calculateAverage(d.data)),
-    gpuPowerAverages: arrays.gpuPowerDataArrays.map(d => calculateAverage(d.data))
+    fpsAverages: props.benchmarkData.map(run => run.stats?.FPS?.avg || 0),
+    frametimeAverages: props.benchmarkData.map(run => run.stats?.FrameTime?.avg || 0),
+    cpuLoadAverages: props.benchmarkData.map(run => run.stats?.CPULoad?.avg || 0),
+    gpuLoadAverages: props.benchmarkData.map(run => run.stats?.GPULoad?.avg || 0),
+    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats?.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: props.benchmarkData.map(run => run.stats?.GPUMemClock?.avg || 0),
+    cpuPowerAverages: props.benchmarkData.map(run => run.stats?.CPUPower?.avg || 0),
+    gpuPowerAverages: props.benchmarkData.map(run => run.stats?.GPUPower?.avg || 0)
   }
 })
 

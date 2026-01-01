@@ -243,12 +243,28 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state -->
-          <div v-if="loadingData" class="text-center my-4">
-            <div class="spinner-border" role="status">
-              <span class="visually-hidden">Loading data...</span>
+          <!-- Loading state with single progress bar -->
+          <div v-if="loadingData" class="my-4">
+            <div class="progress-container">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">
+                    <i class="fa-solid fa-download"></i> {{ loadingStatus }}
+                  </span>
+                  <span class="text-muted small">{{ loadingProgress }}%</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                  <div
+                    class="progress-bar progress-bar-striped progress-bar-animated"
+                    role="progressbar"
+                    :style="{ width: loadingProgress + '%' }"
+                    :aria-valuenow="loadingProgress"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  ></div>
+                </div>
+              </div>
             </div>
-            <p class="text-muted mt-2">Loading benchmark data...</p>
           </div>
 
           <!-- Error state -->
@@ -258,7 +274,7 @@
 
           <!-- Data visualization -->
           <div v-else-if="benchmarkData && benchmarkData.length > 0">
-            <BenchmarkCharts :benchmarkData="benchmarkData" />
+            <BenchmarkCharts :benchmarkData="convertToLegacyFormat(benchmarkData)" />
           </div>
 
           <!-- No data state -->
@@ -320,6 +336,7 @@ import BenchmarkCharts from '../components/BenchmarkCharts.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { formatRelativeDate } from '../utils/dateFormatter'
+import { convertToLegacyFormat } from '../utils/benchmarkDataProcessor'
 
 // Configure marked for security
 marked.setOptions({
@@ -373,6 +390,9 @@ const runToDelete = ref(null)
 const benchmarkData = ref(null)
 const loadingData = ref(false)
 const dataError = ref(null)
+const loadingProgress = ref(0)
+const loadingStatus = ref('Initializing...')
+const totalRuns = ref(0)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
@@ -448,11 +468,13 @@ async function loadBenchmark() {
     editTitle.value = benchmark.value.Title
     editDescription.value = benchmark.value.Description || ''
     
-    // Load benchmark data
+    // Hide the main loading spinner before loading data to show progress bars
+    loading.value = false
+    
+    // Load benchmark data (with progress tracking)
     await loadBenchmarkData(id)
   } catch (err) {
     error.value = err.message || 'Failed to load benchmark'
-  } finally {
     loading.value = false
   }
 }
@@ -461,15 +483,85 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
+    loadingProgress.value = 0
+    loadingStatus.value = 'Initializing...'
     
-    // Load full data for accurate statistics (averages, percentiles, percentages)
-    // The frontend chart component will downsample line charts as needed
-    benchmarkData.value = await api.benchmarks.getData(id)
+    // Get the total number of runs from benchmark metadata
+    totalRuns.value = benchmark.value.run_count || 0
     
-    // Initialize edit labels from loaded data
-    editLabels.value = benchmarkData.value.map(d => d.Label || '')
+    if (totalRuns.value === 0) {
+      benchmarkData.value = []
+      return
+    }
+    
+    // Load data incrementally - one run at a time to prevent browser freezing
+    benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
+      onRunDownloadStart: (runIndex, total) => {
+        loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
+        // Calculate progress based on completed runs
+        loadingProgress.value = Math.round((runIndex / total) * 100)
+      },
+      onRunDownloadProgress: (progress) => {
+        // Fine-grained progress within current run
+        const runIndex = benchmarkData.value ? benchmarkData.value.length : 0
+        const baseProgress = (runIndex / totalRuns.value) * 100
+        const runProgress = (progress / 100) * (100 / totalRuns.value)
+        loadingProgress.value = Math.round(baseProgress + runProgress)
+      },
+      onRunDownloadComplete: (runIndex, runData) => {
+        // Progress updated via onRunProcessComplete
+      },
+      onRunProcessComplete: (runIndex, total) => {
+        // Update progress after run is fully processed
+        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
+      },
+      onError: (error, runIndex) => {
+        console.error(`Error loading run ${runIndex}:`, error)
+      }
+    })
+    
+    // Initialize edit labels from loaded data (processed data has lowercase 'label')
+    editLabels.value = benchmarkData.value.map(d => d.label || '')
+    
+    // DEBUG: Log data structure
+    console.log('=== BENCHMARK DATA LOADED ===')
+    console.log('Total runs:', benchmarkData.value.length)
+    if (benchmarkData.value.length > 0) {
+      const firstRun = benchmarkData.value[0]
+      console.log('First run structure:', Object.keys(firstRun))
+      console.log('First run label:', firstRun.label)
+      console.log('First run specs:', {
+        specOS: firstRun.specOS,
+        SpecOS: firstRun.SpecOS,
+        specGPU: firstRun.specGPU,
+        SpecGPU: firstRun.SpecGPU
+      })
+      console.log('First run series keys:', firstRun.series ? Object.keys(firstRun.series) : 'NO SERIES')
+      console.log('First run stats keys:', firstRun.stats ? Object.keys(firstRun.stats) : 'NO STATS')
+      if (firstRun.series && firstRun.series.FPS) {
+        console.log('FPS series sample (first 5):', firstRun.series.FPS.slice(0, 5))
+        console.log('FPS series length:', firstRun.series.FPS.length)
+      }
+      if (firstRun.stats && firstRun.stats.FPS) {
+        console.log('FPS stats:', firstRun.stats.FPS)
+      }
+      
+      // Test convertToLegacyFormat
+      const legacy = convertToLegacyFormat(benchmarkData.value)
+      console.log('After convertToLegacyFormat:')
+      console.log('Legacy first run keys:', Object.keys(legacy[0]))
+      console.log('Legacy first run Label:', legacy[0].Label)
+      console.log('Legacy first run SpecOS:', legacy[0].SpecOS)
+      if (legacy[0].FPS) {
+        console.log('Legacy FPS sample (first 5):', legacy[0].FPS.slice(0, 5))
+        console.log('Legacy FPS length:', legacy[0].FPS.length)
+      } else {
+        console.log('Legacy FPS: MISSING OR EMPTY')
+      }
+    }
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
+    console.error('Error loading benchmark data:', err)
   } finally {
     loadingData.value = false
   }
@@ -482,7 +574,7 @@ function toggleEditMode() {
     editMode.value = true
     editTitle.value = benchmark.value.Title
     editDescription.value = benchmark.value.Description || ''
-    editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.Label || '') : []
+    editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   }
 }
 
@@ -490,7 +582,7 @@ function cancelEdit() {
   editMode.value = false
   editTitle.value = benchmark.value.Title
   editDescription.value = benchmark.value.Description || ''
-  editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.Label || '') : []
+  editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   selectedFiles.value = []
   if (fileInput.value) {
     fileInput.value.value = ''
@@ -686,6 +778,15 @@ onMounted(() => {
   .benchmark-actions .btn {
     flex: 1; /* Make buttons equal width on mobile */
   }
+}
+
+/* Progress container styling */
+.progress-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
 }
 
 .card {

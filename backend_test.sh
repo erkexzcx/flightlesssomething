@@ -193,12 +193,13 @@ fi
 # Test 7: Get benchmark data
 log_info "Test 7: Get benchmark data"
 RESPONSE=$(curl -s "${BASE_URL}/api/benchmarks/${BENCHMARK_ID}/data")
-if echo "$RESPONSE" | jq -e '.runs | length > 0' > /dev/null 2>&1; then
-    RUN_COUNT=$(echo "$RESPONSE" | jq '.runs | length')
+# API returns an array directly, not wrapped in a "runs" property
+if echo "$RESPONSE" | jq -e '. | length > 0' > /dev/null 2>&1; then
+    RUN_COUNT=$(echo "$RESPONSE" | jq '. | length')
     log_info "✓ Get benchmark data passed ($RUN_COUNT runs)"
     
     # Verify data structure (suppress verbose output)
-    FIRST_RUN=$(echo "$RESPONSE" | jq -c '.runs[0]')
+    FIRST_RUN=$(echo "$RESPONSE" | jq -c '.[0]')
     if echo "$FIRST_RUN" | jq -e '.Label' > /dev/null 2>&1; then
         LABEL=$(echo "$FIRST_RUN" | jq -r '.Label')
         log_info "  First run label: $LABEL"
