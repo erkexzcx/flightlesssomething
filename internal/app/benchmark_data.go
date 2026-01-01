@@ -402,7 +402,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 }
 
 // StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
-// This minimizes memory usage by streaming JSON encoding directly from disk decompression
+// This minimizes memory usage by encoding runs one at a time and allowing GC to reclaim memory
 func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 	// Open the data file
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
@@ -414,8 +414,6 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		if closeErr := file.Close(); closeErr != nil {
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
 		}
-		// Hint to GC that we're done with potentially large data
-		runtime.GC()
 	}()
 
 	// Set up decompression
@@ -436,10 +434,50 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
-	// Stream JSON directly to response writer
-	// This allows the data to be garbage collected after encoding
-	jsonEncoder := json.NewEncoder(w)
-	return jsonEncoder.Encode(benchmarkData)
+	// Manually stream JSON array to minimize memory usage
+	// Write opening bracket
+	if _, err := w.Write([]byte("[")); err != nil {
+		return err
+	}
+
+	// Encode each run individually and allow GC to reclaim memory
+	for i, run := range benchmarkData {
+		// Encode this run to JSON
+		runJSON, err := json.Marshal(run)
+		if err != nil {
+			return err
+		}
+		
+		// Write the JSON
+		if _, err := w.Write(runJSON); err != nil {
+			return err
+		}
+		
+		// Write comma separator if not the last element
+		if i < len(benchmarkData)-1 {
+			if _, err := w.Write([]byte(",")); err != nil {
+				return err
+			}
+		}
+		
+		// Explicitly nil out the reference to allow GC to reclaim this run's memory
+		benchmarkData[i] = nil
+		
+		// Trigger GC periodically (every 10 runs) to aggressively reclaim memory
+		if i%10 == 0 && i > 0 {
+			runtime.GC()
+		}
+	}
+
+	// Write closing bracket
+	if _, err := w.Write([]byte("]")); err != nil {
+		return err
+	}
+	
+	// Final GC to clean up any remaining data
+	runtime.GC()
+
+	return nil
 }
 
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
@@ -629,7 +667,7 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	}()
 
 	// Export each benchmark data as a CSV file
-	for _, data := range benchmarkData {
+	for i, data := range benchmarkData {
 		// Create a safe filename from the label
 		filename := sanitizeFilename(data.Label) + ".csv"
 
@@ -642,6 +680,14 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 		// Write CSV content
 		if err := writeBenchmarkDataAsCSV(data, fileWriter); err != nil {
 			return err
+		}
+		
+		// Explicitly nil out the reference to allow GC to reclaim this run's memory
+		benchmarkData[i] = nil
+		
+		// Trigger GC periodically (every 5 runs) to aggressively reclaim memory
+		if i%5 == 0 && i > 0 {
+			runtime.GC()
 		}
 	}
 

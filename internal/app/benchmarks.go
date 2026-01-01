@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -424,6 +425,9 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 			benchmark.RunNames = runNames
 			benchmark.Specifications = specifications
+			
+			// Trigger GC to reclaim memory from loaded benchmark data
+			runtime.GC()
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -644,6 +648,9 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		// Log benchmark update
 		LogBenchmarkUpdated(db, uid, benchmark.ID, benchmark.Title)
 
+		// Trigger GC to reclaim memory from loaded benchmark data
+		runtime.GC()
+
 		c.JSON(http.StatusOK, gin.H{"message": "run deleted successfully"})
 	}
 }
@@ -759,6 +766,9 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 
 		// Log benchmark update
 		LogBenchmarkUpdated(db, uid, benchmark.ID, benchmark.Title)
+
+		// Trigger GC to reclaim memory from loaded benchmark data
+		runtime.GC()
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":         "runs added successfully",
