@@ -51,7 +51,7 @@ func main() {
 }
 
 // parseMemoryLimit parses memory limit string (e.g., "512MiB", "2GiB")
-// Supports: KiB, MiB, GiB suffixes
+// Supports: KiB, MiB, GiB, TiB suffixes
 // Returns -1 if invalid or empty, which disables the limit
 func parseMemoryLimit(s string) int64 {
 	var limit int64 = -1
@@ -61,9 +61,9 @@ func parseMemoryLimit(s string) int64 {
 		return limit
 	}
 	
-	// Check for valid 3-character suffix (KiB, MiB, GiB)
+	// Check for valid 3-character suffix (KiB, MiB, GiB, TiB)
 	suffix := s[len(s)-3:]
-	if suffix == "MiB" || suffix == "GiB" || suffix == "KiB" {
+	if suffix == "MiB" || suffix == "GiB" || suffix == "KiB" || suffix == "TiB" {
 		// Parse the number part
 		numStr := s[:len(s)-3]
 		if val, err := strconv.ParseInt(numStr, 10, 64); err == nil && val > 0 {
@@ -74,6 +74,8 @@ func parseMemoryLimit(s string) int64 {
 				limit = val * 1024 * 1024
 			case "GiB":
 				limit = val * 1024 * 1024 * 1024
+			case "TiB":
+				limit = val * 1024 * 1024 * 1024 * 1024
 			}
 		}
 	}
