@@ -25,6 +25,7 @@ vendor/
 data/
 *.db
 *.bin
+*.meta
 
 # Environment files
 .env
