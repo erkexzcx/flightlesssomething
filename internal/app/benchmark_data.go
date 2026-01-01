@@ -30,7 +30,6 @@ const (
 	// Data processing constants
 	precisionFactor     = 100000
 	bytesToKB           = 1024
-	maxDataLines        = 100000  // Per file limit
 	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
 	maxStringLength     = 100
 )
@@ -118,9 +117,6 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 		}
 
 		counter++
-		if counter == maxDataLines {
-			return errors.New("file cannot have more than 100000 data lines")
-		}
 	}
 
 	if err := scanner.Err(); err != nil {
