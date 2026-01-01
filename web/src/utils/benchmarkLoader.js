@@ -85,15 +85,19 @@ function parseJSONInWorker(jsonString, onProgress) {
     const requestId = Math.random().toString(36).substring(7)
 
     // Simulate progress during parsing (since we can't track actual JSON.parse progress)
+    // Use a logarithmic-style progression that starts faster and slows down
     let progressInterval
     if (onProgress) {
       let simulatedProgress = 0
+      let updateCount = 0
       progressInterval = setInterval(() => {
-        simulatedProgress += 10
-        if (simulatedProgress < 90) {
-          onProgress(simulatedProgress)
-        }
-      }, 50) // Update every 50ms
+        updateCount++
+        // Logarithmic-style progression: fast start, slow end
+        // Reaches ~70% in 2 seconds, then slows to ~85% by 5 seconds
+        const increment = Math.max(1, 15 / Math.sqrt(updateCount))
+        simulatedProgress = Math.min(simulatedProgress + increment, 90)
+        onProgress(Math.round(simulatedProgress))
+      }, 100) // Update every 100ms for smoother progression
     }
 
     worker.addEventListener('message', (event) => {

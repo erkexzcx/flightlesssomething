@@ -254,19 +254,16 @@
                   <span class="text-muted small" v-if="downloadProgress >= 0">
                     {{ downloadProgress }}%
                   </span>
-                  <span class="text-muted small" v-else>
-                    <div class="spinner-border spinner-border-sm" role="status">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                  </span>
+                  <div v-else class="spinner-border spinner-border-sm text-muted" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
                 </div>
                 <div class="progress" style="height: 20px;">
                   <div
                     class="progress-bar progress-bar-striped progress-bar-animated"
                     role="progressbar"
                     :style="{ width: downloadProgress >= 0 ? downloadProgress + '%' : '100%' }"
-                    :class="{ 'progress-bar-indeterminate': downloadProgress < 0 }"
-                    :aria-valuenow="downloadProgress"
+                    :aria-valuenow="downloadProgress >= 0 ? downloadProgress : 0"
                     aria-valuemin="0"
                     aria-valuemax="100"
                   ></div>
