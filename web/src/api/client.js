@@ -136,6 +136,17 @@ export const api = {
       return `${API_BASE}/api/benchmarks/${id}/data`
     },
 
+    // Get benchmark data with progress tracking
+    // Returns a promise that resolves with the data
+    // Callbacks: onDownloadProgress(percent), onParseProgress(percent)
+    async getDataWithProgress(id, progressCallbacks) {
+      const { loadBenchmarkDataWithProgress } = await import('../utils/benchmarkLoader.js')
+      return loadBenchmarkDataWithProgress(
+        `${API_BASE}/api/benchmarks/${id}/data`,
+        progressCallbacks
+      )
+    },
+
     async deleteRun(id, runIndex) {
       return fetchJSON(`/api/benchmarks/${id}/runs/${runIndex}`, {
         method: 'DELETE',

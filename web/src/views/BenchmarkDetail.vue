@@ -243,12 +243,55 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state -->
-          <div v-if="loadingData" class="text-center my-4">
-            <div class="spinner-border" role="status">
-              <span class="visually-hidden">Loading data...</span>
+          <!-- Loading state with progress bars -->
+          <div v-if="loadingData" class="my-4">
+            <div class="progress-container">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">
+                    <i class="fa-solid fa-download"></i> Downloading benchmark data
+                  </span>
+                  <span class="text-muted small" v-if="downloadProgress >= 0">
+                    {{ downloadProgress }}%
+                  </span>
+                  <span class="text-muted small" v-else>
+                    <div class="spinner-border spinner-border-sm" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                  </span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                  <div
+                    class="progress-bar progress-bar-striped progress-bar-animated"
+                    role="progressbar"
+                    :style="{ width: downloadProgress >= 0 ? downloadProgress + '%' : '100%' }"
+                    :class="{ 'progress-bar-indeterminate': downloadProgress < 0 }"
+                    :aria-valuenow="downloadProgress"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  ></div>
+                </div>
+              </div>
+              
+              <div v-if="downloadProgress === 100">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">
+                    <i class="fa-solid fa-cog fa-spin"></i> Parsing benchmark data
+                  </span>
+                  <span class="text-muted small">{{ parseProgress }}%</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                  <div
+                    class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                    role="progressbar"
+                    :style="{ width: parseProgress + '%' }"
+                    :aria-valuenow="parseProgress"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  ></div>
+                </div>
+              </div>
             </div>
-            <p class="text-muted mt-2">Loading benchmark data...</p>
           </div>
 
           <!-- Error state -->
@@ -373,6 +416,8 @@ const runToDelete = ref(null)
 const benchmarkData = ref(null)
 const loadingData = ref(false)
 const dataError = ref(null)
+const downloadProgress = ref(0)
+const parseProgress = ref(0)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
@@ -461,10 +506,20 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
+    downloadProgress.value = 0
+    parseProgress.value = 0
     
     // Load full data for accurate statistics (averages, percentiles, percentages)
     // The frontend chart component will downsample line charts as needed
-    benchmarkData.value = await api.benchmarks.getData(id)
+    // Use progress-tracking version for better UX with large files
+    benchmarkData.value = await api.benchmarks.getDataWithProgress(id, {
+      onDownloadProgress: (progress) => {
+        downloadProgress.value = progress
+      },
+      onParseProgress: (progress) => {
+        parseProgress.value = progress
+      }
+    })
     
     // Initialize edit labels from loaded data
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
@@ -686,6 +741,15 @@ onMounted(() => {
   .benchmark-actions .btn {
     flex: 1; /* Make buttons equal width on mobile */
   }
+}
+
+/* Progress container styling */
+.progress-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
 }
 
 .card {
