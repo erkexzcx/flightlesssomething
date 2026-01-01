@@ -441,26 +441,26 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
 }
 
-// storeBenchmarkMetadata stores lightweight metadata (run count, labels, and JSON size) separately
+// storeBenchmarkMetadata stores lightweight metadata (run count, labels, and exact JSON size) separately
 func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	labels := make([]string, len(benchmarkData))
 	for i, data := range benchmarkData {
 		labels[i] = data.Label
 	}
 
-	// Calculate JSON size efficiently by streaming to a counting writer
-	// This avoids allocating the full JSON in memory
+	// Calculate exact JSON size by encoding to a counting writer
+	// This ensures we get the EXACT byte count that will be sent to clients
 	counter := &countingWriter{}
 	encoder := json.NewEncoder(counter)
 	if err := encoder.Encode(benchmarkData); err != nil {
-		// If JSON encoding fails, store 0 and log warning
+		// If JSON encoding fails, log warning and store 0
 		fmt.Printf("Warning: failed to calculate JSON size for benchmark %d: %v\n", benchmarkID, err)
 	}
 	
 	metadata := BenchmarkMetadata{
 		RunCount:  len(benchmarkData),
 		RunLabels: labels,
-		JSONSize:  counter.count, // Store the JSON byte size from counting writer
+		JSONSize:  counter.count, // Store the exact JSON byte size
 	}
 
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
@@ -575,119 +575,31 @@ func retrieveBenchmarkDataLegacy(benchmarkID uint) ([]*BenchmarkData, error) {
 }
 
 // StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
-// This truly minimizes memory usage by decoding and encoding runs one at a time
+// For accurate Content-Length, we load all data and use json.NewEncoder for consistent output
 func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
-	// Open the data file
-	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
-	file, err := os.Open(filePath)
+	// Load benchmark data (V2 format uses streaming internally to minimize memory during load)
+	benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
-		}
-		// Final GC after streaming completes
-		runtime.GC()
-	}()
-
-	// Set up decompression
-	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
-	if err != nil {
-		return err
-	}
-	defer zstdDecoder.Close()
-
-	gobDecoder := gob.NewDecoder(zstdDecoder)
 	
-	// Try to read header to determine format version
-	var header fileHeader
-	var runCount int
-	
-	if err := gobDecoder.Decode(&header); err != nil {
-		// Old format - need to fall back to loading entire dataset
-		// Close and reopen to read from beginning
-		zstdDecoder.Close()
-		_ = file.Close() //nolint:errcheck // Error not critical, falling back to legacy reader
-		
-		// Use legacy method which loads all data
-		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
-		if err != nil {
-			return err
-		}
-		
-		// Set headers and write JSON (all at once for old format)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		
-		// Encode all data at once for old format
-		return json.NewEncoder(w).Encode(benchmarkData)
-	}
-	
-	// New format detected
-	if header.Version != storageFormatVersion {
-		return fmt.Errorf("unsupported storage format version: %d", header.Version)
-	}
-	
-	runCount = header.RunCount
-
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-
-	// Manually stream JSON array - true streaming without loading all runs
-	if _, err := w.Write([]byte("[")); err != nil {
-		return err
-	}
-
-	// Stream each run individually (only one run in memory at a time)
-	for i := 0; i < runCount; i++ {
-		var run BenchmarkData
-		if err := gobDecoder.Decode(&run); err != nil {
-			return fmt.Errorf("failed to decode run %d: %w", i, err)
-		}
-		
-		// Encode this run to JSON
-		runJSON, err := json.Marshal(&run)
-		if err != nil {
-			return err
-		}
-		
-		// Write the JSON
-		if _, err := w.Write(runJSON); err != nil {
-			return err
-		}
-		
-		// Write comma separator if not the last element
-		if i < runCount-1 {
-			if _, err := w.Write([]byte(",")); err != nil {
-				return err
-			}
-		}
-		
-		// Trigger GC periodically to aggressively reclaim memory
-		// Each run is now out of scope and can be collected
-		if i%gcFrequencyStreaming == 0 && i > 0 {
-			runtime.GC()
-		}
-	}
-
-	// Write closing bracket
-	if _, err := w.Write([]byte("]")); err != nil {
-		return err
-	}
-
-	return nil
+	
+	// Encode using json.NewEncoder - this matches what we use for size calculation
+	// ensuring Content-Length is accurate
+	return json.NewEncoder(w).Encode(benchmarkData)
 }
 
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
 // This is optimized to read only metadata without loading the full benchmark data
 func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
-	runCount, labels, _, err := GetBenchmarkMetadata(benchmarkID)
-	return runCount, labels, err
+	count, labels, _, err := GetBenchmarkMetadata(benchmarkID)
+	return count, labels, err
 }
 
-// GetBenchmarkMetadata returns the full metadata for a benchmark including JSON size
+// GetBenchmarkMetadata returns the full metadata for a benchmark
 // This is optimized to read only metadata without loading the full benchmark data
 func GetBenchmarkMetadata(benchmarkID uint) (int, []string, *BenchmarkMetadata, error) {
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
@@ -711,21 +623,15 @@ func GetBenchmarkMetadata(benchmarkID uint) (int, []string, *BenchmarkMetadata, 
 				fmt.Printf("Warning: failed to store benchmark metadata: %v\n", storeErr)
 			}
 
-			// Return without metadata object since we couldn't load/create it
 			return len(benchmarkData), labels, nil, nil
 		}
 		return 0, nil, nil, err
 	}
 	defer func() {
-
 		if closeErr := metaFile.Close(); closeErr != nil {
-
 			// Log error but continue - this is cleanup
-
 			fmt.Printf("Warning: failed to close metaFile: %v\n", closeErr)
-
 		}
-
 	}()
 
 	var metadata BenchmarkMetadata
