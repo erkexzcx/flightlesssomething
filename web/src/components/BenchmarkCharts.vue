@@ -794,13 +794,12 @@ const fpsStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return props.benchmarkData.map((run) => {
-    const stats = run.stats.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+    const stats = run.stats.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
-    const filtered = filterOutliers(seriesData) // For density chart only
     
     return {
       label: run.label,
-      data: seriesData, // Downsampled data for line charts
+      data: seriesData, // Downsampled data for line charts ONLY
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data  
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
@@ -808,11 +807,8 @@ const fpsStats = computed(() => {
       // These would need to be added to benchmarkDataProcessor.js if needed
       stddev: 0,  
       variance: 0,
-      filteredOutliers: filtered,
-      // NOTE: Density chart uses downsampled data (2000 points max)
-      // This is a visual approximation - accuracy is good enough for distribution visualization
-      // True accuracy would require keeping all data points which defeats the memory optimization
-      densityData: countOccurrences(filtered)
+      // Use pre-calculated density from FULL data (calculated during download from all points)
+      densityData: stats.density
     }
   })
 })
@@ -822,22 +818,20 @@ const frametimeStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return props.benchmarkData.map((run) => {
-    const stats = run.stats.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+    const stats = run.stats.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
-    const filtered = filterOutliers(seriesData) // For density chart only
     
     return {
       label: run.label,
-      data: seriesData, // Downsampled data for line charts
+      data: seriesData, // Downsampled data for line charts ONLY
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
       // NOTE: stddev/variance not pre-calculated to save memory
       stddev: 0,  
       variance: 0,
-      filteredOutliers: filtered,
-      // NOTE: Density chart uses downsampled data - visual approximation
-      densityData: countOccurrences(filtered)
+      // Use pre-calculated density from FULL data (calculated during download from all points)
+      densityData: stats.density
     }
   })
 })

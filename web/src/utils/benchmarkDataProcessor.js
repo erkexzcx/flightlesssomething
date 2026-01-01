@@ -60,10 +60,53 @@ function downsampleLTTB(data, threshold) {
   return sampled
 }
 
+// Calculate density data for histogram/area charts
+// Filters outliers (1st-99th percentile) and counts occurrences
+function calculateDensityData(values) {
+  if (!values || values.length === 0) return []
+  
+  // Filter outliers (keep only 1st-99th percentile)
+  const sorted = [...values].sort((a, b) => a - b)
+  const low = Math.floor(sorted.length * 0.01)
+  const high = Math.ceil(sorted.length * 0.99)
+  const filtered = sorted.slice(low, high)
+  
+  // Count occurrences (round to integers)
+  const counts = {}
+  filtered.forEach(value => {
+    const rounded = Math.round(value)
+    counts[rounded] = (counts[rounded] || 0) + 1
+  })
+  
+  // Convert to array format [[value, count], ...]
+  let array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
+  
+  // Downsample if too many points (max 100 for density charts)
+  const MAX_DENSITY_POINTS = 100
+  while (array.length > MAX_DENSITY_POINTS) {
+    let minDiff = Infinity
+    let minIndex = -1
+    
+    for (let i = 0; i < array.length - 1; i++) {
+      const diff = array[i + 1][0] - array[i][0]
+      if (diff < minDiff) {
+        minDiff = diff
+        minIndex = i
+      }
+    }
+    
+    // Merge adjacent bins
+    array[minIndex][1] += array[minIndex + 1][1]
+    array.splice(minIndex + 1, 1)
+  }
+  
+  return array
+}
+
 // Calculate statistics for an array of values
 function calculateStats(values) {
   if (!values || values.length === 0) {
-    return { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+    return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
   }
 
   const sorted = [...values].sort((a, b) => a - b)
@@ -74,7 +117,8 @@ function calculateStats(values) {
     max: sorted[sorted.length - 1],
     avg: sum / values.length,
     p01: sorted[Math.floor(values.length * 0.01)],
-    p99: sorted[Math.floor(values.length * 0.99)]
+    p99: sorted[Math.floor(values.length * 0.99)],
+    density: calculateDensityData(values) // Pre-calculate density from FULL data
   }
 }
 
@@ -114,7 +158,7 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     const data = runData[metric]
     if (!data || data.length === 0) {
       processed.series[metric] = []
-      processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+      processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
       return
     }
 
@@ -151,7 +195,7 @@ export function mergeProcessedRuns(processedRuns) {
     
     // Helper to get stats for all runs for a specific metric
     getStats: (metric) => {
-      return processedRuns.map(run => run.stats[metric] || { min: 0, max: 0, avg: 0, p01: 0, p99: 0 })
+      return processedRuns.map(run => run.stats[metric] || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] })
     }
   }
 }
