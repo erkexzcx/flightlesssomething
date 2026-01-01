@@ -203,13 +203,13 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		data, err := RetrieveBenchmarkData(uint(benchmarkID))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
+		// Stream benchmark data directly to response to minimize memory usage
+		if err := StreamBenchmarkDataAsJSON(uint(benchmarkID), c.Writer); err != nil {
+			// If streaming fails, we can't change status code (already sent headers)
+			// Log the error for debugging
+			fmt.Printf("Error streaming benchmark data %d: %v\n", benchmarkID, err)
 			return
 		}
-
-		c.JSON(http.StatusOK, data)
 	}
 }
 

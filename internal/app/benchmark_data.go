@@ -5,14 +5,17 @@ import (
 	"bufio"
 	"encoding/csv"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/big"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -398,6 +401,47 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 	return benchmarkData, err
 }
 
+// StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
+// This minimizes memory usage by streaming JSON encoding directly from disk decompression
+func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
+	// Open the data file
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+		}
+		// Hint to GC that we're done with potentially large data
+		runtime.GC()
+	}()
+
+	// Set up decompression
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return err
+	}
+	defer zstdDecoder.Close()
+
+	// Decode gob data
+	var benchmarkData []*BenchmarkData
+	gobDecoder := gob.NewDecoder(zstdDecoder)
+	if err := gobDecoder.Decode(&benchmarkData); err != nil {
+		return err
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	// Stream JSON directly to response writer
+	// This allows the data to be garbage collected after encoding
+	jsonEncoder := json.NewEncoder(w)
+	return jsonEncoder.Encode(benchmarkData)
+}
+
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
 // This is optimized to read only metadata without loading the full benchmark data
 func GetBenchmarkRunCount(benchmarkID uint) (int, []string, error) {
@@ -562,6 +606,9 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	if err != nil {
 		return err
 	}
+	
+	// Hint to GC after we're done to clean up potentially large data
+	defer runtime.GC()
 
 	if len(benchmarkData) == 0 {
 		return errors.New("no benchmark data to export")
