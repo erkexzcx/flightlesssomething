@@ -122,7 +122,11 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     specGPU: runData.SpecGPU || '',
     specCPU: runData.SpecCPU || '',
     specRAM: runData.SpecRAM || '',
-    specOSSpecific: runData.SpecOSSpecific || {},
+    // Build SpecOSSpecific from individual fields since backend sends them separately
+    specOSSpecific: {
+      SpecLinuxKernel: runData.SpecLinuxKernel || '',
+      SpecLinuxScheduler: runData.SpecLinuxScheduler || ''
+    },
     
     // Downsampled time-series data for line charts
     series: {},
@@ -132,6 +136,7 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
   }
 
   // Extract all metrics
+  // Backend sends these with "Data" prefix (e.g., DataFPS, DataFrameTime)
   const metrics = [
     'FPS', 'FrameTime', 'CPULoad', 'CPUTemp', 'CPUPower',
     'GPULoad', 'GPUTemp', 'GPUCoreClock', 'GPUMemClock',
@@ -139,7 +144,10 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
   ]
 
   metrics.forEach(metric => {
-    const data = runData[metric]
+    // Backend sends data with "Data" prefix
+    const backendFieldName = 'Data' + metric
+    const data = runData[backendFieldName]
+    
     if (!data || data.length === 0) {
       processed.series[metric] = []
       processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
