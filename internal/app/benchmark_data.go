@@ -37,6 +37,11 @@ const (
 	
 	// Storage format version for backward compatibility
 	storageFormatVersion = 2 // Version 2: Streaming-friendly format with individual run encoding
+	
+	// GC tuning constants for streaming operations
+	// These control how often runtime.GC() is called during streaming to aggressively reclaim memory
+	gcFrequencyStreaming = 10 // Trigger GC every N runs during JSON streaming (viewing benchmarks)
+	gcFrequencyExport    = 5  // Trigger GC every N runs during ZIP export (more aggressive due to CSV overhead)
 )
 
 var benchmarksDir string
@@ -570,7 +575,7 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		
 		// Trigger GC periodically to aggressively reclaim memory
 		// Each run is now out of scope and can be collected
-		if i%10 == 0 && i > 0 {
+		if i%gcFrequencyStreaming == 0 && i > 0 {
 			runtime.GC()
 		}
 	}
@@ -823,8 +828,8 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 			return err
 		}
 		
-		// Trigger GC periodically (every 5 runs) to aggressively reclaim memory
-		if i%5 == 0 && i > 0 {
+		// Trigger GC periodically to aggressively reclaim memory
+		if i%gcFrequencyExport == 0 && i > 0 {
 			runtime.GC()
 		}
 	}
@@ -865,8 +870,8 @@ func exportBenchmarkDataLegacy(benchmarkData []*BenchmarkData, writer io.Writer)
 		// Explicitly nil out the reference to allow GC to reclaim this run's memory
 		benchmarkData[i] = nil
 		
-		// Trigger GC periodically (every 5 runs) to aggressively reclaim memory
-		if i%5 == 0 && i > 0 {
+		// Trigger GC periodically to aggressively reclaim memory
+		if i%gcFrequencyExport == 0 && i > 0 {
 			runtime.GC()
 		}
 	}

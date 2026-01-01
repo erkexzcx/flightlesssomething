@@ -20,8 +20,9 @@ const (
 	// - 0: Old schema (Format 1 and Format 2) - no schema_versions table, has ai_summary column
 	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
 	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
+	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format)
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 2
+	currentSchemaVersion = 3
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )

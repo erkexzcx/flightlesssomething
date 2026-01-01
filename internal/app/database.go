@@ -110,16 +110,20 @@ func InitDB(dataDir string) (*DBInstance, error) {
 				return nil, fmt.Errorf("failed to set schema version to 2: %w", err)
 			}
 			log.Println("Successfully migrated to version 2")
+			version = 2 // Update local version for next migration step
 		}
-		// Future migrations would go here as additional else-if blocks:
-		// else if version == 2 {
-		//     if err := migrateFromV2ToV3(db); err != nil {
-		//         return nil, fmt.Errorf("failed to migrate from v2 to v3: %w", err)
-		//     }
-		//     if err := setSchemaVersion(db, 3); err != nil {
-		//         return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
-		//     }
-		// }
+		
+		if version == 2 {
+			log.Println("Migrating benchmark storage format from V1 to V2...")
+			if err := MigrateBenchmarkStorageToV2(dataDir); err != nil {
+				return nil, fmt.Errorf("failed to migrate storage format to v2: %w", err)
+			}
+			// Update version to 3 after successful migration
+			if err := setSchemaVersion(db, 3); err != nil {
+				return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
+			}
+			log.Println("Successfully migrated to version 3")
+		}
 	}
 
 	// Ensure schema version is set for new databases
