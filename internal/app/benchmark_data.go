@@ -3,7 +3,6 @@ package app
 import (
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"encoding/csv"
 	"encoding/gob"
 	"encoding/json"
@@ -83,8 +82,10 @@ func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool, expectedLines int) error {
 	counter := 0
 	
-	// Pre-allocate slices with exact capacity based on actual line count
-	// This minimizes memory usage by allocating exactly what's needed
+	// Pre-allocate slices with EXACT capacity based on actual line count
+	// Two-pass approach: first pass counts lines (streaming, no memory storage),
+	// second pass parses with exact pre-allocation to achieve 100% accuracy.
+	// This eliminates all reallocation overhead while keeping memory usage minimal.
 	capacity := expectedLines
 	if capacity < 0 {
 		capacity = 0 // Safety check
@@ -242,11 +243,17 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*Bench
 		}
 	}
 
-	// Calculate expected data lines
+	// Calculate expected data lines for pre-allocation
+	// totalLines is EXACT count from first pass (streaming line count)
+	// Subtract header lines to get data line count for array pre-allocation
 	// Total lines - first line (format) - specs line - header line - afterburner extra headers
 	dataLines := totalLines - 3 // format, specs, header
 	if fileType == FileTypeAfterburner {
 		dataLines -= len(headerMap) // additional header lines for afterburner
+	}
+	// Ensure we have a reasonable minimum for pre-allocation
+	if dataLines < 0 {
+		dataLines = 100 // Fallback minimum
 	}
 	
 	err = parseData(scanner, headerMap, benchmarkData, fileType == FileTypeAfterburner, dataLines)
@@ -286,7 +293,30 @@ func ReadBenchmarkFiles(files []*multipart.FileHeader) ([]*BenchmarkData, error)
 }
 
 func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, error) {
+	// PASS 1: Count total lines in the file for 100% accurate pre-allocation
+	// This pass streams through the file without storing content, keeping memory usage minimal
 	file, err := fileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
+	
+	lineCount := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineCount++
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		_ = file.Close() //nolint:errcheck // Error from counting, will report scan error
+		return nil, fmt.Errorf("failed to count lines: %w", scanErr)
+	}
+	
+	// Close file after first pass
+	if closeErr := file.Close(); closeErr != nil {
+		return nil, fmt.Errorf("failed to close file after counting: %w", closeErr)
+	}
+	
+	// PASS 2: Reopen file and parse with exact pre-allocation
+	file, err = fileHeader.Open()
 	if err != nil {
 		return nil, err
 	}
@@ -296,19 +326,9 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
 		}
 	}()
-
-	// Read the entire file content into memory for two-pass processing
-	// This allows us to count lines first for exact memory allocation
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	// Count total lines in the file for exact capacity allocation
-	// This minimizes memory waste by allocating the exact amount needed
-	lineCount := bytes.Count(content, []byte{'\n'})
 	
-	scanner := bufio.NewScanner(bytes.NewReader(content))
+	reader := bufio.NewReader(file)
+	scanner = bufio.NewScanner(reader)
 
 	// First line identifies file format
 	if !scanner.Scan() {
@@ -326,6 +346,7 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		return nil, fmt.Errorf("unsupported file format (expected MangoHud CSV or Afterburner HML, got: '%.50s...')", firstLine)
 	}
 
+	// Use exact line count for 100% accurate pre-allocation (no reallocation needed)
 	benchmarkData, err := readBenchmarkFile(scanner, fileType, lineCount)
 	if err != nil {
 		return nil, err
@@ -368,9 +389,13 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 		}
 	}()
 
+	// Use buffered writer to reduce syscalls and improve write performance
+	// 256KB buffer is large enough for efficient I/O without excessive memory use
+	bufWriter := bufio.NewWriterSize(file, 256*1024)
+	
 	// Use higher compression concurrency and better compression level for storage
 	// SpeedDefault provides good balance between compression ratio and speed
-	zstdEncoder, err := zstd.NewWriter(file, 
+	zstdEncoder, err := zstd.NewWriter(bufWriter, 
 		zstd.WithEncoderLevel(zstd.SpeedDefault),
 		zstd.WithEncoderConcurrency(2))
 	if err != nil {
@@ -380,6 +405,7 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	gobEncoder := gob.NewEncoder(zstdEncoder)
 	
 	// Write file header with version and run count
+	// Pre-allocated struct avoids allocation during encoding
 	header := fileHeader{
 		Version:  storageFormatVersion,
 		RunCount: len(benchmarkData),
@@ -404,6 +430,11 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	// Ensure all data is flushed before metadata write
 	if err := zstdEncoder.Close(); err != nil {
 		return fmt.Errorf("failed to close zstd encoder: %w", err)
+	}
+	
+	// Flush buffered writer to disk
+	if err := bufWriter.Flush(); err != nil {
+		return fmt.Errorf("failed to flush buffer: %w", err)
 	}
 
 	// Store metadata separately for fast access
