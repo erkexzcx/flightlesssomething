@@ -15,6 +15,15 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('theme', 'dark')
   }
 
+  // Advanced filter settings for benchmark charts
+  const storedFilterSpikes = localStorage.getItem('filterExtremeSpikes')
+  const filterExtremeSpikes = ref(storedFilterSpikes !== null ? storedFilterSpikes === 'true' : true)
+  
+  // Initialize filter setting if not set (default: enabled)
+  if (storedFilterSpikes === null) {
+    localStorage.setItem('filterExtremeSpikes', 'true')
+  }
+
   // Fetch version from backend
   async function fetchVersion() {
     try {
@@ -45,6 +54,12 @@ export const useAppStore = defineStore('app', () => {
     setTheme(newTheme)
   }
 
+  // Set filter extreme spikes setting
+  function setFilterExtremeSpikes(enabled) {
+    filterExtremeSpikes.value = enabled
+    localStorage.setItem('filterExtremeSpikes', enabled.toString())
+  }
+
   return {
     version,
     loading,
@@ -52,5 +67,7 @@ export const useAppStore = defineStore('app', () => {
     fetchVersion,
     setTheme,
     toggleTheme,
+    filterExtremeSpikes,
+    setFilterExtremeSpikes,
   }
 })
