@@ -316,15 +316,11 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := zstdEncoder.Close(); err != nil {
-			fmt.Printf("Warning: failed to close zstd encoder: %v\n", err)
-		}
-	}()
 
 	// Stream directly from gob encoder to zstd encoder (no intermediate buffer)
 	gobEncoder := gob.NewEncoder(zstdEncoder)
 	if err := gobEncoder.Encode(benchmarkData); err != nil {
+		zstdEncoder.Close() // Ensure encoder is closed on error
 		return err
 	}
 
@@ -355,15 +351,10 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 		return err
 	}
 	defer func() {
-
 		if err := metaFile.Close(); err != nil {
-
 			// Log error but continue - this is cleanup
-
 			fmt.Printf("Warning: failed to close metaFile: %v\n", err)
-
 		}
-
 	}()
 
 	// Use gob encoding for metadata (no need for compression, it's tiny)
@@ -702,7 +693,7 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 			if i < len(arr) {
 				row[j] = strconv.FormatFloat(arr[i], 'f', -1, 64)
 			} else {
-				row[j] = ""
+				row[j] = "" // Clear previous value for shorter arrays
 			}
 		}
 		if err := csvWriter.Write(row); err != nil {
