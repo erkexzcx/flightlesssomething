@@ -18,11 +18,11 @@
             </thead>
             <tbody>
               <tr v-for="(data, index) in benchmarkData" :key="index">
-                <th scope="row">{{ data.Label }}</th>
-                <td>{{ data.SpecOS || '-' }}</td>
-                <td>{{ data.SpecGPU || '-' }}</td>
-                <td>{{ data.SpecCPU || '-' }}</td>
-                <td>{{ data.SpecRAM || '-' }}</td>
+                <th scope="row">{{ data.label }}</th>
+                <td>{{ data.specOS || '-' }}</td>
+                <td>{{ data.specGPU || '-' }}</td>
+                <td>{{ data.specCPU || '-' }}</td>
+                <td>{{ data.specRAM || '-' }}</td>
                 <td>{{ formatOSSpecific(data) }}</td>
               </tr>
             </tbody>
@@ -115,7 +115,7 @@
                 :key="index" 
                 :value="index"
               >
-                {{ data.Label }}
+                {{ data.label }}
               </option>
             </select>
           </div>
@@ -151,7 +151,7 @@
                 :key="index" 
                 :value="index"
               >
-                {{ data.Label }}
+                {{ data.label }}
               </option>
             </select>
           </div>
@@ -373,8 +373,9 @@ Highcharts.setOptions({
 // Helper functions
 function formatOSSpecific(data) {
   const parts = []
-  if (data.SpecLinuxKernel) parts.push(data.SpecLinuxKernel)
-  if (data.SpecLinuxScheduler) parts.push(data.SpecLinuxScheduler)
+  // Processed data uses specOSSpecific object
+  if (data.specOSSpecific?.SpecLinuxKernel) parts.push(data.specOSSpecific.SpecLinuxKernel)
+  if (data.specOSSpecific?.SpecLinuxScheduler) parts.push(data.specOSSpecific.SpecLinuxScheduler)
   return parts.length > 0 ? parts.join(' ') : '-'
 }
 
@@ -765,20 +766,24 @@ const dataArrays = computed(() => {
     }
   }
   
+  // Processed data structure: d.series.FPS = [[x1, y1], [x2, y2], ...]
+  // We only need the Y values for compatibility with existing chart code
+  const extractY = (series) => series.map(point => point[1])
+  
   return {
-    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFPS || [] })),
-    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataFrameTime || [] })),
-    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPULoad || [] })),
-    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPULoad || [] })),
-    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUTemp || [] })),
-    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataCPUPower || [] })),
-    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUTemp || [] })),
-    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUCoreClock || [] })),
-    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUMemClock || [] })),
-    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUVRAMUsed || [] })),
-    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataGPUPower || [] })),
-    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataRAMUsed || [] })),
-    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.Label, data: d.DataSwapUsed || [] }))
+    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.FPS || []) })),
+    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.FrameTime || []) })),
+    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPULoad || []) })),
+    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPULoad || []) })),
+    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPUTemp || []) })),
+    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.CPUPower || []) })),
+    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUTemp || []) })),
+    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUCoreClock || []) })),
+    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUMemClock || []) })),
+    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUVRAMUsed || []) })),
+    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.GPUPower || []) })),
+    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.RAMUsed || []) })),
+    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series.SwapUsed || []) }))
   }
 })
 

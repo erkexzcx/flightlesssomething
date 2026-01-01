@@ -1,8 +1,13 @@
 // Utility for loading benchmark data incrementally - one run at a time
 // This prevents browser freezing and provides detailed progress tracking
 
+import { processRun } from './benchmarkDataProcessor.js'
+
 /**
  * Downloads benchmark runs one-by-one and processes them incrementally
+ * IMPORTANT: Returns processed data (downsampled + stats), NOT raw data
+ * This prevents Vue reactivity from creating watchers on massive arrays
+ * 
  * @param {number} benchmarkId - The benchmark ID
  * @param {number} totalRuns - Total number of runs to download
  * @param {Object} callbacks - Progress callbacks
@@ -11,7 +16,7 @@
  * @param {Function} callbacks.onRunDownloadComplete - Called when a run download completes (runIndex, runData)
  * @param {Function} callbacks.onRunProcessComplete - Called when a run is processed (runIndex, totalRuns)
  * @param {Function} callbacks.onError - Called on error (error, runIndex)
- * @returns {Promise<Array>} Array of all benchmark runs
+ * @returns {Promise<Array>} Array of processed benchmark runs (not raw data)
  */
 export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callbacks = {}) {
   const {
@@ -22,7 +27,7 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
     onError
   } = callbacks
 
-  const runs = []
+  const processedRuns = []
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex++) {
     try {
@@ -76,8 +81,19 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
         onRunDownloadComplete(runIndex, runData)
       }
 
-      // Store the run
-      runs.push(runData)
+      // **CRITICAL: Process run immediately and discard raw data**
+      // Extract only downsampled points and statistics
+      // This prevents Vue from creating reactive watchers on massive arrays (thousands of points per run)
+      const processedRun = processRun(runData, runIndex, 2000) // Max 2000 points per metric per run
+      processedRuns.push(processedRun)
+      
+      // Explicitly clear the raw data to help garbage collection
+      // This is important because we don't want the raw runData lingering in memory
+      runData.FPS = null
+      runData.FrameTime = null
+      runData.CPULoad = null
+      runData.GPULoad = null
+      // (other metrics will be garbage collected automatically when runData goes out of scope)
 
       // Notify processing complete
       if (onRunProcessComplete) {
@@ -92,5 +108,5 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
     }
   }
 
-  return runs
+  return processedRuns
 }

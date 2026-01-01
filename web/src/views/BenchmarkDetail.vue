@@ -336,6 +336,7 @@ import BenchmarkCharts from '../components/BenchmarkCharts.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { formatRelativeDate } from '../utils/dateFormatter'
+import { convertToLegacyFormat } from '../utils/benchmarkDataProcessor'
 
 // Configure marked for security
 marked.setOptions({
@@ -519,8 +520,8 @@ async function loadBenchmarkData(id) {
       }
     })
     
-    // Initialize edit labels from loaded data
-    editLabels.value = benchmarkData.value.map(d => d.Label || '')
+    // Initialize edit labels from loaded data (processed data has lowercase 'label')
+    editLabels.value = benchmarkData.value.map(d => d.label || '')
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
   } finally {
@@ -535,7 +536,7 @@ function toggleEditMode() {
     editMode.value = true
     editTitle.value = benchmark.value.Title
     editDescription.value = benchmark.value.Description || ''
-    editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.Label || '') : []
+    editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   }
 }
 
@@ -543,7 +544,7 @@ function cancelEdit() {
   editMode.value = false
   editTitle.value = benchmark.value.Title
   editDescription.value = benchmark.value.Description || ''
-  editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.Label || '') : []
+  editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   selectedFiles.value = []
   if (fileInput.value) {
     fileInput.value.value = ''
