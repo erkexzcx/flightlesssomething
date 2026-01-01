@@ -125,12 +125,64 @@ curl http://localhost:5000/api/benchmarks/1
 
 **GET** `/api/benchmarks/:id/data`
 
-Download benchmark data (compressed binary, no authentication required).
+Get benchmark data in JSON format (no authentication required).
 
-Example:
+**Query parameters** (optional, for large datasets):
+- `run_offset` (integer) - Starting run index (0-based, default: 0)
+- `run_limit` (integer) - Maximum number of runs to return (default: all)
+
+**Response format:**
+- Without pagination: Returns array of benchmark runs directly
+- With pagination: Returns object with `runs`, `total_runs`, `offset`, `limit`
+
+Examples:
 ```bash
-curl http://localhost:5000/api/benchmarks/1/data -o benchmark.dat
+# Get all benchmark data (default behavior)
+curl http://localhost:5000/api/benchmarks/1/data
+
+# Get first 10 runs (for large benchmarks)
+curl "http://localhost:5000/api/benchmarks/1/data?run_offset=0&run_limit=10"
+
+# Get next 10 runs
+curl "http://localhost:5000/api/benchmarks/1/data?run_offset=10&run_limit=10"
 ```
+
+Response (without pagination):
+```json
+[
+  {
+    "Label": "run1",
+    "SpecOS": "Steam Runtime 3 (sniper)",
+    "SpecCPU": "AMD Ryzen 7 9800X3D",
+    "SpecGPU": "AMD Radeon RX 9070 XT",
+    "DataFPS": [120.5, 119.8, 121.2, ...],
+    "DataFrameTime": [8.3, 8.4, 8.2, ...],
+    ...
+  },
+  ...
+]
+```
+
+Response (with pagination):
+```json
+{
+  "runs": [
+    {
+      "Label": "run1",
+      "SpecOS": "Steam Runtime 3 (sniper)",
+      ...
+    }
+  ],
+  "total_runs": 100,
+  "offset": 0,
+  "limit": 10
+}
+```
+
+**Performance tips:**
+- For benchmarks with > 50 runs or > 50K data points, use pagination
+- Fetch runs in batches of 10-20 for optimal memory usage
+- See [Performance Guide](performance.md) for more details
 
 ---
 
