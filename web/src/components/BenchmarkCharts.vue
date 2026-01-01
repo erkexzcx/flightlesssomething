@@ -31,6 +31,14 @@
       </div>
     </div>
 
+    <!-- Global calculation loading indicator -->
+    <div v-if="calculationsLoading" class="alert alert-info text-center my-3" role="alert">
+      <div class="spinner-border spinner-border-sm me-2" role="status">
+        <span class="visually-hidden">Calculating...</span>
+      </div>
+      <strong>Processing benchmark data...</strong> Running calculations in background thread for optimal performance.
+    </div>
+
     <!-- Tabs for different chart categories -->
     <ul class="nav nav-tabs" id="chartTabs" role="tablist">
       <li class="nav-item" role="presentation">
