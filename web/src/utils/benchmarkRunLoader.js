@@ -84,9 +84,6 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
         onRunProcessComplete(runIndex, totalRuns)
       }
 
-      // Small delay to allow UI to update
-      await new Promise(resolve => setTimeout(resolve, 10))
-
     } catch (error) {
       if (onError) {
         onError(error, runIndex)

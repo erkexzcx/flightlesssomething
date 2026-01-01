@@ -243,7 +243,7 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state with progress bars -->
+          <!-- Loading state with single progress bar -->
           <div v-if="loadingData" class="my-4">
             <div class="progress-container">
               <div class="mb-3">
@@ -251,40 +251,16 @@
                   <span class="text-muted small">
                     <i class="fa-solid fa-download"></i> {{ loadingStatus }}
                   </span>
-                  <span class="text-muted small" v-if="downloadProgress >= 0">
-                    {{ downloadProgress }}%
-                  </span>
-                  <div v-else class="spinner-border spinner-border-sm text-muted" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                  </div>
+                  <span class="text-muted small">{{ loadingProgress }}%</span>
                 </div>
                 <div class="progress" style="height: 20px;">
                   <div
                     class="progress-bar progress-bar-striped progress-bar-animated"
                     role="progressbar"
-                    :style="{ width: downloadProgress >= 0 ? downloadProgress + '%' : '100%' }"
-                    :aria-valuenow="downloadProgress >= 0 ? downloadProgress : 0"
+                    :style="{ width: loadingProgress + '%' }"
+                    :aria-valuenow="loadingProgress"
                     aria-valuemin="0"
                     aria-valuemax="100"
-                  ></div>
-                </div>
-              </div>
-              
-              <div v-if="currentRunProcessing !== null">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span class="text-muted small">
-                    <i class="fa-solid fa-cog fa-spin"></i> {{ processingStatus }}
-                  </span>
-                  <span class="text-muted small">{{ Math.round((currentRunProcessing + 1) / totalRuns * 100) }}%</span>
-                </div>
-                <div class="progress" style="height: 20px;">
-                  <div
-                    class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                    role="progressbar"
-                    :style="{ width: ((currentRunProcessing + 1) / totalRuns * 100) + '%' }"
-                    :aria-valuenow="currentRunProcessing + 1"
-                    :aria-valuemin="0"
-                    :aria-valuemax="totalRuns"
                   ></div>
                 </div>
               </div>
@@ -413,11 +389,8 @@ const runToDelete = ref(null)
 const benchmarkData = ref(null)
 const loadingData = ref(false)
 const dataError = ref(null)
-const downloadProgress = ref(0)
-const parseProgress = ref(0)
+const loadingProgress = ref(0)
 const loadingStatus = ref('Initializing...')
-const processingStatus = ref('')
-const currentRunProcessing = ref(null)
 const totalRuns = ref(0)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
@@ -509,11 +482,8 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
-    downloadProgress.value = 0
-    parseProgress.value = 0
-    currentRunProcessing.value = null
+    loadingProgress.value = 0
     loadingStatus.value = 'Initializing...'
-    processingStatus.value = ''
     
     // Get the total number of runs from benchmark metadata
     totalRuns.value = benchmark.value.run_count || 0
@@ -526,18 +496,23 @@ async function loadBenchmarkData(id) {
     // Load data incrementally - one run at a time to prevent browser freezing
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
       onRunDownloadStart: (runIndex, total) => {
-        loadingStatus.value = `Downloading run ${runIndex + 1}/${total}`
-        downloadProgress.value = 0
+        loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
+        // Calculate progress based on completed runs
+        loadingProgress.value = Math.round((runIndex / total) * 100)
       },
       onRunDownloadProgress: (progress) => {
-        downloadProgress.value = progress
+        // Fine-grained progress within current run
+        const runIndex = benchmarkData.value ? benchmarkData.value.length : 0
+        const baseProgress = (runIndex / totalRuns.value) * 100
+        const runProgress = (progress / 100) * (100 / totalRuns.value)
+        loadingProgress.value = Math.round(baseProgress + runProgress)
       },
       onRunDownloadComplete: (runIndex, runData) => {
-        downloadProgress.value = 100
+        // Progress updated via onRunProcessComplete
       },
       onRunProcessComplete: (runIndex, total) => {
-        currentRunProcessing.value = runIndex
-        processingStatus.value = `Processing run ${runIndex + 1}/${total}`
+        // Update progress after run is fully processed
+        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
       },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
