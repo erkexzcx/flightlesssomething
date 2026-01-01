@@ -497,18 +497,21 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
-    downloadProgress.value = null
+    // Initialize progress to show loading state immediately
+    downloadProgress.value = { loaded: 0, total: 0, percentage: 0 }
     
     // Load full data for accurate statistics (averages, percentiles, percentages)
     // The frontend chart component will downsample line charts as needed
     benchmarkData.value = await api.benchmarks.getData(id, (progress) => {
       downloadProgress.value = progress
+      console.log('Download progress:', progress)
     })
     
     // Initialize edit labels from loaded data
     editLabels.value = benchmarkData.value.map(d => d.Label || '')
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
+    console.error('Failed to load benchmark data:', err)
   } finally {
     loadingData.value = false
     downloadProgress.value = null
