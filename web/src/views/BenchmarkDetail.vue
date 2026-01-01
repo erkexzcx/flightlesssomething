@@ -490,11 +490,13 @@ async function loadBenchmark() {
     editTitle.value = benchmark.value.Title
     editDescription.value = benchmark.value.Description || ''
     
-    // Load benchmark data
+    // Hide the main loading spinner before loading data to show progress bars
+    loading.value = false
+    
+    // Load benchmark data (with progress tracking)
     await loadBenchmarkData(id)
   } catch (err) {
     error.value = err.message || 'Failed to load benchmark'
-  } finally {
     loading.value = false
   }
 }
