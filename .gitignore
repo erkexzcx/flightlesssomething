@@ -45,3 +45,4 @@ Thumbs.db
 web/node_modules/
 web/dist/
 
+server.log
