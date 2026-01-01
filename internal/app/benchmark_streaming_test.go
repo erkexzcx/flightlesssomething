@@ -145,8 +145,8 @@ func TestStreamingMemoryUsage(t *testing.T) {
 	}
 	
 	// Clean up test files
-	_ = os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))
-	_ = os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID))
+	_ = os.Remove(fmt.Sprintf("%s/%d.bin", tmpDir, benchmarkID))   //nolint:errcheck // Test cleanup, errors not critical
+	_ = os.Remove(fmt.Sprintf("%s/%d.meta", tmpDir, benchmarkID)) //nolint:errcheck // Test cleanup, errors not critical
 }
 
 // discardWriter is a writer that counts bytes but doesn't store them

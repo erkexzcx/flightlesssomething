@@ -557,7 +557,7 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		// Old format - need to fall back to loading entire dataset
 		// Close and reopen to read from beginning
 		zstdDecoder.Close()
-		_ = file.Close()
+		_ = file.Close() //nolint:errcheck // Error not critical, falling back to legacy reader
 		
 		// Use legacy method which loads all data
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
@@ -819,7 +819,7 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	if err := gobDecoder.Decode(&header); err != nil {
 		// Old format - fall back to loading entire dataset
 		zstdDecoder.Close()
-		_ = file.Close()
+		_ = file.Close() //nolint:errcheck // Error not critical, falling back to legacy reader
 		
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
 		if err != nil {

@@ -118,7 +118,7 @@ func isBenchmarkFormatV2(benchmarkID uint) (bool, error) {
 		return false, err
 	}
 	defer func() {
-		_ = file.Close()
+		_ = file.Close() //nolint:errcheck // Defer close, error not critical in read-only operation
 	}()
 	
 	// Set up decompression
