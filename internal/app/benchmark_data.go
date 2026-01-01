@@ -34,9 +34,18 @@ const (
 	bytesToKB           = 1024
 	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
 	maxStringLength     = 100
+	
+	// Storage format version for backward compatibility
+	storageFormatVersion = 2 // Version 2: Streaming-friendly format with individual run encoding
 )
 
 var benchmarksDir string
+
+// fileHeader is written at the beginning of the benchmark data file
+type fileHeader struct {
+	Version  int // Storage format version
+	RunCount int // Number of runs in this file
+}
 
 // InitBenchmarksDir initializes the directory for benchmark data
 func InitBenchmarksDir(dataDir string) error {
@@ -296,7 +305,9 @@ func truncateString(s string) string {
 	return s
 }
 
-// StoreBenchmarkData stores benchmark data to disk
+// StoreBenchmarkData stores benchmark data to disk in streaming-friendly format
+// Format: [zstd compressed: [header: version, run_count] [run1] [run2] ... [runN]]
+// This allows streaming reads without loading entire dataset into memory
 func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	// Store the full data
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
@@ -320,14 +331,28 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 		return err
 	}
 
-	// Stream directly from gob encoder to zstd encoder (no intermediate buffer)
 	gobEncoder := gob.NewEncoder(zstdEncoder)
-	if err := gobEncoder.Encode(benchmarkData); err != nil {
+	
+	// Write file header with version and run count
+	header := fileHeader{
+		Version:  storageFormatVersion,
+		RunCount: len(benchmarkData),
+	}
+	if err := gobEncoder.Encode(&header); err != nil {
 		if closeErr := zstdEncoder.Close(); closeErr != nil {
-			// Log close error but return the encode error as it's more important
-			fmt.Printf("Warning: failed to close zstd encoder after encode error: %v\n", closeErr)
+			fmt.Printf("Warning: failed to close zstd encoder after header encode error: %v\n", closeErr)
 		}
-		return err
+		return fmt.Errorf("failed to encode header: %w", err)
+	}
+	
+	// Write each run separately (enables streaming reads)
+	for i, run := range benchmarkData {
+		if err := gobEncoder.Encode(run); err != nil {
+			if closeErr := zstdEncoder.Close(); closeErr != nil {
+				fmt.Printf("Warning: failed to close zstd encoder after encode error: %v\n", closeErr)
+			}
+			return fmt.Errorf("failed to encode run %d: %w", i, err)
+		}
 	}
 
 	// Ensure all data is flushed before metadata write
@@ -369,6 +394,7 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 }
 
 // RetrieveBenchmarkData retrieves benchmark data from disk
+// Supports both old format (version 1: single array) and new format (version 2: streaming)
 func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
 	file, err := os.Open(filePath)
@@ -394,6 +420,56 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 	}
 	defer zstdDecoder.Close()
 
+	gobDecoder := gob.NewDecoder(zstdDecoder)
+	
+	// Try to read header first
+	var header fileHeader
+	if err := gobDecoder.Decode(&header); err != nil {
+		// If header decode fails, this might be old format (version 1)
+		// Reopen and try old format
+		return retrieveBenchmarkDataLegacy(benchmarkID)
+	}
+	
+	// Check version
+	if header.Version == 1 {
+		// Old format: single array (shouldn't happen as old files don't have headers, but handle it)
+		return retrieveBenchmarkDataLegacy(benchmarkID)
+	} else if header.Version != storageFormatVersion {
+		return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
+	
+	// New format (version 2): read runs individually
+	benchmarkData := make([]*BenchmarkData, header.RunCount)
+	for i := 0; i < header.RunCount; i++ {
+		var run BenchmarkData
+		if err := gobDecoder.Decode(&run); err != nil {
+			return nil, fmt.Errorf("failed to decode run %d: %w", i, err)
+		}
+		benchmarkData[i] = &run
+	}
+	
+	return benchmarkData, nil
+}
+
+// retrieveBenchmarkDataLegacy reads data in the old format (version 1: single array)
+func retrieveBenchmarkDataLegacy(benchmarkID uint) ([]*BenchmarkData, error) {
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+		}
+	}()
+
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return nil, err
+	}
+	defer zstdDecoder.Close()
+
 	// Stream directly to gob decoder to avoid intermediate buffer allocation
 	var benchmarkData []*BenchmarkData
 	gobDecoder := gob.NewDecoder(zstdDecoder)
@@ -402,7 +478,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 }
 
 // StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
-// This minimizes memory usage by encoding runs one at a time and allowing GC to reclaim memory
+// This truly minimizes memory usage by decoding and encoding runs one at a time
 func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 	// Open the data file
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
@@ -414,6 +490,8 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		if closeErr := file.Close(); closeErr != nil {
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
 		}
+		// Final GC after streaming completes
+		runtime.GC()
 	}()
 
 	// Set up decompression
@@ -423,27 +501,57 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 	}
 	defer zstdDecoder.Close()
 
-	// Decode gob data
-	var benchmarkData []*BenchmarkData
 	gobDecoder := gob.NewDecoder(zstdDecoder)
-	if err := gobDecoder.Decode(&benchmarkData); err != nil {
-		return err
+	
+	// Try to read header to determine format version
+	var header fileHeader
+	var runCount int
+	
+	if err := gobDecoder.Decode(&header); err != nil {
+		// Old format - need to fall back to loading entire dataset
+		// Close and reopen to read from beginning
+		zstdDecoder.Close()
+		file.Close()
+		
+		// Use legacy method which loads all data
+		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
+		if err != nil {
+			return err
+		}
+		
+		// Set headers and write JSON (all at once for old format)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		
+		// Encode all data at once for old format
+		return json.NewEncoder(w).Encode(benchmarkData)
 	}
+	
+	// New format detected
+	if header.Version != storageFormatVersion {
+		return fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
+	
+	runCount = header.RunCount
 
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
-	// Manually stream JSON array to minimize memory usage
-	// Write opening bracket
+	// Manually stream JSON array - true streaming without loading all runs
 	if _, err := w.Write([]byte("[")); err != nil {
 		return err
 	}
 
-	// Encode each run individually and allow GC to reclaim memory
-	for i, run := range benchmarkData {
+	// Stream each run individually (only one run in memory at a time)
+	for i := 0; i < runCount; i++ {
+		var run BenchmarkData
+		if err := gobDecoder.Decode(&run); err != nil {
+			return fmt.Errorf("failed to decode run %d: %w", i, err)
+		}
+		
 		// Encode this run to JSON
-		runJSON, err := json.Marshal(run)
+		runJSON, err := json.Marshal(&run)
 		if err != nil {
 			return err
 		}
@@ -454,16 +562,14 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		}
 		
 		// Write comma separator if not the last element
-		if i < len(benchmarkData)-1 {
+		if i < runCount-1 {
 			if _, err := w.Write([]byte(",")); err != nil {
 				return err
 			}
 		}
 		
-		// Explicitly nil out the reference to allow GC to reclaim this run's memory
-		benchmarkData[i] = nil
-		
-		// Trigger GC periodically (every 10 runs) to aggressively reclaim memory
+		// Trigger GC periodically to aggressively reclaim memory
+		// Each run is now out of scope and can be collected
 		if i%10 == 0 && i > 0 {
 			runtime.GC()
 		}
@@ -473,9 +579,6 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 	if _, err := w.Write([]byte("]")); err != nil {
 		return err
 	}
-	
-	// Final GC to clean up any remaining data
-	runtime.GC()
 
 	return nil
 }
@@ -638,16 +741,99 @@ func DeleteBenchmarkData(benchmarkID uint) error {
 }
 
 // ExportBenchmarkDataAsZip exports benchmark data as a ZIP file containing CSV files
+// Uses streaming to minimize memory usage
 func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
-	// Retrieve the benchmark data
-	benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
+	// Open the data file
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
-	
-	// Hint to GC after we're done to clean up potentially large data
-	defer runtime.GC()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+		}
+		// Hint to GC after we're done
+		runtime.GC()
+	}()
 
+	// Set up decompression
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return err
+	}
+	defer zstdDecoder.Close()
+
+	gobDecoder := gob.NewDecoder(zstdDecoder)
+	
+	// Try to read header to determine format version
+	var header fileHeader
+	var runCount int
+	
+	if err := gobDecoder.Decode(&header); err != nil {
+		// Old format - fall back to loading entire dataset
+		zstdDecoder.Close()
+		file.Close()
+		
+		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
+		if err != nil {
+			return err
+		}
+		
+		return exportBenchmarkDataLegacy(benchmarkData, writer)
+	}
+	
+	// New format
+	if header.Version != storageFormatVersion {
+		return fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
+	
+	runCount = header.RunCount
+
+	if runCount == 0 {
+		return errors.New("no benchmark data to export")
+	}
+
+	// Create a new ZIP writer
+	zipWriter := zip.NewWriter(writer)
+	defer func() {
+		if err := zipWriter.Close(); err != nil {
+			fmt.Printf("Warning: failed to close zipWriter: %v\n", err)
+		}
+	}()
+
+	// Export each benchmark run as a CSV file (one at a time - true streaming)
+	for i := 0; i < runCount; i++ {
+		var run BenchmarkData
+		if err := gobDecoder.Decode(&run); err != nil {
+			return fmt.Errorf("failed to decode run %d: %w", i, err)
+		}
+		
+		// Create a safe filename from the label
+		filename := sanitizeFilename(run.Label) + ".csv"
+
+		// Create a file in the ZIP archive
+		fileWriter, err := zipWriter.Create(filename)
+		if err != nil {
+			return err
+		}
+
+		// Write CSV content
+		if err := writeBenchmarkDataAsCSV(&run, fileWriter); err != nil {
+			return err
+		}
+		
+		// Trigger GC periodically (every 5 runs) to aggressively reclaim memory
+		if i%5 == 0 && i > 0 {
+			runtime.GC()
+		}
+	}
+
+	return nil
+}
+
+// exportBenchmarkDataLegacy exports data in old format (for backward compatibility)
+func exportBenchmarkDataLegacy(benchmarkData []*BenchmarkData, writer io.Writer) error {
 	if len(benchmarkData) == 0 {
 		return errors.New("no benchmark data to export")
 	}
@@ -655,15 +841,9 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	// Create a new ZIP writer
 	zipWriter := zip.NewWriter(writer)
 	defer func() {
-
 		if err := zipWriter.Close(); err != nil {
-
-			// Log error but continue - this is cleanup
-
 			fmt.Printf("Warning: failed to close zipWriter: %v\n", err)
-
 		}
-
 	}()
 
 	// Export each benchmark data as a CSV file
