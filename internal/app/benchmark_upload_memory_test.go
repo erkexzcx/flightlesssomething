@@ -139,12 +139,12 @@ func createTestFileHeader(filename string, content []byte) *multipart.FileHeader
 		panic(err)
 	}
 	
-	if _, err := part.Write(content); err != nil {
-		panic(err)
+	if _, writeErr := part.Write(content); writeErr != nil {
+		panic(writeErr)
 	}
 	
-	if err := writer.Close(); err != nil {
-		panic(err)
+	if closeErr := writer.Close(); closeErr != nil {
+		panic(closeErr)
 	}
 	
 	// Parse the multipart form to get FileHeader

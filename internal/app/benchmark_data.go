@@ -305,14 +305,14 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 	for scanner.Scan() {
 		lineCount++
 	}
-	if err := scanner.Err(); err != nil {
+	if scanErr := scanner.Err(); scanErr != nil {
 		_ = file.Close() //nolint:errcheck // Error from counting, will report scan error
-		return nil, fmt.Errorf("failed to count lines: %w", err)
+		return nil, fmt.Errorf("failed to count lines: %w", scanErr)
 	}
 	
 	// Close file after first pass
-	if err := file.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close file after counting: %w", err)
+	if closeErr := file.Close(); closeErr != nil {
+		return nil, fmt.Errorf("failed to close file after counting: %w", closeErr)
 	}
 	
 	// PASS 2: Reopen file and parse with exact pre-allocation
