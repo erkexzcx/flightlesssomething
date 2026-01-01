@@ -28,6 +28,7 @@ export default [
         FormData: 'readonly',
         File: 'readonly',
         Blob: 'readonly',
+        TextDecoder: 'readonly',
         // Web Worker globals
         self: 'readonly',
         // Node globals

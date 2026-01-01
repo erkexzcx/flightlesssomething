@@ -87,11 +87,14 @@ func MigrateBenchmarkStorageToV2(dataDir string) error {
 			continue
 		}
 		
+		// Note: StoreBenchmarkData already calls storeBenchmarkMetadata internally
+		// which now includes JSON size calculation, so metadata is already generated
+		
 		// Clear loaded data to help GC
 		benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
 		runtime.GC()
 		
-		log.Printf("  ✓ Successfully migrated to V2 format")
+		log.Printf("  ✓ Successfully migrated to V2 format with metadata")
 		successCount++
 	}
 	
