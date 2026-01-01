@@ -436,10 +436,11 @@ function calculatePercentile(data, percentile) {
 }
 
 // Calculate percentile FPS using harmonic mean method (via frametimes)
+// All FPS data is processed without filtering - users should filter data before uploading
 function calculatePercentileFPS(fpsData, percentile) {
   if (!fpsData || fpsData.length === 0) return 0
   
-  // Convert FPS to frametimes
+  // Convert FPS to frametimes (all frames included, no filtering applied)
   const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
   
   // IMPORTANT: Percentiles must be inverted when working with frametimes
