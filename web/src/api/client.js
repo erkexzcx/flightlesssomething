@@ -143,8 +143,8 @@ export const api = {
       const contentLength = response.headers.get('content-length')
       const total = contentLength ? parseInt(contentLength, 10) : 0
 
-      if (!total || !onProgress) {
-        // No progress tracking needed or possible
+      // If no progress callback or body not readable, use simple method
+      if (!onProgress || !response.body) {
         return response.json()
       }
 
@@ -164,8 +164,8 @@ export const api = {
         // Call progress callback
         onProgress({
           loaded: receivedLength,
-          total: total,
-          percentage: Math.round((receivedLength / total) * 100)
+          total: total, // May be 0 if no Content-Length
+          percentage: total > 0 ? Math.round((receivedLength / total) * 100) : 0
         })
       }
 

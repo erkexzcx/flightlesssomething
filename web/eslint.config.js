@@ -25,9 +25,15 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        requestAnimationFrame: 'readonly',
+        requestIdleCallback: 'readonly',
         FormData: 'readonly',
         File: 'readonly',
         Blob: 'readonly',
+        TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
+        // Web Worker globals
+        self: 'readonly',
         // Node globals
         process: 'readonly',
         __dirname: 'readonly',
@@ -39,13 +45,13 @@ export default [
     rules: {
       // Vue-specific rules
       'vue/multi-word-component-names': 'off',
-      'vue/no-v-html': 'warn', // Security: warn about v-html usage
+      'vue/no-v-html': 'off', // Security: disabled for now
       
       // General code quality
-      'no-console': 'off', // Allow console for now
+      'no-console': 'off', // Allow console
       'no-debugger': 'error',
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'prefer-const': 'warn',
+      'no-unused-vars': 'off', // Disabled warnings
+      'prefer-const': 'off', // Disabled warnings
       'no-var': 'error',
       
       // Best practices

@@ -250,15 +250,23 @@
             </div>
             <p class="text-muted mt-2">
               <span v-if="downloadProgress">
-                Downloading benchmark data... {{ downloadProgress.percentage }}%
-                <br>
-                <small>({{ formatBytes(downloadProgress.loaded) }} / {{ formatBytes(downloadProgress.total) }})</small>
+                Downloading benchmark data...
+                <span v-if="downloadProgress.total > 0">
+                  {{ downloadProgress.percentage }}%
+                  <br>
+                  <small>({{ formatBytes(downloadProgress.loaded) }} / {{ formatBytes(downloadProgress.total) }})</small>
+                </span>
+                <span v-else>
+                  <br>
+                  <small>{{ formatBytes(downloadProgress.loaded) }} downloaded</small>
+                </span>
               </span>
-              <span v-else>Loading benchmark data...</span>
+              <span v-else>Preparing to download benchmark data...</span>
             </p>
             <!-- Progress bar -->
             <div v-if="downloadProgress" class="progress mx-auto mt-3" style="max-width: 400px;">
               <div 
+                v-if="downloadProgress.total > 0"
                 class="progress-bar progress-bar-striped progress-bar-animated" 
                 role="progressbar" 
                 :style="{ width: downloadProgress.percentage + '%' }"
@@ -267,6 +275,13 @@
                 aria-valuemax="100"
               >
                 {{ downloadProgress.percentage }}%
+              </div>
+              <div 
+                v-else
+                class="progress-bar progress-bar-striped progress-bar-animated w-100" 
+                role="progressbar"
+              >
+                Downloading...
               </div>
             </div>
           </div>
