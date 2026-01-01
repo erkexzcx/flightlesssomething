@@ -787,63 +787,67 @@ const dataArrays = computed(() => {
   }
 })
 
-// Computed properties to cache statistical calculations for FPS data
-// These are expensive operations that should only run once per data change
+// Computed properties using PRE-CALCULATED statistics from FULL data
+// Statistics are calculated during incremental loading from full datasets (before downsampling)
+// This ensures 100% accuracy for bar charts and density panels
 const fpsStats = computed(() => {
-  const arrays = dataArrays.value.fpsDataArrays
-  if (!arrays || arrays.length === 0) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
+  return props.benchmarkData.map((run) => {
+    const stats = run.stats.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+    const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
+    const filtered = filterOutliers(seriesData) // For density chart only
+    
     return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentileFPS(d.data, 1),
-      avg: calculateAverageFPS(d.data),
-      max: calculatePercentileFPS(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
+      label: run.label,
+      data: seriesData, // Downsampled data for line charts
+      min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
+      avg: stats.avg,  // Use pre-calculated average from FULL data  
+      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      stddev: 0,  // Not pre-calculated, would need to be added to processor if needed
+      variance: 0, // Not pre-calculated, would need to be added to processor if needed
       filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
+      densityData: countOccurrences(filtered) // Density from downsampled data (visual approximation)
     }
   })
 })
 
-// Computed properties to cache statistical calculations for frametime data
+// Computed properties using PRE-CALCULATED statistics from FULL data
 const frametimeStats = computed(() => {
-  const arrays = dataArrays.value.frameTimeDataArrays
-  if (!arrays || arrays.length === 0) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
-  return arrays.map(d => {
-    const filtered = filterOutliers(d.data)
+  return props.benchmarkData.map((run) => {
+    const stats = run.stats.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0 }
+    const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
+    const filtered = filterOutliers(seriesData) // For density chart only
+    
     return {
-      label: d.label,
-      data: d.data,
-      min: calculatePercentile(d.data, 1),
-      avg: calculateAverage(d.data),
-      max: calculatePercentile(d.data, 97),
-      stddev: calculateStandardDeviation(d.data),
-      variance: calculateVariance(d.data),
+      label: run.label,
+      data: seriesData, // Downsampled data for line charts
+      min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
+      avg: stats.avg,  // Use pre-calculated average from FULL data
+      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      stddev: 0,  // Not pre-calculated
+      variance: 0, // Not pre-calculated
       filteredOutliers: filtered,
-      densityData: countOccurrences(filtered)
+      densityData: countOccurrences(filtered) // Density from downsampled data (visual approximation)
     }
   })
 })
 
-// Computed properties to cache average calculations for summary charts
+// Computed properties using PRE-CALCULATED averages from FULL data for summary charts
 const summaryStats = computed(() => {
-  const arrays = dataArrays.value
-  if (!arrays) return null
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
   return {
-    fpsAverages: arrays.fpsDataArrays.map(d => calculateAverageFPS(d.data)),
-    frametimeAverages: arrays.frameTimeDataArrays.map(d => calculateAverage(d.data)),
-    cpuLoadAverages: arrays.cpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuLoadAverages: arrays.gpuLoadDataArrays.map(d => calculateAverage(d.data)),
-    gpuCoreClockAverages: arrays.gpuCoreClockDataArrays.map(d => calculateAverage(d.data)),
-    gpuMemClockAverages: arrays.gpuMemClockDataArrays.map(d => calculateAverage(d.data)),
-    cpuPowerAverages: arrays.cpuPowerDataArrays.map(d => calculateAverage(d.data)),
-    gpuPowerAverages: arrays.gpuPowerDataArrays.map(d => calculateAverage(d.data))
+    fpsAverages: props.benchmarkData.map(run => run.stats.FPS?.avg || 0),
+    frametimeAverages: props.benchmarkData.map(run => run.stats.FrameTime?.avg || 0),
+    cpuLoadAverages: props.benchmarkData.map(run => run.stats.CPULoad?.avg || 0),
+    gpuLoadAverages: props.benchmarkData.map(run => run.stats.GPULoad?.avg || 0),
+    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: props.benchmarkData.map(run => run.stats.GPUMemClock?.avg || 0),
+    cpuPowerAverages: props.benchmarkData.map(run => run.stats.CPUPower?.avg || 0),
+    gpuPowerAverages: props.benchmarkData.map(run => run.stats.GPUPower?.avg || 0)
   }
 })
 
