@@ -22,7 +22,7 @@ class WorkerManager {
     }
 
     try {
-      this.worker = new Worker(this.workerUrl, { type: 'module' })
+      this.worker = new Worker(this.workerUrl)
       
       // Handle messages from worker
       this.worker.addEventListener('message', (event) => {
