@@ -1,0 +1,78 @@
+package app
+
+import (
+	"testing"
+)
+
+func TestCountTotalDataLines(t *testing.T) {
+	t.Run("empty_benchmark_data", func(t *testing.T) {
+		data := []*BenchmarkData{}
+		count := CountTotalDataLines(data)
+		if count != 0 {
+			t.Errorf("Expected 0 lines for empty data, got %d", count)
+		}
+	})
+
+	t.Run("single_run_with_data", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Run 1",
+				DataFPS: []float64{60.0, 61.0, 62.0},
+			},
+		}
+		count := CountTotalDataLines(data)
+		if count != 3 {
+			t.Errorf("Expected 3 lines, got %d", count)
+		}
+	})
+
+	t.Run("multiple_runs", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Run 1",
+				DataFPS: []float64{60.0, 61.0, 62.0},
+			},
+			{
+				Label:   "Run 2",
+				DataFPS: []float64{70.0, 71.0, 72.0, 73.0},
+			},
+			{
+				Label:   "Run 3",
+				DataFPS: []float64{80.0, 81.0},
+			},
+		}
+		count := CountTotalDataLines(data)
+		// 3 + 4 + 2 = 9
+		if count != 9 {
+			t.Errorf("Expected 9 lines, got %d", count)
+		}
+	})
+
+	t.Run("different_array_lengths", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:        "Run 1",
+				DataFPS:      []float64{60.0, 61.0, 62.0},
+				DataCPULoad:  []float64{50.0, 51.0, 52.0, 53.0, 54.0},
+				DataFrameTime: []float64{16.0, 17.0},
+			},
+		}
+		count := CountTotalDataLines(data)
+		// Should use the maximum length (5 from DataCPULoad)
+		if count != 5 {
+			t.Errorf("Expected 5 lines (max of arrays), got %d", count)
+		}
+	})
+
+	t.Run("run_with_no_data", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label: "Run 1",
+			},
+		}
+		count := CountTotalDataLines(data)
+		if count != 0 {
+			t.Errorf("Expected 0 lines for run with no data, got %d", count)
+		}
+	})
+}

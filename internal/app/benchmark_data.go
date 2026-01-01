@@ -28,10 +28,10 @@ const (
 	FileTypeAfterburner
 
 	// Data processing constants
-	precisionFactor = 100000
-	bytesToKB       = 1024
-	maxDataLines    = 100000
-	maxStringLength = 100
+	precisionFactor     = 100000
+	bytesToKB           = 1024
+	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
+	maxStringLength     = 100
 )
 
 var benchmarksDir string
@@ -117,9 +117,6 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 		}
 
 		counter++
-		if counter == maxDataLines {
-			return errors.New("file cannot have more than 100000 data lines")
-		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -514,6 +511,38 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 	specifications = strings.Join(specs, ", ")
 	
 	return runNames, specifications
+}
+
+// CountTotalDataLines counts the total number of data lines across all benchmark runs.
+// It returns the maximum length among all data arrays, as that represents the number of data rows.
+func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
+	totalLines := 0
+	for _, data := range benchmarkData {
+		// Find the maximum length among all data arrays for this run
+		maxLen := 0
+		dataArrays := [][]float64{
+			data.DataFPS,
+			data.DataFrameTime,
+			data.DataCPULoad,
+			data.DataGPULoad,
+			data.DataCPUTemp,
+			data.DataCPUPower,
+			data.DataGPUTemp,
+			data.DataGPUCoreClock,
+			data.DataGPUMemClock,
+			data.DataGPUVRAMUsed,
+			data.DataGPUPower,
+			data.DataRAMUsed,
+			data.DataSwapUsed,
+		}
+		for _, arr := range dataArrays {
+			if len(arr) > maxLen {
+				maxLen = len(arr)
+			}
+		}
+		totalLines += maxLen
+	}
+	return totalLines
 }
 
 // DeleteBenchmarkData deletes benchmark data file and metadata from disk

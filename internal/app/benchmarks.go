@@ -281,6 +281,15 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Check total data lines limit
+		totalLines := CountTotalDataLines(benchmarkData)
+		if totalLines > maxTotalDataLines {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("total data lines (%d) exceeds maximum allowed (%d)", totalLines, maxTotalDataLines),
+			})
+			return
+		}
+
 		// Create benchmark record
 		benchmark := Benchmark{
 			UserID:      uid,
@@ -721,6 +730,15 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 
 		// Append new runs to existing data
 		existingData = append(existingData, newBenchmarkData...)
+
+		// Check total data lines limit after combining
+		totalLines := CountTotalDataLines(existingData)
+		if totalLines > maxTotalDataLines {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("total data lines (%d) would exceed maximum allowed (%d)", totalLines, maxTotalDataLines),
+			})
+			return
+		}
 
 		// Store combined data
 		if err := StoreBenchmarkData(existingData, uint(benchmarkID)); err != nil {

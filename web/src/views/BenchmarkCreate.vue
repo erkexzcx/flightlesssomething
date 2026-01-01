@@ -19,6 +19,8 @@
           <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/benchmarks.md" target="_blank" rel="noopener noreferrer">
             Read the benchmark guide <i class="fa-solid fa-external-link-alt fa-xs"></i>
           </a>
+          <br>
+          <i class="fa-solid fa-info-circle"></i> <strong>Note:</strong> Combined benchmarks must not exceed 1 million data lines (excluding headers).
         </p>
         
         <div class="mb-3">
