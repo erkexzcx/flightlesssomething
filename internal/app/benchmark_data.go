@@ -3,7 +3,6 @@ package app
 import (
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"encoding/csv"
 	"encoding/gob"
 	"errors"
@@ -309,23 +308,26 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 		}
 	}()
 
-	var buffer bytes.Buffer
-	gobEncoder := gob.NewEncoder(&buffer)
-	err = gobEncoder.Encode(benchmarkData)
+	// Use higher compression concurrency and better compression level for storage
+	// SpeedDefault provides good balance between compression ratio and speed
+	zstdEncoder, err := zstd.NewWriter(file, 
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderConcurrency(2))
 	if err != nil {
 		return err
 	}
 
-	zstdEncoder, err := zstd.NewWriter(file, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	if err != nil {
+	// Stream directly from gob encoder to zstd encoder (no intermediate buffer)
+	gobEncoder := gob.NewEncoder(zstdEncoder)
+	if err := gobEncoder.Encode(benchmarkData); err != nil {
+		if closeErr := zstdEncoder.Close(); closeErr != nil {
+			// Log close error but return the encode error as it's more important
+			fmt.Printf("Warning: failed to close zstd encoder after encode error: %v\n", closeErr)
+		}
 		return err
 	}
 
-	_, err = zstdEncoder.Write(buffer.Bytes())
-	if err != nil {
-		return err
-	}
-
+	// Ensure all data is flushed before metadata write
 	if err := zstdEncoder.Close(); err != nil {
 		return fmt.Errorf("failed to close zstd encoder: %w", err)
 	}
@@ -352,15 +354,10 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 		return err
 	}
 	defer func() {
-
 		if err := metaFile.Close(); err != nil {
-
 			// Log error but continue - this is cleanup
-
 			fmt.Printf("Warning: failed to close metaFile: %v\n", err)
-
 		}
-
 	}()
 
 	// Use gob encoding for metadata (no need for compression, it's tiny)
@@ -387,20 +384,16 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 
 	}()
 
-	zstdDecoder, err := zstd.NewReader(file)
+	// Use concurrent decompression for better performance with large files
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
 	if err != nil {
 		return nil, err
 	}
 	defer zstdDecoder.Close()
 
-	var buffer bytes.Buffer
-	_, err = buffer.ReadFrom(zstdDecoder)
-	if err != nil {
-		return nil, err
-	}
-
+	// Stream directly to gob decoder to avoid intermediate buffer allocation
 	var benchmarkData []*BenchmarkData
-	gobDecoder := gob.NewDecoder(&buffer)
+	gobDecoder := gob.NewDecoder(zstdDecoder)
 	err = gobDecoder.Decode(&benchmarkData)
 	return benchmarkData, err
 }
@@ -638,8 +631,16 @@ func sanitizeFilename(filename string) string {
 
 // writeBenchmarkDataAsCSV writes benchmark data to a writer in MangoHud CSV format
 func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
-	csvWriter := csv.NewWriter(writer)
-	defer csvWriter.Flush()
+	// Use buffered writer for better performance
+	bufWriter := bufio.NewWriterSize(writer, 64*1024) // 64KB buffer
+	csvWriter := csv.NewWriter(bufWriter)
+	defer func() {
+		csvWriter.Flush()
+		if err := bufWriter.Flush(); err != nil {
+			// Log flush error in defer - write errors should have been caught earlier
+			fmt.Printf("Warning: failed to flush buffer in defer: %v\n", err)
+		}
+	}()
 
 	// Write the header line (MangoHud format)
 	if err := csvWriter.Write([]string{"os", "cpu", "gpu", "ram", "kernel", "driver", "cpuscheduler"}); err != nil {
@@ -689,14 +690,18 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 		}
 	}
 
+	// Pre-allocate row buffer to avoid repeated allocations
+	// Reusing the same slice prevents allocations and also ensures proper clearing
+	// of values when arrays have different lengths
+	row := make([]string, len(headers))
+	
 	// Write data rows
 	for i := 0; i < maxLen; i++ {
-		row := make([]string, len(headers))
 		for j, arr := range dataArrays {
 			if i < len(arr) {
 				row[j] = strconv.FormatFloat(arr[i], 'f', -1, 64)
 			} else {
-				row[j] = ""
+				row[j] = "" // Clear previous value for shorter arrays
 			}
 		}
 		if err := csvWriter.Write(row); err != nil {

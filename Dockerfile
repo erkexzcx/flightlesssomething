@@ -38,7 +38,7 @@ RUN mkdir -p internal/app/web && \
 
 # Build the application with version from git
 RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
-    CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -o server ./cmd/server
+    CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -tags netgo -o server ./cmd/server
 
 # Runtime stage
 FROM gcr.io/distroless/base-debian13:latest

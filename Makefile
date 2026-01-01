@@ -28,7 +28,7 @@ build-server: build-web
 	@echo '}' >> internal/app/webfs_embed.go
 	@# Build the server with version from git
 	@VERSION=$$(git describe --tags --always 2>/dev/null || echo "dev"); \
-	go build -ldflags="-X main.version=$$VERSION" -o server ./cmd/server
+	CGO_ENABLED=1 go build -ldflags="-X main.version=$$VERSION -w -s" -trimpath -o server ./cmd/server
 	@# Clean up copied files
 	@rm -rf internal/app/web internal/app/webfs_embed.go
 

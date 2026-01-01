@@ -125,11 +125,27 @@ curl http://localhost:5000/api/benchmarks/1
 
 **GET** `/api/benchmarks/:id/data`
 
-Download benchmark data (compressed binary, no authentication required).
+Get benchmark data in JSON format (no authentication required).
 
 Example:
 ```bash
-curl http://localhost:5000/api/benchmarks/1/data -o benchmark.dat
+curl http://localhost:5000/api/benchmarks/1/data
+```
+
+Response:
+```json
+[
+  {
+    "Label": "run1",
+    "SpecOS": "Steam Runtime 3 (sniper)",
+    "SpecCPU": "AMD Ryzen 7 9800X3D",
+    "SpecGPU": "AMD Radeon RX 9070 XT",
+    "DataFPS": [120.5, 119.8, 121.2, ...],
+    "DataFrameTime": [8.3, 8.4, 8.2, ...],
+    ...
+  },
+  ...
+]
 ```
 
 ---
