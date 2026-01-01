@@ -320,7 +320,10 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	// Stream directly from gob encoder to zstd encoder (no intermediate buffer)
 	gobEncoder := gob.NewEncoder(zstdEncoder)
 	if err := gobEncoder.Encode(benchmarkData); err != nil {
-		zstdEncoder.Close() // Ensure encoder is closed on error
+		if closeErr := zstdEncoder.Close(); closeErr != nil {
+			// Log close error but return the encode error as it's more important
+			fmt.Printf("Warning: failed to close zstd encoder after encode error: %v\n", closeErr)
+		}
 		return err
 	}
 
@@ -633,7 +636,10 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 	csvWriter := csv.NewWriter(bufWriter)
 	defer func() {
 		csvWriter.Flush()
-		bufWriter.Flush()
+		if err := bufWriter.Flush(); err != nil {
+			// Log flush error in defer - write errors should have been caught earlier
+			fmt.Printf("Warning: failed to flush buffer in defer: %v\n", err)
+		}
 	}()
 
 	// Write the header line (MangoHud format)
