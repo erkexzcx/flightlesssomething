@@ -246,7 +246,8 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*Bench
 	}
 
 	// Calculate expected data lines for pre-allocation
-	// totalLines is either exact (from line count) or estimated (from file size)
+	// totalLines is estimated from file size: (fileSize - 300) / 75
+	// Subtract header lines to get data line count for array pre-allocation
 	// Total lines - first line (format) - specs line - header line - afterburner extra headers
 	dataLines := totalLines - 3 // format, specs, header
 	if fileType == FileTypeAfterburner {
@@ -317,11 +318,15 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 	headerOverhead := int64(300)
 	avgLineSize := int64(75)
 	
-	estimatedLines := int((fileHeader.Size - headerOverhead) / avgLineSize)
-	if estimatedLines < 100 {
-		estimatedLines = 100 // Minimum reasonable size
+	// Protect against invalid file sizes or very small files
+	estimatedLines := 100 // Default minimum
+	if fileHeader.Size > headerOverhead {
+		estimatedLines = int((fileHeader.Size - headerOverhead) / avgLineSize)
+		if estimatedLines < 100 {
+			estimatedLines = 100 // Minimum reasonable size
+		}
 	}
-	// Cap at reasonable maximum to prevent excessive pre-allocation on corrupted files
+	// Cap at reasonable maximum to prevent excessive pre-allocation on corrupted/malicious files
 	if estimatedLines > 2000000 {
 		estimatedLines = 2000000 // ~150MB of data arrays
 	}

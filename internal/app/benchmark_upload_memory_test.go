@@ -111,7 +111,19 @@ func TestUploadParsingMemoryUsage(t *testing.T) {
 	runtime.GC()
 }
 
-// createTestFileHeader creates a multipart.FileHeader for testing
+// createTestFileHeader creates a multipart.FileHeader for testing purposes.
+// It simulates a file upload by creating a multipart form with the given filename and content.
+// This is necessary because multipart.FileHeader is normally created by the HTTP framework
+// during file upload processing, but we need to create one manually for unit tests.
+//
+// Parameters:
+//   - filename: The name of the file to simulate (e.g., "test.csv")
+//   - content: The file content as a byte slice
+//
+// Returns:
+//   - *multipart.FileHeader: A file header that can be passed to readSingleBenchmarkFile
+//
+// Panics if the multipart form cannot be created (test setup failure).
 func createTestFileHeader(filename string, content []byte) *multipart.FileHeader {
 	// Create a buffer to write multipart form
 	var b bytes.Buffer
