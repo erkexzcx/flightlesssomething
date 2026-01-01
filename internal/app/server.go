@@ -70,6 +70,7 @@ func Start(config *Config, version string) error {
 	r.GET("/api/benchmarks", HandleListBenchmarks(db))
 	r.GET("/api/benchmarks/:id", HandleGetBenchmark(db))
 	r.GET("/api/benchmarks/:id/data", HandleGetBenchmarkData(db))
+	r.GET("/api/benchmarks/:id/runs/:runIndex", HandleGetBenchmarkRun(db))
 	r.GET("/api/benchmarks/:id/download", HandleDownloadBenchmarkData(db))
 
 	// Protected benchmark routes

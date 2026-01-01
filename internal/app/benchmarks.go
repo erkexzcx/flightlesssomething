@@ -785,3 +785,38 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		})
 	}
 }
+
+// HandleGetBenchmarkRun returns a single run from a benchmark
+func HandleGetBenchmarkRun(db *DBInstance) gin.HandlerFunc {
+return func(c *gin.Context) {
+id := c.Param("id")
+benchmarkID, err := strconv.ParseUint(id, 10, 32)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+return
+}
+
+runIndexStr := c.Param("runIndex")
+runIndex, err := strconv.Atoi(runIndexStr)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run index"})
+return
+}
+
+// Verify benchmark exists
+var benchmark Benchmark
+if dbErr := db.DB.First(&benchmark, benchmarkID).Error; dbErr != nil {
+c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
+return
+}
+
+// Retrieve the single run
+run, err := RetrieveBenchmarkRun(uint(benchmarkID), runIndex)
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+return
+}
+
+c.JSON(http.StatusOK, run)
+}
+}

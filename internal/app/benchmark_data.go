@@ -1033,3 +1033,59 @@ func convertRAMToKB(ramStr string) string {
 	// If we can't parse it, return empty string
 	return ""
 }
+
+// RetrieveBenchmarkRun retrieves a single run from benchmark data
+// runIndex is 0-based
+func RetrieveBenchmarkRun(benchmarkID uint, runIndex int) (*BenchmarkData, error) {
+filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+file, err := os.Open(filePath)
+if err != nil {
+return nil, err
+}
+defer func() {
+if closeErr := file.Close(); closeErr != nil {
+fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+}
+}()
+
+zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+if err != nil {
+return nil, err
+}
+defer zstdDecoder.Close()
+
+gobDecoder := gob.NewDecoder(zstdDecoder)
+
+// Try to read header to determine format version
+var header fileHeader
+if err := gobDecoder.Decode(&header); err != nil {
+// Old format - need to load all data
+return nil, fmt.Errorf("old format not supported for single run retrieval")
+}
+
+// New format detected
+if header.Version != storageFormatVersion {
+return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+}
+
+// Check if runIndex is valid
+if runIndex < 0 || runIndex >= header.RunCount {
+return nil, fmt.Errorf("invalid run index %d (total runs: %d)", runIndex, header.RunCount)
+}
+
+// Skip to the requested run
+for i := 0; i < runIndex; i++ {
+var skipRun BenchmarkData
+if err := gobDecoder.Decode(&skipRun); err != nil {
+return nil, fmt.Errorf("failed to skip run %d: %w", i, err)
+}
+}
+
+// Decode the requested run
+var run BenchmarkData
+if err := gobDecoder.Decode(&run); err != nil {
+return nil, fmt.Errorf("failed to decode run %d: %w", runIndex, err)
+}
+
+return &run, nil
+}

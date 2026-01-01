@@ -249,7 +249,7 @@
               <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                   <span class="text-muted small">
-                    <i class="fa-solid fa-download"></i> Downloading benchmark data
+                    <i class="fa-solid fa-download"></i> {{ loadingStatus }}
                   </span>
                   <span class="text-muted small" v-if="downloadProgress >= 0">
                     {{ downloadProgress }}%
@@ -270,21 +270,21 @@
                 </div>
               </div>
               
-              <div v-if="downloadProgress === 100">
+              <div v-if="currentRunProcessing !== null">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                   <span class="text-muted small">
-                    <i class="fa-solid fa-cog fa-spin"></i> Parsing benchmark data
+                    <i class="fa-solid fa-cog fa-spin"></i> {{ processingStatus }}
                   </span>
-                  <span class="text-muted small">{{ parseProgress }}%</span>
+                  <span class="text-muted small">{{ Math.round((currentRunProcessing + 1) / totalRuns * 100) }}%</span>
                 </div>
                 <div class="progress" style="height: 20px;">
                   <div
                     class="progress-bar progress-bar-striped progress-bar-animated bg-success"
                     role="progressbar"
-                    :style="{ width: parseProgress + '%' }"
-                    :aria-valuenow="parseProgress"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
+                    :style="{ width: ((currentRunProcessing + 1) / totalRuns * 100) + '%' }"
+                    :aria-valuenow="currentRunProcessing + 1"
+                    :aria-valuemin="0"
+                    :aria-valuemax="totalRuns"
                   ></div>
                 </div>
               </div>
@@ -415,6 +415,10 @@ const loadingData = ref(false)
 const dataError = ref(null)
 const downloadProgress = ref(0)
 const parseProgress = ref(0)
+const loadingStatus = ref('Initializing...')
+const processingStatus = ref('')
+const currentRunProcessing = ref(null)
+const totalRuns = ref(0)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
 const selectedFiles = ref([])
@@ -507,16 +511,36 @@ async function loadBenchmarkData(id) {
     dataError.value = null
     downloadProgress.value = 0
     parseProgress.value = 0
+    currentRunProcessing.value = null
+    loadingStatus.value = 'Initializing...'
+    processingStatus.value = ''
     
-    // Load full data for accurate statistics (averages, percentiles, percentages)
-    // The frontend chart component will downsample line charts as needed
-    // Use progress-tracking version for better UX with large files
-    benchmarkData.value = await api.benchmarks.getDataWithProgress(id, {
-      onDownloadProgress: (progress) => {
+    // Get the total number of runs from benchmark metadata
+    totalRuns.value = benchmark.value.run_count || 0
+    
+    if (totalRuns.value === 0) {
+      benchmarkData.value = []
+      return
+    }
+    
+    // Load data incrementally - one run at a time to prevent browser freezing
+    benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
+      onRunDownloadStart: (runIndex, total) => {
+        loadingStatus.value = `Downloading run ${runIndex + 1}/${total}`
+        downloadProgress.value = 0
+      },
+      onRunDownloadProgress: (progress) => {
         downloadProgress.value = progress
       },
-      onParseProgress: (progress) => {
-        parseProgress.value = progress
+      onRunDownloadComplete: (runIndex, runData) => {
+        downloadProgress.value = 100
+      },
+      onRunProcessComplete: (runIndex, total) => {
+        currentRunProcessing.value = runIndex
+        processingStatus.value = `Processing run ${runIndex + 1}/${total}`
+      },
+      onError: (error, runIndex) => {
+        console.error(`Error loading run ${runIndex}:`, error)
       }
     })
     
