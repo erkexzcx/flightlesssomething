@@ -145,11 +145,8 @@ export const api = {
 
       // If no progress callback or body not readable, use simple method
       if (!onProgress || !response.body) {
-        console.warn('Progress tracking not available - using simple JSON parsing')
         return response.json()
       }
-
-      console.log('Starting download with progress tracking, Content-Length:', total)
 
       // Initial progress callback
       onProgress({
@@ -178,8 +175,6 @@ export const api = {
           percentage: total > 0 ? Math.round((receivedLength / total) * 100) : 0
         })
       }
-
-      console.log('Download complete, total bytes:', receivedLength)
 
       // Combine chunks and parse JSON
       const chunksAll = new Uint8Array(receivedLength)
