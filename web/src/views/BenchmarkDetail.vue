@@ -506,10 +506,10 @@ async function loadBenchmarkData(id) {
       onRunDownloadProgress: (progress) => {
         // progress is -1 (indeterminate) - not used
       },
-      onRunDownloadComplete: (runIndex, runData) => {
+      onRunDownloadComplete: (runIndex, runData, total) => {
         // Download phase complete - move to processing phase
         // Progress: (runIndex * 2 + 1) segments out of total * 2 segments
-        loadingProgress.value = Math.round((runIndex * 2 + 1) / (totalRuns.value * 2) * 100)
+        loadingProgress.value = Math.round((runIndex * 2 + 1) / (total * 2) * 100)
       },
       onRunProcessComplete: (runIndex, total) => {
         // Processing phase complete - this run is fully done

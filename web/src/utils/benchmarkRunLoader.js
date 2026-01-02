@@ -13,7 +13,7 @@ import { processRun } from './benchmarkDataProcessor.js'
  * @param {Object} callbacks - Progress callbacks
  * @param {Function} callbacks.onRunDownloadStart - Called when starting to download a run (runIndex, totalRuns)
  * @param {Function} callbacks.onRunDownloadProgress - Called with download progress for current run (progress 0-100)
- * @param {Function} callbacks.onRunDownloadComplete - Called when a run download completes (runIndex, runData)
+ * @param {Function} callbacks.onRunDownloadComplete - Called when a run download completes (runIndex, runData, totalRuns)
  * @param {Function} callbacks.onRunProcessComplete - Called when a run is processed (runIndex, totalRuns)
  * @param {Function} callbacks.onError - Called on error (error, runIndex)
  * @returns {Promise<Array>} Array of processed benchmark runs (not raw data)
@@ -72,7 +72,7 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
       
       // Notify download complete
       if (onRunDownloadComplete) {
-        onRunDownloadComplete(runIndex, runData)
+        onRunDownloadComplete(runIndex, runData, totalRuns)
       }
 
       // **CRITICAL: Process run immediately and discard raw data**
