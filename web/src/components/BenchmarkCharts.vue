@@ -120,7 +120,14 @@
             </select>
           </div>
           <div ref="fpsAvgChart" style="height:250pt;"></div>
-          <div ref="fpsStddevVarianceChart" style="height:400pt;"></div>
+          <div class="row">
+            <div class="col-12 col-md-6">
+              <div ref="fpsStddevChart" style="height:400pt;"></div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div ref="fpsVarianceChart" style="height:400pt;"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -156,7 +163,14 @@
             </select>
           </div>
           <div ref="frametimeAvgChart" style="height:250pt;"></div>
-          <div ref="frametimeStddevVarianceChart" style="height:400pt;"></div>
+          <div class="row">
+            <div class="col-12 col-md-6">
+              <div ref="frametimeStddevChart" style="height:400pt;"></div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div ref="frametimeVarianceChart" style="height:400pt;"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -311,11 +325,13 @@ const swapUsedChart = ref(null)
 const fpsMinMaxAvgChart = ref(null)
 const fpsDensityChart = ref(null)
 const fpsAvgChart = ref(null)
-const fpsStddevVarianceChart = ref(null)
+const fpsStddevChart = ref(null)
+const fpsVarianceChart = ref(null)
 const frametimeMinMaxAvgChart = ref(null)
 const frametimeDensityChart = ref(null)
 const frametimeAvgChart = ref(null)
-const frametimeStddevVarianceChart = ref(null)
+const frametimeStddevChart = ref(null)
+const frametimeVarianceChart = ref(null)
 const fpsSummaryChart = ref(null)
 const frametimeSummaryChart = ref(null)
 const cpuLoadSummaryChart = ref(null)
@@ -909,26 +925,47 @@ function renderFPSTab() {
   // FPS Average comparison chart - render via separate function
   renderFPSComparisonChart()
 
-  // FPS Stability chart
-  if (fpsStddevVarianceChart.value && stats) {
+  // FPS Standard Deviation chart
+  if (fpsStddevChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
     const categories = stats.map(s => s.label)
     const standardDeviations = stats.map(s => s.stddev)
-    const variances = stats.map(s => s.variance)
 
-    Highcharts.chart(fpsStddevVarianceChart.value, {
+    Highcharts.chart(fpsStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
-      title: { ...chartOpts.title, text: 'FPS Stability' },
-      subtitle: { ...chartOpts.subtitle, text: 'Measures of FPS consistency (std. dev.) and spread (variance). Less is better.' },
+      title: { ...chartOpts.title, text: 'FPS Standard Deviation' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures FPS consistency. Less is better.' },
       xAxis: { ...chartOpts.xAxis, categories: categories },
-      yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
-      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Std. Dev.', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)}` } },
       plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
-      legend: { ...chartOpts.legend, enabled: true },
+      legend: { enabled: false },
       series: [
-        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
+        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' }
+      ]
+    })
+  }
+
+  // FPS Variance chart
+  if (fpsVarianceChart.value && stats) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
+    const categories = stats.map(s => s.label)
+    const variances = stats.map(s => s.variance)
+
+    Highcharts.chart(fpsVarianceChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'FPS Variance' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures FPS spread. Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Variance', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)}` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      legend: { enabled: false },
+      series: [
         { name: 'Variance', data: variances, color: '#33FF57' }
       ]
     })
@@ -994,26 +1031,47 @@ function renderFrametimeTab() {
   // Frametime Average comparison chart - render via separate function
   renderFrametimeComparisonChart()
 
-  // Frametime Stability chart
-  if (frametimeStddevVarianceChart.value && stats) {
+  // Frametime Standard Deviation chart
+  if (frametimeStddevChart.value && stats) {
     const colors = getThemeColors.value
     const chartOpts = commonChartOptions.value
     const categories = stats.map(s => s.label)
     const standardDeviations = stats.map(s => s.stddev)
-    const variances = stats.map(s => s.variance)
 
-    Highcharts.chart(frametimeStddevVarianceChart.value, {
+    Highcharts.chart(frametimeStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
-      title: { ...chartOpts.title, text: 'Frametime Stability' },
-      subtitle: { ...chartOpts.subtitle, text: 'Measures of Frametime consistency (std. dev.) and spread (variance). Less is better.' },
+      title: { ...chartOpts.title, text: 'Frametime Standard Deviation' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures Frametime consistency. Less is better.' },
       xAxis: { ...chartOpts.xAxis, categories: categories },
-      yAxis: { ...chartOpts.yAxis, title: { text: 'Value', align: 'high', style: { color: colors.textColor } } },
-      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.series.name}</b>: ${this.y.toFixed(2)}` } },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Std. Dev. (ms)', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ms` } },
       plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
-      legend: { ...chartOpts.legend, enabled: true },
+      legend: { enabled: false },
       series: [
-        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' },
+        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' }
+      ]
+    })
+  }
+
+  // Frametime Variance chart
+  if (frametimeVarianceChart.value && stats) {
+    const colors = getThemeColors.value
+    const chartOpts = commonChartOptions.value
+    const categories = stats.map(s => s.label)
+    const variances = stats.map(s => s.variance)
+
+    Highcharts.chart(frametimeVarianceChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Frametime Variance' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures Frametime spread. Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: categories },
+      yAxis: { ...chartOpts.yAxis, title: { text: 'Variance (ms²)', align: 'high', style: { color: colors.textColor } } },
+      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ms²` } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      legend: { enabled: false },
+      series: [
         { name: 'Variance', data: variances, color: '#33FF57' }
       ]
     })
