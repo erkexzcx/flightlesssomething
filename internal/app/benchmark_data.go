@@ -703,34 +703,39 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 	return runNames, specifications
 }
 
+// getRunDataPointCount returns the number of data points in a single benchmark run.
+// It returns the maximum length among all data arrays, as that represents the number of data rows.
+func getRunDataPointCount(data *BenchmarkData) int {
+	dataArrays := [][]float64{
+		data.DataFPS,
+		data.DataFrameTime,
+		data.DataCPULoad,
+		data.DataGPULoad,
+		data.DataCPUTemp,
+		data.DataCPUPower,
+		data.DataGPUTemp,
+		data.DataGPUCoreClock,
+		data.DataGPUMemClock,
+		data.DataGPUVRAMUsed,
+		data.DataGPUPower,
+		data.DataRAMUsed,
+		data.DataSwapUsed,
+	}
+	maxLen := 0
+	for _, arr := range dataArrays {
+		if len(arr) > maxLen {
+			maxLen = len(arr)
+		}
+	}
+	return maxLen
+}
+
 // CountTotalDataLines counts the total number of data lines across all benchmark runs.
 // It returns the maximum length among all data arrays, as that represents the number of data rows.
 func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
 	totalLines := 0
 	for _, data := range benchmarkData {
-		// Find the maximum length among all data arrays for this run
-		maxLen := 0
-		dataArrays := [][]float64{
-			data.DataFPS,
-			data.DataFrameTime,
-			data.DataCPULoad,
-			data.DataGPULoad,
-			data.DataCPUTemp,
-			data.DataCPUPower,
-			data.DataGPUTemp,
-			data.DataGPUCoreClock,
-			data.DataGPUMemClock,
-			data.DataGPUVRAMUsed,
-			data.DataGPUPower,
-			data.DataRAMUsed,
-			data.DataSwapUsed,
-		}
-		for _, arr := range dataArrays {
-			if len(arr) > maxLen {
-				maxLen = len(arr)
-			}
-		}
-		totalLines += maxLen
+		totalLines += getRunDataPointCount(data)
 	}
 	return totalLines
 }
@@ -739,35 +744,14 @@ func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
 // Returns an error if any run exceeds maxPerRunDataLines.
 func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 	for i, data := range benchmarkData {
-		// Find the maximum length among all data arrays for this run
-		maxLen := 0
-		dataArrays := [][]float64{
-			data.DataFPS,
-			data.DataFrameTime,
-			data.DataCPULoad,
-			data.DataGPULoad,
-			data.DataCPUTemp,
-			data.DataCPUPower,
-			data.DataGPUTemp,
-			data.DataGPUCoreClock,
-			data.DataGPUMemClock,
-			data.DataGPUVRAMUsed,
-			data.DataGPUPower,
-			data.DataRAMUsed,
-			data.DataSwapUsed,
-		}
-		for _, arr := range dataArrays {
-			if len(arr) > maxLen {
-				maxLen = len(arr)
-			}
-		}
+		runDataPoints := getRunDataPointCount(data)
 		
-		if maxLen > maxPerRunDataLines {
+		if runDataPoints > maxPerRunDataLines {
 			runLabel := data.Label
 			if runLabel == "" {
 				runLabel = fmt.Sprintf("run #%d", i+1)
 			}
-			return fmt.Errorf("%s has %d data points, which exceeds the maximum allowed %d per run", runLabel, maxLen, maxPerRunDataLines)
+			return fmt.Errorf("%s has %d data points, which exceeds the maximum allowed %d per run", runLabel, runDataPoints, maxPerRunDataLines)
 		}
 	}
 	return nil
