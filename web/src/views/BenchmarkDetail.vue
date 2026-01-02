@@ -586,6 +586,9 @@ async function handleDeleteRun() {
     
     await api.benchmarks.deleteRun(benchmark.value.ID, runToDelete.value)
     
+    // Reload benchmark metadata to get updated run_count
+    benchmark.value = await api.benchmarks.get(benchmark.value.ID)
+    
     // Reload the benchmark data to reflect the deletion
     await loadBenchmarkData(benchmark.value.ID)
     
@@ -615,7 +618,7 @@ async function handleUpdate() {
       editLabels.value.forEach((label, index) => {
         const trimmedLabel = label.trim()
         // Only include if it changed from original
-        if (benchmarkData.value[index] && trimmedLabel !== benchmarkData.value[index].Label) {
+        if (benchmarkData.value[index] && trimmedLabel !== benchmarkData.value[index].label) {
           labels[index] = trimmedLabel
         }
       })
@@ -624,15 +627,19 @@ async function handleUpdate() {
       }
     }
     
+    // Track if we need to reload data
+    let needsDataReload = false
+    
+    // Update benchmark metadata (title, description, labels)
     const updated = await api.benchmarks.update(benchmark.value.ID, data)
     
-    // Update local benchmark data
+    // Update local benchmark metadata
     benchmark.value.Title = updated.Title
     benchmark.value.Description = updated.Description
     
-    // If labels were updated, reload the benchmark data
+    // If labels were updated, we need to reload data
     if (data.labels) {
-      await loadBenchmarkData(benchmark.value.ID)
+      needsDataReload = true
     }
     
     // If there are new files to add, upload them
@@ -650,14 +657,23 @@ async function handleUpdate() {
       
       await api.benchmarks.addRuns(benchmark.value.ID, formData)
       
-      // Reload benchmark data to show new runs
-      await loadBenchmarkData(benchmark.value.ID)
-      
       // Clear selected files
       selectedFiles.value = []
       if (fileInput.value) {
         fileInput.value.value = ''
       }
+      
+      // Mark that we need to reload data
+      needsDataReload = true
+    }
+    
+    // Reload benchmark data only once if needed
+    if (needsDataReload) {
+      // Reload benchmark metadata first to get updated run_count
+      benchmark.value = await api.benchmarks.get(benchmark.value.ID)
+      
+      // Then reload the benchmark data with the correct run_count
+      await loadBenchmarkData(benchmark.value.ID)
     }
     
     editMode.value = false
