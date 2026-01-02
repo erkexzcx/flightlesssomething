@@ -524,7 +524,8 @@ async function loadBenchmarkData(id) {
     
     // Add a small delay to ensure the browser has time to render 100% progress
     // before hiding the loading screen (fixes visual issue where 100% is never shown)
-    await new Promise(resolve => setTimeout(resolve, 10))
+    // Use requestAnimationFrame to wait for the next render frame
+    await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
     console.error('Error loading benchmark data:', err)
