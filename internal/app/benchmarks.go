@@ -297,6 +297,12 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Check per-run data lines limit
+		if err := ValidatePerRunDataLines(benchmarkData); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		// Check total data lines limit
 		totalLines := CountTotalDataLines(benchmarkData)
 		if totalLines > maxTotalDataLines {
@@ -740,6 +746,12 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		newBenchmarkData, err := ReadBenchmarkFiles(files)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse files: " + err.Error()})
+			return
+		}
+
+		// Check per-run data lines limit for new runs
+		if err := ValidatePerRunDataLines(newBenchmarkData); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 

@@ -33,6 +33,7 @@ const (
 	precisionFactor     = 100000
 	bytesToKB           = 1024
 	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
+	maxPerRunDataLines  = 500000  // Maximum data points per single run
 	maxStringLength     = 100
 	
 	// Storage format version for backward compatibility
@@ -732,6 +733,44 @@ func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
 		totalLines += maxLen
 	}
 	return totalLines
+}
+
+// ValidatePerRunDataLines validates that no single run exceeds the per-run data point limit.
+// Returns an error if any run exceeds maxPerRunDataLines.
+func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
+	for i, data := range benchmarkData {
+		// Find the maximum length among all data arrays for this run
+		maxLen := 0
+		dataArrays := [][]float64{
+			data.DataFPS,
+			data.DataFrameTime,
+			data.DataCPULoad,
+			data.DataGPULoad,
+			data.DataCPUTemp,
+			data.DataCPUPower,
+			data.DataGPUTemp,
+			data.DataGPUCoreClock,
+			data.DataGPUMemClock,
+			data.DataGPUVRAMUsed,
+			data.DataGPUPower,
+			data.DataRAMUsed,
+			data.DataSwapUsed,
+		}
+		for _, arr := range dataArrays {
+			if len(arr) > maxLen {
+				maxLen = len(arr)
+			}
+		}
+		
+		if maxLen > maxPerRunDataLines {
+			runLabel := data.Label
+			if runLabel == "" {
+				runLabel = fmt.Sprintf("run #%d", i+1)
+			}
+			return fmt.Errorf("%s has %d data points, which exceeds the maximum allowed %d per run", runLabel, maxLen, maxPerRunDataLines)
+		}
+	}
+	return nil
 }
 
 // DeleteBenchmarkData deletes benchmark data file and metadata from disk

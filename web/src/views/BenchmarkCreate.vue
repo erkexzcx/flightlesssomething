@@ -20,7 +20,7 @@
             Read the benchmark guide <i class="fa-solid fa-external-link-alt fa-xs"></i>
           </a>
           <br>
-          <i class="fa-solid fa-info-circle"></i> <strong>Note:</strong> Combined benchmarks must not exceed 1 million data lines (excluding headers).
+          <i class="fa-solid fa-info-circle"></i> <strong>Note:</strong> Combined benchmarks must not exceed 1 million data lines (excluding headers). Each single run is limited to 500k data points.
         </p>
         
         <div class="mb-3">
