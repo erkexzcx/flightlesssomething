@@ -90,18 +90,26 @@ function calculateDensityData(values) {
 // Calculate statistics for an array of values
 function calculateStats(values) {
   if (!values || values.length === 0) {
-    return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
   }
 
   const sorted = [...values].sort((a, b) => a - b)
   const sum = values.reduce((acc, val) => acc + val, 0)
+  const avg = sum / values.length
+  
+  // Calculate variance and standard deviation from FULL data
+  const squaredDiffs = values.map(val => Math.pow(val - avg, 2))
+  const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / values.length
+  const stddev = Math.sqrt(variance)
   
   return {
     min: sorted[0],
     max: sorted[sorted.length - 1],
-    avg: sum / values.length,
+    avg: avg,
     p01: sorted[Math.floor(values.length * 0.01)],
     p99: sorted[Math.floor(values.length * 0.99)],
+    stddev: stddev,  // Pre-calculated from FULL data
+    variance: variance,  // Pre-calculated from FULL data
     density: calculateDensityData(values) // Pre-calculate density from FULL data
   }
 }
@@ -150,7 +158,7 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     
     if (!data || data.length === 0) {
       processed.series[metric] = []
-      processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+      processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
       return
     }
 
@@ -187,7 +195,7 @@ export function mergeProcessedRuns(processedRuns) {
     
     // Helper to get stats for all runs for a specific metric
     getStats: (metric) => {
-      return processedRuns.map(run => run.stats[metric] || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] })
+      return processedRuns.map(run => run.stats[metric] || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] })
     }
   }
 }

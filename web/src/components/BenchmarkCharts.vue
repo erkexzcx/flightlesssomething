@@ -803,10 +803,8 @@ const fpsStats = computed(() => {
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data  
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
-      // NOTE: stddev/variance not pre-calculated in processor to save memory
-      // These would need to be added to benchmarkDataProcessor.js if needed
-      stddev: 0,  
-      variance: 0,
+      stddev: stats.stddev || 0,  // Use pre-calculated stddev from FULL data
+      variance: stats.variance || 0,  // Use pre-calculated variance from FULL data
       // Use pre-calculated density from FULL data (calculated during download from all points)
       densityData: stats.density
     }
@@ -827,9 +825,8 @@ const frametimeStats = computed(() => {
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data
       max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
-      // NOTE: stddev/variance not pre-calculated to save memory
-      stddev: 0,  
-      variance: 0,
+      stddev: stats.stddev || 0,  // Use pre-calculated stddev from FULL data
+      variance: stats.variance || 0,  // Use pre-calculated variance from FULL data
       // Use pre-calculated density from FULL data (calculated during download from all points)
       densityData: stats.density
     }
