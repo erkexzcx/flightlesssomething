@@ -497,15 +497,12 @@ async function loadBenchmarkData(id) {
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
       onRunDownloadStart: (runIndex, total) => {
         loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
-        // Calculate progress based on completed runs
-        loadingProgress.value = Math.round((runIndex / total) * 100)
+        // Don't update progress here - let onRunProcessComplete handle it
+        // This prevents the progress bar from jumping backward
       },
       onRunDownloadProgress: (progress) => {
-        // Fine-grained progress within current run
-        const runIndex = benchmarkData.value ? benchmarkData.value.length : 0
-        const baseProgress = (runIndex / totalRuns.value) * 100
-        const runProgress = (progress / 100) * (100 / totalRuns.value)
-        loadingProgress.value = Math.round(baseProgress + runProgress)
+        // progress is -1 (indeterminate) from the loader, so we don't update here
+        // The progress will be updated when the run is processed
       },
       onRunDownloadComplete: (runIndex, runData) => {
         // Progress updated via onRunProcessComplete
