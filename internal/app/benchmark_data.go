@@ -659,9 +659,6 @@ func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
 		if (i+1)%gcFrequencyStreaming == 0 {
 			runtime.GC()
 		}
-		
-		// Clear run to help GC (will be overwritten next iteration anyway)
-		run = BenchmarkData{} //nolint:ineffassign // Intentional to help GC
 	}
 	
 	// Write closing bracket and final newline (to match json.Encoder)
