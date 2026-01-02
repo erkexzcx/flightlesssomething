@@ -22,16 +22,11 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
     throw new Error(errorData.error || 'Failed to load benchmark data')
   }
 
-  // Get content length for progress calculation
-  const contentLength = response.headers.get('Content-Length')
-  const total = contentLength ? parseInt(contentLength, 10) : 0
-
-  let loaded = 0
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let text = ''
 
-  // Read the response body with progress tracking
+  // Read the response body with indeterminate progress tracking
   // Stream directly to string to avoid memory overhead from Blob conversion
   while (true) {
     const { done, value } = await reader.read()
@@ -40,14 +35,9 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
     
     // Decode chunk directly to string instead of accumulating Uint8Arrays
     text += decoder.decode(value, { stream: true })
-    loaded += value.length
     
-    // Report download progress
-    if (onDownloadProgress && total > 0) {
-      const progress = Math.round((loaded / total) * 100)
-      onDownloadProgress(progress)
-    } else if (onDownloadProgress) {
-      // If content-length is missing, show indeterminate progress
+    // Report indeterminate progress (server doesn't send Content-Length)
+    if (onDownloadProgress) {
       onDownloadProgress(-1)
     }
   }

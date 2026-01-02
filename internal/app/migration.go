@@ -565,12 +565,12 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 }
 
 
-// RegenerateMetadataWithJSONSize regenerates all .meta files to include JSON size
-// This enables accurate Content-Length headers for benchmark downloads
+// RegenerateMetadataWithJSONSize regenerates all .meta files
+// Note: This function name is kept for compatibility but no longer includes JSON size calculation
 func RegenerateMetadataWithJSONSize(dataDir string) error {
 	benchmarksDirPath := filepath.Join(dataDir, "benchmarks")
 	
-	log.Println("Starting metadata regeneration with JSON size...")
+	log.Println("Starting metadata regeneration...")
 	
 	// Find all .bin files
 	files, err := filepath.Glob(filepath.Join(benchmarksDirPath, "*.bin"))
@@ -600,7 +600,7 @@ func RegenerateMetadataWithJSONSize(dataDir string) error {
 			continue
 		}
 		
-		// Regenerate metadata with JSON size
+		// Regenerate metadata
 		if err := storeBenchmarkMetadata(benchmarkData, benchmarkID); err != nil {
 			log.Printf("    ERROR: Failed to store metadata for benchmark %d: %v", benchmarkID, err)
 			errorCount++
