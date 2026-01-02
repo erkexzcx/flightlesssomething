@@ -5,6 +5,11 @@
 
 // Downsample data points using Largest Triangle Three Buckets (LTTB) algorithm
 function downsampleLTTB(data, threshold) {
+  // Handle edge cases
+  if (!data || data.length === 0) {
+    return []
+  }
+  
   if (data.length <= threshold) {
     return data
   }
@@ -17,29 +22,51 @@ function downsampleLTTB(data, threshold) {
 
   for (let i = 0; i < threshold - 2; i++) {
     const avgRangeStart = Math.floor((i + 1) * bucketSize) + 1
-    const avgRangeEnd = Math.floor((i + 2) * bucketSize) + 1
+    const avgRangeEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, data.length)
     const avgRangeLength = avgRangeEnd - avgRangeStart
 
     let avgX = 0
     let avgY = 0
+    let validPoints = 0
 
+    // Calculate average with bounds checking
     for (let j = avgRangeStart; j < avgRangeEnd; j++) {
+      if (j >= data.length || !data[j] || !Array.isArray(data[j]) || data[j].length < 2) {
+        continue
+      }
       avgX += data[j][0]
       avgY += data[j][1]
+      validPoints++
     }
-    avgX /= avgRangeLength
-    avgY /= avgRangeLength
+    
+    if (validPoints === 0) {
+      // Skip this bucket if no valid points
+      continue
+    }
+    
+    avgX /= validPoints
+    avgY /= validPoints
 
     const rangeStart = Math.floor(i * bucketSize) + 1
-    const rangeEnd = Math.floor((i + 1) * bucketSize) + 1
+    const rangeEnd = Math.min(Math.floor((i + 1) * bucketSize) + 1, data.length)
 
     let maxArea = -1
     let maxAreaPoint = null
 
-    const pointAX = sampled[sampled.length - 1][0]
-    const pointAY = sampled[sampled.length - 1][1]
+    const lastPoint = sampled[sampled.length - 1]
+    if (!lastPoint || !Array.isArray(lastPoint) || lastPoint.length < 2) {
+      // If last point is invalid, skip this iteration
+      continue
+    }
+    
+    const pointAX = lastPoint[0]
+    const pointAY = lastPoint[1]
 
     for (let j = rangeStart; j < rangeEnd; j++) {
+      if (j >= data.length || !data[j] || !Array.isArray(data[j]) || data[j].length < 2) {
+        continue
+      }
+      
       const area = Math.abs(
         (pointAX - avgX) * (data[j][1] - pointAY) -
         (pointAX - data[j][0]) * (avgY - pointAY)
@@ -51,11 +78,16 @@ function downsampleLTTB(data, threshold) {
       }
     }
 
-    sampled.push(maxAreaPoint)
+    if (maxAreaPoint) {
+      sampled.push(maxAreaPoint)
+    }
   }
 
-  // Always add last point
-  sampled.push(data[data.length - 1])
+  // Always add last point if it exists and is valid
+  const lastDataPoint = data[data.length - 1]
+  if (lastDataPoint && Array.isArray(lastDataPoint) && lastDataPoint.length >= 2) {
+    sampled.push(lastDataPoint)
+  }
 
   return sampled
 }
