@@ -76,3 +76,140 @@ func TestCountTotalDataLines(t *testing.T) {
 		}
 	})
 }
+
+func TestValidatePerRunDataLines(t *testing.T) {
+	t.Run("within_limit", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Run 1",
+				DataFPS: make([]float64, 1000),
+			},
+			{
+				Label:   "Run 2",
+				DataFPS: make([]float64, 5000),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err != nil {
+			t.Errorf("Expected no error for data within limit, got: %v", err)
+		}
+	})
+
+	t.Run("exactly_at_limit", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Run 1",
+				DataFPS: make([]float64, maxPerRunDataLines),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err != nil {
+			t.Errorf("Expected no error for data exactly at limit, got: %v", err)
+		}
+	})
+
+	t.Run("exceeds_limit_first_run", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Large Run",
+				DataFPS: make([]float64, maxPerRunDataLines+1),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err == nil {
+			t.Error("Expected error for data exceeding limit")
+		}
+		expectedMsg := "Large Run has 500001 data lines, which exceeds the maximum allowed 500000 per run"
+		if err.Error() != expectedMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+		}
+	})
+
+	t.Run("exceeds_limit_second_run", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "Run 1",
+				DataFPS: make([]float64, 1000),
+			},
+			{
+				Label:   "Huge Run",
+				DataFPS: make([]float64, maxPerRunDataLines+100),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err == nil {
+			t.Error("Expected error for second run exceeding limit")
+		}
+		expectedMsg := "Huge Run has 500100 data lines, which exceeds the maximum allowed 500000 per run"
+		if err.Error() != expectedMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+		}
+	})
+
+	t.Run("exceeds_limit_no_label", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:   "",
+				DataFPS: make([]float64, maxPerRunDataLines+1),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err == nil {
+			t.Error("Expected error for data exceeding limit")
+		}
+		expectedMsg := "run #1 has 500001 data lines, which exceeds the maximum allowed 500000 per run"
+		if err.Error() != expectedMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+		}
+	})
+
+	t.Run("different_array_lengths_within_limit", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:         "Run 1",
+				DataFPS:       make([]float64, 100000),
+				DataCPULoad:   make([]float64, 200000),
+				DataFrameTime: make([]float64, 150000),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err != nil {
+			t.Errorf("Expected no error for data within limit, got: %v", err)
+		}
+	})
+
+	t.Run("different_array_lengths_exceeds_limit", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label:         "Run 1",
+				DataFPS:       make([]float64, 100000),
+				DataCPULoad:   make([]float64, maxPerRunDataLines+1000),
+				DataFrameTime: make([]float64, 150000),
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err == nil {
+			t.Error("Expected error for data exceeding limit")
+		}
+	})
+
+	t.Run("empty_data", func(t *testing.T) {
+		data := []*BenchmarkData{}
+		err := ValidatePerRunDataLines(data)
+		if err != nil {
+			t.Errorf("Expected no error for empty data, got: %v", err)
+		}
+	})
+
+	t.Run("run_with_no_data_arrays", func(t *testing.T) {
+		data := []*BenchmarkData{
+			{
+				Label: "Empty Run",
+			},
+		}
+		err := ValidatePerRunDataLines(data)
+		if err != nil {
+			t.Errorf("Expected no error for run with no data arrays, got: %v", err)
+		}
+	})
+}

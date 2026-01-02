@@ -256,6 +256,7 @@ curl http://localhost:5000/debug/pprof/heap
 Memory-efficient limits that work well with V2 streaming format:
 
 - **Maximum data points per benchmark:** 1,000,000 total across all runs
+- **Maximum data lines per run:** 500,000 per single run
 - **Maximum file upload size:** Configurable via reverse proxy (nginx, etc.)
 - **Rate limiting:** 5 benchmark uploads per 10 minutes (per user)
 - **Memory impact:** Even at maximum limit, streaming uses < 10 MB RAM
