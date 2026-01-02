@@ -257,7 +257,7 @@
                   <div
                     class="progress-bar"
                     role="progressbar"
-                    :style="`width: ${loadingProgress}%`"
+                    :style="`width: ${Number(loadingProgress)}% !important`"
                     :aria-valuenow="loadingProgress"
                     aria-valuemin="0"
                     aria-valuemax="100"
