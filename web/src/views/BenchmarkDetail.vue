@@ -253,7 +253,7 @@
                   </span>
                   <span class="text-muted small">{{ loadingProgress }}%</span>
                 </div>
-                <div class="progress" style="height: 20px;">
+                <div class="progress" style="height: 20px; width: 100%;">
                   <div
                     class="progress-bar"
                     role="progressbar"
@@ -502,6 +502,7 @@ async function loadBenchmarkData(id) {
         // Start of download phase for this run
         // Progress for this run: runIndex * 2 segments out of total * 2 segments
         loadingProgress.value = Math.round((runIndex * 2) / (total * 2) * 100)
+        console.log(`[Progress] Download start - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
       },
       onRunDownloadProgress: (progress) => {
         // progress is -1 (indeterminate) - not used
@@ -510,11 +511,13 @@ async function loadBenchmarkData(id) {
         // Download phase complete - move to processing phase
         // Progress: (runIndex * 2 + 1) segments out of total * 2 segments
         loadingProgress.value = Math.round((runIndex * 2 + 1) / (total * 2) * 100)
+        console.log(`[Progress] Download complete - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
       },
       onRunProcessComplete: (runIndex, total) => {
         // Processing phase complete - this run is fully done
         // Progress: (runIndex + 1) * 2 segments out of total * 2 segments
         loadingProgress.value = Math.round(((runIndex + 1) * 2) / (total * 2) * 100)
+        console.log(`[Progress] Process complete - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
       },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
