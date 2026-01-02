@@ -274,7 +274,7 @@
 
           <!-- Data visualization -->
           <div v-else-if="benchmarkData && benchmarkData.length > 0">
-            <BenchmarkCharts :benchmarkData="convertToLegacyFormat(benchmarkData)" />
+            <BenchmarkCharts :benchmarkData="benchmarkData" />
           </div>
 
           <!-- No data state -->
@@ -336,7 +336,6 @@ import BenchmarkCharts from '../components/BenchmarkCharts.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { formatRelativeDate } from '../utils/dateFormatter'
-import { convertToLegacyFormat } from '../utils/benchmarkDataProcessor'
 
 // Configure marked for security
 marked.setOptions({
@@ -522,43 +521,6 @@ async function loadBenchmarkData(id) {
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
     editLabels.value = benchmarkData.value.map(d => d.label || '')
-    
-    // DEBUG: Log data structure
-    console.log('=== BENCHMARK DATA LOADED ===')
-    console.log('Total runs:', benchmarkData.value.length)
-    if (benchmarkData.value.length > 0) {
-      const firstRun = benchmarkData.value[0]
-      console.log('First run structure:', Object.keys(firstRun))
-      console.log('First run label:', firstRun.label)
-      console.log('First run specs:', {
-        specOS: firstRun.specOS,
-        SpecOS: firstRun.SpecOS,
-        specGPU: firstRun.specGPU,
-        SpecGPU: firstRun.SpecGPU
-      })
-      console.log('First run series keys:', firstRun.series ? Object.keys(firstRun.series) : 'NO SERIES')
-      console.log('First run stats keys:', firstRun.stats ? Object.keys(firstRun.stats) : 'NO STATS')
-      if (firstRun.series && firstRun.series.FPS) {
-        console.log('FPS series sample (first 5):', firstRun.series.FPS.slice(0, 5))
-        console.log('FPS series length:', firstRun.series.FPS.length)
-      }
-      if (firstRun.stats && firstRun.stats.FPS) {
-        console.log('FPS stats:', firstRun.stats.FPS)
-      }
-      
-      // Test convertToLegacyFormat
-      const legacy = convertToLegacyFormat(benchmarkData.value)
-      console.log('After convertToLegacyFormat:')
-      console.log('Legacy first run keys:', Object.keys(legacy[0]))
-      console.log('Legacy first run Label:', legacy[0].Label)
-      console.log('Legacy first run SpecOS:', legacy[0].SpecOS)
-      if (legacy[0].FPS) {
-        console.log('Legacy FPS sample (first 5):', legacy[0].FPS.slice(0, 5))
-        console.log('Legacy FPS length:', legacy[0].FPS.length)
-      } else {
-        console.log('Legacy FPS: MISSING OR EMPTY')
-      }
-    }
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
     console.error('Error loading benchmark data:', err)
