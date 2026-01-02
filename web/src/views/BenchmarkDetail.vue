@@ -255,7 +255,7 @@
                 </div>
                 <div class="progress" style="height: 20px;">
                   <div
-                    class="progress-bar progress-bar-striped progress-bar-animated"
+                    class="progress-bar"
                     role="progressbar"
                     :style="`width: ${loadingProgress}%`"
                     :aria-valuenow="loadingProgress"
