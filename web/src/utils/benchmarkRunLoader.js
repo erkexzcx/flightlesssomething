@@ -51,7 +51,7 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
       const decoder = new TextDecoder()
       let text = ''
 
-      // Read response body (indeterminate progress - no Content-Length available)
+      // Read response body
       while (true) {
         const { done, value } = await reader.read()
         
