@@ -257,7 +257,7 @@
                   <div
                     class="progress-bar progress-bar-striped progress-bar-animated"
                     role="progressbar"
-                    :style="{ width: loadingProgress + '%' }"
+                    :style="`width: ${loadingProgress}%`"
                     :aria-valuenow="loadingProgress"
                     aria-valuemin="0"
                     aria-valuemax="100"
