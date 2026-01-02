@@ -441,26 +441,16 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	return storeBenchmarkMetadata(benchmarkData, benchmarkID)
 }
 
-// storeBenchmarkMetadata stores lightweight metadata (run count, labels, and exact JSON size) separately
+// storeBenchmarkMetadata stores lightweight metadata (run count and labels) separately
 func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) error {
 	labels := make([]string, len(benchmarkData))
 	for i, data := range benchmarkData {
 		labels[i] = data.Label
 	}
 
-	// Calculate exact JSON size by encoding to a counting writer
-	// This ensures we get the EXACT byte count that will be sent to clients
-	counter := &countingWriter{}
-	encoder := json.NewEncoder(counter)
-	if err := encoder.Encode(benchmarkData); err != nil {
-		// If JSON encoding fails, log warning and store 0
-		fmt.Printf("Warning: failed to calculate JSON size for benchmark %d: %v\n", benchmarkID, err)
-	}
-	
 	metadata := BenchmarkMetadata{
 		RunCount:  len(benchmarkData),
 		RunLabels: labels,
-		JSONSize:  counter.count, // Store the exact JSON byte size
 	}
 
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
@@ -478,16 +468,6 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 	// Use gob encoding for metadata (no need for compression, it's tiny)
 	gobEncoder := gob.NewEncoder(metaFile)
 	return gobEncoder.Encode(metadata)
-}
-
-// countingWriter counts bytes written without storing them
-type countingWriter struct {
-	count int64
-}
-
-func (c *countingWriter) Write(p []byte) (n int, err error) {
-	c.count += int64(len(p))
-	return len(p), nil
 }
 
 // RetrieveBenchmarkData retrieves benchmark data from disk

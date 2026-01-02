@@ -47,27 +47,21 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
         throw new Error(errorData.error || `Failed to load run ${runIndex}`)
       }
 
-      // Track download progress if Content-Length is available
-      const contentLength = response.headers.get('Content-Length')
-      const total = contentLength ? parseInt(contentLength, 10) : 0
-
-      let loaded = 0
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let text = ''
 
-      // Read response body with progress tracking
+      // Read response body (indeterminate progress - no Content-Length available)
       while (true) {
         const { done, value } = await reader.read()
         
         if (done) break
         
         text += decoder.decode(value, { stream: true })
-        loaded += value.length
         
-        if (onRunDownloadProgress && total > 0) {
-          const progress = Math.round((loaded / total) * 100)
-          onRunDownloadProgress(progress)
+        // Report indeterminate progress if callback exists
+        if (onRunDownloadProgress) {
+          onRunDownloadProgress(-1)
         }
       }
       
