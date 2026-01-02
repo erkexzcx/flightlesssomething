@@ -521,6 +521,11 @@ async function loadBenchmarkData(id) {
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
     editLabels.value = benchmarkData.value.map(d => d.label || '')
+    
+    // Add a small delay to ensure the browser has time to render 100% progress
+    // before hiding the loading screen (fixes visual issue where 100% is never shown)
+    // Use requestAnimationFrame to wait for the next render frame
+    await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
     console.error('Error loading benchmark data:', err)
