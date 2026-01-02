@@ -748,6 +748,11 @@ onMounted(() => {
   border-radius: 8px;
 }
 
+/* Disable progress bar animation to snap instantly to value */
+.progress-bar {
+  transition: none !important;
+}
+
 .card {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
