@@ -575,21 +575,101 @@ func retrieveBenchmarkDataLegacy(benchmarkID uint) ([]*BenchmarkData, error) {
 }
 
 // StreamBenchmarkDataAsJSON streams benchmark data directly to the writer as JSON
-// For accurate Content-Length, we load all data and use json.NewEncoder for consistent output
+// This uses true streaming to minimize memory usage - loads and encodes one run at a time
 func StreamBenchmarkDataAsJSON(benchmarkID uint, w http.ResponseWriter) error {
-	// Load benchmark data (V2 format uses streaming internally to minimize memory during load)
-	benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
-	if err != nil {
-		return err
-	}
-	
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	
-	// Encode using json.NewEncoder - this matches what we use for size calculation
-	// ensuring Content-Length is accurate
-	return json.NewEncoder(w).Encode(benchmarkData)
+	// Open the file and prepare for streaming reads
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+		}
+	}()
+
+	// Setup decompression
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return err
+	}
+	defer zstdDecoder.Close()
+
+	gobDecoder := gob.NewDecoder(zstdDecoder)
+	
+	// Read header
+	var header fileHeader
+	if err := gobDecoder.Decode(&header); err != nil {
+		// Fall back to legacy format (loads all into memory)
+		benchmarkData, legacyErr := retrieveBenchmarkDataLegacy(benchmarkID)
+		if legacyErr != nil {
+			return legacyErr
+		}
+		return json.NewEncoder(w).Encode(benchmarkData)
+	}
+	
+	// Check version
+	if header.Version != storageFormatVersion {
+		// For unsupported versions, fall back to RetrieveBenchmarkData
+		benchmarkData, err := RetrieveBenchmarkData(benchmarkID)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(w).Encode(benchmarkData)
+	}
+	
+	// Stream the JSON array manually to match json.NewEncoder output exactly
+	// Format: [{...},{...}]\n (compact, no whitespace between elements)
+	
+	// Write opening bracket
+	if _, err := w.Write([]byte("[")); err != nil {
+		return err
+	}
+	
+	// Stream each run individually
+	for i := 0; i < header.RunCount; i++ {
+		var run BenchmarkData
+		if err := gobDecoder.Decode(&run); err != nil {
+			return fmt.Errorf("failed to decode run %d: %w", i, err)
+		}
+		
+		// Add comma separator before this element (except for first element)
+		if i > 0 {
+			if _, err := w.Write([]byte(",")); err != nil {
+				return err
+			}
+		}
+		
+		// Encode this run to JSON (compact format, no newlines)
+		jsonBytes, err := json.Marshal(&run)
+		if err != nil {
+			return fmt.Errorf("failed to encode run %d: %w", i, err)
+		}
+		
+		if _, err := w.Write(jsonBytes); err != nil {
+			return err
+		}
+		
+		// Trigger GC periodically to release memory from encoded runs
+		if (i+1)%gcFrequencyStreaming == 0 {
+			runtime.GC()
+		}
+		
+		// Clear run to help GC (will be overwritten next iteration anyway)
+		run = BenchmarkData{} //nolint:ineffassign // Intentional to help GC
+	}
+	
+	// Write closing bracket and final newline (to match json.Encoder)
+	if _, err := w.Write([]byte("]\n")); err != nil {
+		return err
+	}
+	
+	return nil
 }
 
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
