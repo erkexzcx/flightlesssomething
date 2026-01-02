@@ -142,7 +142,7 @@
                 <i class="fa-solid fa-info-circle"></i> 
                 Upload additional benchmark files to add more runs to this benchmark.
                 <br>
-                <i class="fa-solid fa-info-circle"></i> <strong>Note:</strong> Combined benchmarks must not exceed 1 million data lines (excluding headers). Each single run is limited to 500k data points.
+                <i class="fa-solid fa-info-circle"></i> <strong>Note:</strong> Combined benchmarks must not exceed 1 million data lines (excluding headers). Each single run is limited to 500k data lines.
               </p>
               <input
                 type="file"

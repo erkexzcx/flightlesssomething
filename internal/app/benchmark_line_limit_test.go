@@ -119,7 +119,7 @@ func TestValidatePerRunDataLines(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for data exceeding limit")
 		}
-		expectedMsg := "Large Run has 500001 data points, which exceeds the maximum allowed 500000 per run"
+		expectedMsg := "Large Run has 500001 data lines, which exceeds the maximum allowed 500000 per run"
 		if err.Error() != expectedMsg {
 			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 		}
@@ -140,7 +140,7 @@ func TestValidatePerRunDataLines(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for second run exceeding limit")
 		}
-		expectedMsg := "Huge Run has 500100 data points, which exceeds the maximum allowed 500000 per run"
+		expectedMsg := "Huge Run has 500100 data lines, which exceeds the maximum allowed 500000 per run"
 		if err.Error() != expectedMsg {
 			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 		}
@@ -157,7 +157,7 @@ func TestValidatePerRunDataLines(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for data exceeding limit")
 		}
-		expectedMsg := "run #1 has 500001 data points, which exceeds the maximum allowed 500000 per run"
+		expectedMsg := "run #1 has 500001 data lines, which exceeds the maximum allowed 500000 per run"
 		if err.Error() != expectedMsg {
 			t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 		}

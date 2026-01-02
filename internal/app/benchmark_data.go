@@ -33,7 +33,7 @@ const (
 	precisionFactor     = 100000
 	bytesToKB           = 1024
 	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
-	maxPerRunDataLines  = 500000  // Maximum data points per single run
+	maxPerRunDataLines  = 500000  // Maximum data lines per single run
 	maxStringLength     = 100
 	
 	// Storage format version for backward compatibility
@@ -703,7 +703,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 	return runNames, specifications
 }
 
-// getRunDataPointCount returns the number of data points in a single benchmark run.
+// getRunDataPointCount returns the number of data lines in a single benchmark run.
 // It returns the maximum length among all data arrays, as that represents the number of data rows.
 func getRunDataPointCount(data *BenchmarkData) int {
 	dataArrays := [][]float64{
@@ -740,7 +740,7 @@ func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
 	return totalLines
 }
 
-// ValidatePerRunDataLines validates that no single run exceeds the per-run data point limit.
+// ValidatePerRunDataLines validates that no single run exceeds the per-run data line limit.
 // Returns an error if any run exceeds maxPerRunDataLines.
 func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 	for i, data := range benchmarkData {
@@ -751,7 +751,7 @@ func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 			if runLabel == "" {
 				runLabel = fmt.Sprintf("run #%d", i+1)
 			}
-			return fmt.Errorf("%s has %d data points, which exceeds the maximum allowed %d per run", runLabel, runDataPoints, maxPerRunDataLines)
+			return fmt.Errorf("%s has %d data lines, which exceeds the maximum allowed %d per run", runLabel, runDataPoints, maxPerRunDataLines)
 		}
 	}
 	return nil
