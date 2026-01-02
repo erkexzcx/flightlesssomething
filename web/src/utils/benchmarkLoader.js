@@ -36,7 +36,7 @@ export async function loadBenchmarkDataWithProgress(url, { onDownloadProgress, o
     // Decode chunk directly to string instead of accumulating Uint8Arrays
     text += decoder.decode(value, { stream: true })
     
-    // Report indeterminate progress (server doesn't send Content-Length)
+    // Report indeterminate progress
     if (onDownloadProgress) {
       onDownloadProgress(-1)
     }

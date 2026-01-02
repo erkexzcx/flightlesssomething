@@ -253,15 +253,15 @@
                   </span>
                   <span class="text-muted small">{{ loadingProgress }}%</span>
                 </div>
-                <div class="progress" style="height: 20px;">
+                <div class="progress">
                   <div
-                    class="progress-bar progress-bar-striped progress-bar-animated"
+                    class="progress-bar"
                     role="progressbar"
                     :style="{ width: loadingProgress + '%' }"
                     :aria-valuenow="loadingProgress"
                     aria-valuemin="0"
                     aria-valuemax="100"
-                  ></div>
+                  >{{ loadingProgress }}%</div>
                 </div>
               </div>
             </div>
@@ -494,25 +494,22 @@ async function loadBenchmarkData(id) {
     }
     
     // Load data incrementally - one run at a time to prevent browser freezing
+    // Progress tracking: Each run has 2 phases (download + processing)
+    // For N runs, total segments = 2N (each segment = 50/N percent)
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
       onRunDownloadStart: (runIndex, total) => {
         loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
-        // Calculate progress based on completed runs
-        loadingProgress.value = Math.round((runIndex / total) * 100)
+        // Simple "ahead" progress: each run = one chunk
+        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
       },
       onRunDownloadProgress: (progress) => {
-        // Fine-grained progress within current run
-        const runIndex = benchmarkData.value ? benchmarkData.value.length : 0
-        const baseProgress = (runIndex / totalRuns.value) * 100
-        const runProgress = (progress / 100) * (100 / totalRuns.value)
-        loadingProgress.value = Math.round(baseProgress + runProgress)
+        // progress is -1 (indeterminate) - not used
       },
-      onRunDownloadComplete: (runIndex, runData) => {
-        // Progress updated via onRunProcessComplete
+      onRunDownloadComplete: (runIndex, runData, total) => {
+        // Keep the same progress (already set in onRunDownloadStart)
       },
       onRunProcessComplete: (runIndex, total) => {
-        // Update progress after run is fully processed
-        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
+        // Keep the same progress (already set in onRunDownloadStart)
       },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
@@ -521,11 +518,6 @@ async function loadBenchmarkData(id) {
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
     editLabels.value = benchmarkData.value.map(d => d.label || '')
-    
-    // Add a small delay to ensure the browser has time to render 100% progress
-    // before hiding the loading screen (fixes visual issue where 100% is never shown)
-    // Use requestAnimationFrame to wait for the next render frame
-    await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
     console.error('Error loading benchmark data:', err)
