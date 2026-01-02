@@ -1,5 +1,5 @@
 # Web UI build stage
-FROM node:20-alpine AS web-builder
+FROM node:25-alpine AS web-builder
 
 WORKDIR /build
 
