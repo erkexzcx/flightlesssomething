@@ -499,25 +499,17 @@ async function loadBenchmarkData(id) {
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
       onRunDownloadStart: (runIndex, total) => {
         loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
-        // Start of download phase for this run
-        // Progress for this run: runIndex * 2 segments out of total * 2 segments
-        loadingProgress.value = Math.round((runIndex * 2) / (total * 2) * 100)
-        console.log(`[Progress] Download start - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
+        // Simple "ahead" progress: each run = one chunk
+        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
       },
       onRunDownloadProgress: (progress) => {
         // progress is -1 (indeterminate) - not used
       },
       onRunDownloadComplete: (runIndex, runData, total) => {
-        // Download phase complete - move to processing phase
-        // Progress: (runIndex * 2 + 1) segments out of total * 2 segments
-        loadingProgress.value = Math.round((runIndex * 2 + 1) / (total * 2) * 100)
-        console.log(`[Progress] Download complete - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
+        // Keep the same progress (already set in onRunDownloadStart)
       },
       onRunProcessComplete: (runIndex, total) => {
-        // Processing phase complete - this run is fully done
-        // Progress: (runIndex + 1) * 2 segments out of total * 2 segments
-        loadingProgress.value = Math.round(((runIndex + 1) * 2) / (total * 2) * 100)
-        console.log(`[Progress] Process complete - run ${runIndex+1}/${total}, progress: ${loadingProgress.value}%`)
+        // Keep the same progress (already set in onRunDownloadStart)
       },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
@@ -526,10 +518,6 @@ async function loadBenchmarkData(id) {
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
     editLabels.value = benchmarkData.value.map(d => d.label || '')
-    
-    // Add a 500ms delay to ensure the browser has time to render 100% progress
-    // before hiding the loading screen (fixes visual issue where 100% is never shown)
-    await new Promise(resolve => setTimeout(resolve, 500))
   } catch (err) {
     dataError.value = err.message || 'Failed to load benchmark data'
     console.error('Error loading benchmark data:', err)
