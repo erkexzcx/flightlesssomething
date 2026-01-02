@@ -750,8 +750,8 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Check per-run data lines limit for new runs
-		if err := ValidatePerRunDataLines(newBenchmarkData); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if validationErr := ValidatePerRunDataLines(newBenchmarkData); validationErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": validationErr.Error()})
 			return
 		}
 
