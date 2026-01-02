@@ -631,17 +631,15 @@ async function handleUpdate() {
     let needsDataReload = false
     
     // Update benchmark metadata (title, description, labels)
-    if (data.title || data.description || data.labels) {
-      const updated = await api.benchmarks.update(benchmark.value.ID, data)
-      
-      // Update local benchmark metadata
-      benchmark.value.Title = updated.Title
-      benchmark.value.Description = updated.Description
-      
-      // If labels were updated, we need to reload data
-      if (data.labels) {
-        needsDataReload = true
-      }
+    const updated = await api.benchmarks.update(benchmark.value.ID, data)
+    
+    // Update local benchmark metadata
+    benchmark.value.Title = updated.Title
+    benchmark.value.Description = updated.Description
+    
+    // If labels were updated, we need to reload data
+    if (data.labels) {
+      needsDataReload = true
     }
     
     // If there are new files to add, upload them
