@@ -253,15 +253,15 @@
                   </span>
                   <span class="text-muted small">{{ loadingProgress }}%</span>
                 </div>
-                <div class="progress" style="height: 20px; width: 100%;">
+                <div class="progress">
                   <div
                     class="progress-bar"
                     role="progressbar"
-                    :style="`width: ${Number(loadingProgress)}% !important`"
+                    :style="{ width: loadingProgress + '%' }"
                     :aria-valuenow="loadingProgress"
                     aria-valuemin="0"
                     aria-valuemax="100"
-                  ></div>
+                  >{{ loadingProgress }}%</div>
                 </div>
               </div>
             </div>
