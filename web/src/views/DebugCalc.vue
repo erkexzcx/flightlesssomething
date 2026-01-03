@@ -74,7 +74,7 @@
                   </table>
                 </div>
                 <div class="col-md-6">
-                  <h6 class="text-muted small mt-3">MangoHud Threshold Method</h6>
+                  <h6 class="text-muted small mt-3">Mangohud</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
                       <tr>
@@ -135,7 +135,7 @@
                   </table>
                 </div>
                 <div class="col-md-6">
-                  <h6 class="text-muted small mt-3">MangoHud Threshold Method</h6>
+                  <h6 class="text-muted small mt-3">Mangohud</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
                       <tr>
@@ -401,8 +401,8 @@ const spreadsheetData = computed(() => {
   
   lines.push('')
   
-  // Add FPS statistics - MangoHud Threshold
-  lines.push('FPS Statistics - MangoHud Threshold')
+  // Add FPS statistics - Mangohud
+  lines.push('FPS Statistics - Mangohud')
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   
   if (parsedData.value.frametimeValues.length > 0) {
@@ -437,8 +437,8 @@ const spreadsheetData = computed(() => {
   
   lines.push('')
   
-  // Add Frametime statistics - MangoHud Threshold
-  lines.push('Frametime Statistics - MangoHud Threshold')
+  // Add Frametime statistics - Mangohud
+  lines.push('Frametime Statistics - Mangohud')
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   // MangoHud formula: idx = floor(val * n - 1) on descending
   // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
@@ -500,8 +500,8 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   lines.push('')
   
-  // Add FPS statistics - MangoHud Threshold
-  lines.push('FPS Statistics - MangoHud Threshold')
+  // Add FPS statistics - Mangohud
+  lines.push('FPS Statistics - Mangohud')
   lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
   
   // currentRow continues from previous section + blank line + section header + column header
@@ -542,8 +542,8 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   lines.push('')
   
-  // Add Frametime statistics - MangoHud Threshold
-  lines.push('Frametime Statistics - MangoHud Threshold')
+  // Add Frametime statistics - Mangohud
+  lines.push('Frametime Statistics - Mangohud')
   lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
   
   // currentRow continues from previous section + blank line + section header + column header
