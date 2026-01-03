@@ -172,18 +172,19 @@
             <h5 class="card-title">Spreadsheet Export for Verification</h5>
             <p class="text-muted small">
               <i class="fa-solid fa-info-circle"></i> 
-              Copy the data below and paste it into your spreadsheet application (Excel, Google Sheets, etc.).
+              <strong>LibreOffice Calc / Excel compatible export.</strong>
+              Copy the data below and paste it into LibreOffice Calc or Excel.
               The export includes raw data, FlightlessSomething's calculated values, and spreadsheet formulas.
               Compare the "FlightlessSomething" values with the "Formula Result" values in your spreadsheet to verify accuracy.
             </p>
             <textarea
-              v-model="spreadsheetData"
+              v-model="spreadsheetDataLibreOffice"
               class="form-control font-monospace"
               rows="20"
               readonly
             ></textarea>
             <div class="mt-2">
-              <button class="btn btn-sm btn-outline-primary" @click="copyToClipboard">
+              <button class="btn btn-sm btn-outline-primary" @click="copyToClipboardLibreOffice">
                 <i class="fa-solid fa-copy"></i> Copy to Clipboard
               </button>
             </div>
@@ -443,6 +444,125 @@ const spreadsheetData = computed(() => {
   return lines.join('\n')
 })
 
+// LibreOffice Calc / Excel compatible export
+const spreadsheetDataLibreOffice = computed(() => {
+  if (!results.value || !parsedData.value) return ''
+
+  const lines = []
+  
+  // Add header with context
+  lines.push('NOTE: This export is for LibreOffice Calc and Excel.')
+  lines.push('Compare the "FlightlessSomething" column (calculated by this app) with the "Formula Result" column (calculated by your spreadsheet).')
+  lines.push('Both values should match to verify the calculations are correct.')
+  lines.push('')
+  
+  // Add raw data with helper column for FPS conversion
+  lines.push('fps\tframetime\tfps_converted')
+  const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
+  const dataStartRow = 6 // After 4 header lines + blank + column headers
+  
+  for (let i = 0; i < maxLength; i++) {
+    const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
+    const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
+    const rowNum = dataStartRow + i
+    // Add formula in column C to convert frametime to FPS
+    if (frametime) {
+      lines.push(`${fps}\t${frametime}\t=1000/B${rowNum}`)
+    } else {
+      lines.push(`${fps}\t${frametime}\t`)
+    }
+  }
+  
+  lines.push('')
+  
+  const ftStartRow = dataStartRow
+  const ftEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
+  const fpsConvertedStartRow = dataStartRow
+  const fpsConvertedEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
+  
+  // Add FPS statistics - Linear Interpolation
+  lines.push('FPS Statistics - Linear Interpolation')
+  lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
+  
+  if (parsedData.value.frametimeValues.length > 0) {
+    // For FPS from frametime, use PERCENTILE on frametime (inverted percentiles) then convert
+    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.99)\t`)
+    lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
+    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.03)\t`)
+    // Use the converted FPS column for STDEV and VAR
+    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
+    lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
+  } else {
+    const fpsStartRow = dataStartRow
+    const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
+    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)\t`)
+    lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t`)
+    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)\t`)
+    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t`)
+    lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t`)
+  }
+  
+  lines.push('')
+  
+  // Add FPS statistics - MangoHud Threshold
+  lines.push('FPS Statistics - MangoHud Threshold')
+  lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
+  
+  if (parsedData.value.frametimeValues.length > 0) {
+    const count = parsedData.value.frametimeValues.length
+    const p99Index = Math.floor(count * 0.99)
+    const p03Index = Math.floor(count * 0.03)
+    
+    // Use SMALL/LARGE functions which work in LibreOffice
+    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/LARGE(B${ftStartRow}:B${ftEndRow};${p99Index})\t`)
+    lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
+    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/SMALL(B${ftStartRow}:B${ftEndRow};${p03Index})\t`)
+    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
+    lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
+  } else {
+    const fpsStartRow = dataStartRow
+    const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
+    const count = parsedData.value.fpsValues.length
+    const p01Index = Math.floor(count * 0.01)
+    const p97Index = Math.floor(count * 0.97)
+    
+    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${p01Index})\t`)
+    lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t`)
+    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=LARGE(A${fpsStartRow}:A${fpsEndRow};${p97Index})\t`)
+    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t`)
+    lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t`)
+  }
+  
+  lines.push('')
+  
+  // Add Frametime statistics - Linear Interpolation
+  lines.push('Frametime Statistics - Linear Interpolation')
+  lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.linear.p01)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)\t`)
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.linear.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.linear.p97)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)\t`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.linear.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`Variance\t${formatNumber(results.value.frametime.linear.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t`)
+  
+  lines.push('')
+  
+  // Add Frametime statistics - MangoHud Threshold
+  lines.push('Frametime Statistics - MangoHud Threshold')
+  lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
+  
+  const count = parsedData.value.frametimeValues.length
+  const p01Index = Math.floor(count * 0.01)
+  const p97Index = Math.floor(count * 0.97)
+  
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=SMALL(B${ftStartRow}:B${ftEndRow};${p01Index})\t`)
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=LARGE(B${ftStartRow}:B${ftEndRow};${p97Index})\t`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t`)
+  
+  return lines.join('\n')
+})
+
 function formatNumber(value) {
   if (value === null || value === undefined) return 'N/A'
   return value.toFixed(2)
@@ -451,6 +571,16 @@ function formatNumber(value) {
 async function copyToClipboard() {
   try {
     await navigator.clipboard.writeText(spreadsheetData.value)
+    alert('Copied to clipboard!')
+  } catch (err) {
+    console.error('Failed to copy to clipboard:', err)
+    alert('Failed to copy to clipboard. Please select and copy manually.')
+  }
+}
+
+async function copyToClipboardLibreOffice() {
+  try {
+    await navigator.clipboard.writeText(spreadsheetDataLibreOffice.value)
     alert('Copied to clipboard!')
   } catch (err) {
     console.error('Failed to copy to clipboard:', err)
