@@ -92,33 +92,6 @@ function downsampleLTTB(data, threshold) {
   return sampled
 }
 
-// Calculate density data for histogram/area charts
-// Filters outliers (1st-99th percentile) and counts occurrences
-// No arbitrary limit - natural bin count based on data range
-// (e.g., FPS 0-2000 = max 2000 bins, FrameTime 0-100 = max 100 bins)
-function calculateDensityData(values) {
-  if (!values || values.length === 0) return []
-  
-  // Filter outliers (keep only 1st-99th percentile)
-  const sorted = [...values].sort((a, b) => a - b)
-  const low = Math.floor(sorted.length * 0.01)
-  const high = Math.ceil(sorted.length * 0.99)
-  const filtered = sorted.slice(low, high)
-  
-  // Count occurrences (round to integers)
-  const counts = {}
-  filtered.forEach(value => {
-    const rounded = Math.round(value)
-    counts[rounded] = (counts[rounded] || 0) + 1
-  })
-  
-  // Convert to array format [[value, count], ...] and sort by value
-  // No downsampling - density data is small compared to downsampled series
-  const array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
-  
-  return array
-}
-
 // Calculate percentile with linear interpolation (matches scientific/numpy method)
 // This provides more accurate percentile values than simple floor-based indexing
 function calculatePercentile(sortedData, percentile) {
@@ -140,6 +113,33 @@ function calculatePercentile(sortedData, percentile) {
   // Linear interpolation between adjacent data points
   const fraction = idx - lower
   return sortedData[lower] * (1 - fraction) + sortedData[upper] * fraction
+}
+
+// Calculate density data for histogram/area charts
+// Filters outliers (1st-99th percentile) and counts occurrences
+// No arbitrary limit - natural bin count based on data range
+// (e.g., FPS 0-2000 = max 2000 bins, FrameTime 0-100 = max 100 bins)
+function calculateDensityData(values) {
+  if (!values || values.length === 0) return []
+  
+  // Filter outliers (keep only 1st-99th percentile)
+  const sorted = [...values].sort((a, b) => a - b)
+  const p01Value = calculatePercentile(sorted, 1)
+  const p99Value = calculatePercentile(sorted, 99)
+  const filtered = sorted.filter(v => v >= p01Value && v <= p99Value)
+  
+  // Count occurrences (round to integers)
+  const counts = {}
+  filtered.forEach(value => {
+    const rounded = Math.round(value)
+    counts[rounded] = (counts[rounded] || 0) + 1
+  })
+  
+  // Convert to array format [[value, count], ...] and sort by value
+  // No downsampling - density data is small compared to downsampled series
+  const array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
+  
+  return array
 }
 
 // Calculate statistics for an array of values
