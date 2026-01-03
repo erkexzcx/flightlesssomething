@@ -485,13 +485,10 @@ const spreadsheetDataLibreOffice = computed(() => {
   lines.push('FPS Statistics - MangoHud Threshold')
   lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
   
-  const fpsCount = parsedData.value.fpsValues.length
-  const fpsP01Index = Math.floor(fpsCount * 0.01) + 1  // SMALL is 1-indexed
-  const fpsP97Index = fpsCount - Math.floor(fpsCount * 0.97)  // LARGE is 1-indexed from the largest
-  
-  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${fpsP01Index})`)
+  // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.01*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)`)
   lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
-  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=LARGE(A${fpsStartRow}:A${fpsEndRow};${fpsP97Index})`)
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.97*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)`)
   lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
   lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})`)
   
@@ -512,13 +509,10 @@ const spreadsheetDataLibreOffice = computed(() => {
   lines.push('Frametime Statistics - MangoHud Threshold')
   lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
   
-  const ftCount = parsedData.value.frametimeValues.length
-  const ftP01Index = Math.floor(ftCount * 0.01) + 1  // SMALL is 1-indexed
-  const ftP97Index = ftCount - Math.floor(ftCount * 0.97)  // LARGE is 1-indexed from the largest
-  
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=SMALL(B${ftStartRow}:B${ftEndRow};${ftP01Index})`)
+  // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)`)
   lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=LARGE(B${ftStartRow}:B${ftEndRow};${ftP97Index})`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)`)
   lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})`)
   lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})`)
   
