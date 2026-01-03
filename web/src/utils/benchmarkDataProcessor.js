@@ -119,6 +119,29 @@ function calculateDensityData(values) {
   return array
 }
 
+// Calculate percentile with linear interpolation (matches scientific/numpy method)
+// This provides more accurate percentile values than simple floor-based indexing
+function calculatePercentile(sortedData, percentile) {
+  if (!sortedData || sortedData.length === 0) {
+    return 0
+  }
+  
+  const n = sortedData.length
+  // Convert percentile (0-100) to decimal and calculate fractional index
+  const idx = (percentile / 100) * (n - 1)
+  const lower = Math.floor(idx)
+  const upper = Math.ceil(idx)
+  
+  // If index is exactly on a data point, return it
+  if (lower === upper) {
+    return sortedData[lower]
+  }
+  
+  // Linear interpolation between adjacent data points
+  const fraction = idx - lower
+  return sortedData[lower] * (1 - fraction) + sortedData[upper] * fraction
+}
+
 // Calculate statistics for an array of values
 function calculateStats(values) {
   if (!values || values.length === 0) {
@@ -138,8 +161,8 @@ function calculateStats(values) {
     min: sorted[0],
     max: sorted[sorted.length - 1],
     avg: avg,
-    p01: sorted[Math.floor(values.length * 0.01)],
-    p99: sorted[Math.floor(values.length * 0.99)],
+    p01: calculatePercentile(sorted, 1),
+    p99: calculatePercentile(sorted, 99),
     stddev: stddev,  // Pre-calculated from FULL data
     variance: variance,  // Pre-calculated from FULL data
     density: calculateDensityData(values) // Pre-calculate density from FULL data
@@ -160,8 +183,8 @@ function calculateFPSStatsFromFrametime(frametimeValues) {
   // Low frametime = high FPS, so percentiles are inverted
   // 1st percentile frametime (fastest) = 99th percentile FPS (p99)
   // 99th percentile frametime (slowest) = 1st percentile FPS (p01)
-  const frametimeP01 = sorted[Math.floor(frametimeValues.length * 0.01)]
-  const frametimeP99 = sorted[Math.floor(frametimeValues.length * 0.99)]
+  const frametimeP01 = calculatePercentile(sorted, 1)
+  const frametimeP99 = calculatePercentile(sorted, 99)
   
   // Convert frametime percentiles to FPS
   const fpsP99 = frametimeP01 > 0 ? 1000 / frametimeP01 : 0  // 1st percentile frametime -> 99th percentile FPS
