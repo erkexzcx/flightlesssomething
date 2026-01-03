@@ -49,7 +49,7 @@
               @change="setCalculationMethod('linear-interpolation')"
             >
             <label class="btn btn-outline-primary" for="linearInterpolation">
-              Linear interpolation (FlightlessSomething)
+              Linear Interpolation
             </label>
 
             <input 
@@ -62,7 +62,7 @@
               @change="setCalculationMethod('mangohud-threshold')"
             >
             <label class="btn btn-outline-primary" for="mangoHudThreshold">
-              MangoHud's frametime-based thresholds
+              Frametime-Based Thresholds
             </label>
           </div>
           <button 
@@ -91,7 +91,7 @@
           <div class="modal-body">
             <div class="row">
               <div class="col-md-6">
-                <h5><strong>Linear Interpolation (FlightlessSomething)</strong></h5>
+                <h5><strong>Linear Interpolation</strong></h5>
                 <p>
                   Uses mathematical interpolation between adjacent data points when calculating percentiles. 
                   This is the standard scientific approach used by statistical tools like NumPy, R, and Excel.
@@ -130,10 +130,10 @@
               </div>
 
               <div class="col-md-6">
-                <h5><strong>MangoHud's Frametime-Based Thresholds</strong></h5>
+                <h5><strong>Frametime-Based Thresholds</strong></h5>
                 <p>
-                  Uses a simpler floor-based approach without interpolation. This matches how MangoHud 
-                  (a popular Linux gaming overlay) calculates percentiles for real-time performance monitoring.
+                  Uses a simpler floor-based approach without interpolation. This method is used by <strong>MangoHud</strong> 
+                  (a popular Linux gaming overlay) for real-time performance monitoring.
                 </p>
                 
                 <h6 class="mt-3">How it works:</h6>
@@ -155,16 +155,16 @@
 
                 <h6 class="mt-3">Best for:</h6>
                 <ul>
-                  <li><strong>Gaming comparisons:</strong> Directly comparable with MangoHud overlays</li>
-                  <li><strong>Community benchmarks:</strong> Matches what other gamers see in MangoHud</li>
+                  <li><strong>Gaming comparisons:</strong> Directly comparable with <strong>MangoHud</strong> overlays</li>
+                  <li><strong>Community benchmarks:</strong> Matches what other gamers see in <strong>MangoHud</strong></li>
                   <li><strong>Simplicity:</strong> Easier to understand and explain</li>
                   <li><strong>Real-time monitoring:</strong> Computationally faster (though negligible difference)</li>
                 </ul>
 
                 <h6 class="mt-3">Use when:</h6>
                 <p class="mb-0">
-                  You want to compare your results directly with MangoHud screenshots or community benchmarks, 
-                  or when sharing results with other Linux gamers who use MangoHud.
+                  You want to compare your results directly with <strong>MangoHud</strong> screenshots or community benchmarks, 
+                  or when sharing results with other Linux gamers who use <strong>MangoHud</strong>.
                 </p>
               </div>
             </div>
@@ -177,7 +177,7 @@
               </p>
               <p class="mb-0">
                 <strong>Example difference:</strong> For a dataset with 100 samples, the 99th percentile FPS 
-                might be 99.1 FPS (linear) vs 100 FPS (MangoHud). Both are correct - they just use different 
+                might be 99.1 FPS (Linear Interpolation) vs 100 FPS (Frametime-Based Thresholds). Both are correct - they just use different 
                 statistical methods.
               </p>
             </div>
