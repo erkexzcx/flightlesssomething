@@ -6,6 +6,7 @@ import BenchmarkDetail from '../views/BenchmarkDetail.vue'
 import APITokens from '../views/APITokens.vue'
 import Users from '../views/Users.vue'
 import Logs from '../views/Logs.vue'
+import DebugCalc from '../views/DebugCalc.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -58,6 +59,11 @@ const routes = [
     path: '/admin/logs',
     name: 'admin-logs',
     component: Logs
+  },
+  {
+    path: '/debugcalc',
+    name: 'debug-calc',
+    component: DebugCalc
   }
 ]
 

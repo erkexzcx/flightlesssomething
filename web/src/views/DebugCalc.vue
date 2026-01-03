@@ -1,0 +1,472 @@
+<template>
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-lg-8 mx-auto">
+        <h2 class="mb-4">Debug Calculator</h2>
+        
+        <!-- Input Section -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Input Data</h5>
+            <p class="text-muted small">
+              Paste your benchmark data below (tab-separated or space-separated). 
+              First row should contain headers (fps, frametime). Subsequent rows should contain numeric values.
+            </p>
+            <textarea
+              v-model="inputData"
+              class="form-control font-monospace"
+              rows="15"
+              placeholder="fps	frametime
+100	10.0
+200	5.0
+..."
+            ></textarea>
+            <div class="mt-3">
+              <button class="btn btn-primary" @click="calculate">
+                <i class="fa-solid fa-calculator"></i> Calculate
+              </button>
+              <button class="btn btn-secondary ms-2" @click="resetToExample">
+                <i class="fa-solid fa-rotate-left"></i> Reset to Example
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Display -->
+        <div v-if="error" class="alert alert-danger" role="alert">
+          <i class="fa-solid fa-exclamation-triangle"></i> {{ error }}
+        </div>
+
+        <!-- Results Section -->
+        <div v-if="results" class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Results</h5>
+            
+            <!-- FPS Statistics -->
+            <div class="mb-4">
+              <h6 class="text-primary">FPS Statistics</h6>
+              <div class="row">
+                <div class="col-md-6">
+                  <h6 class="text-muted small mt-3">Linear Interpolation Method</h6>
+                  <table class="table table-sm table-bordered">
+                    <tbody>
+                      <tr>
+                        <th>1% FPS (Low)</th>
+                        <td>{{ formatNumber(results.fps.linear.p01) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Average FPS</th>
+                        <td>{{ formatNumber(results.fps.linear.avg) }}</td>
+                      </tr>
+                      <tr>
+                        <th>97th Percentile FPS</th>
+                        <td>{{ formatNumber(results.fps.linear.p97) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Standard Deviation</th>
+                        <td>{{ formatNumber(results.fps.linear.stddev) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Variance</th>
+                        <td>{{ formatNumber(results.fps.linear.variance) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="col-md-6">
+                  <h6 class="text-muted small mt-3">MangoHud Threshold Method</h6>
+                  <table class="table table-sm table-bordered">
+                    <tbody>
+                      <tr>
+                        <th>1% FPS (Low)</th>
+                        <td>{{ formatNumber(results.fps.mangohud.p01) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Average FPS</th>
+                        <td>{{ formatNumber(results.fps.mangohud.avg) }}</td>
+                      </tr>
+                      <tr>
+                        <th>97th Percentile FPS</th>
+                        <td>{{ formatNumber(results.fps.mangohud.p97) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Standard Deviation</th>
+                        <td>{{ formatNumber(results.fps.mangohud.stddev) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Variance</th>
+                        <td>{{ formatNumber(results.fps.mangohud.variance) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Frametime Statistics -->
+            <div class="mb-4">
+              <h6 class="text-success">Frametime Statistics</h6>
+              <div class="row">
+                <div class="col-md-6">
+                  <h6 class="text-muted small mt-3">Linear Interpolation Method</h6>
+                  <table class="table table-sm table-bordered">
+                    <tbody>
+                      <tr>
+                        <th>1% Frametime (High)</th>
+                        <td>{{ formatNumber(results.frametime.linear.p01) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Average Frametime</th>
+                        <td>{{ formatNumber(results.frametime.linear.avg) }}</td>
+                      </tr>
+                      <tr>
+                        <th>97th Percentile Frametime</th>
+                        <td>{{ formatNumber(results.frametime.linear.p97) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Standard Deviation</th>
+                        <td>{{ formatNumber(results.frametime.linear.stddev) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Variance</th>
+                        <td>{{ formatNumber(results.frametime.linear.variance) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="col-md-6">
+                  <h6 class="text-muted small mt-3">MangoHud Threshold Method</h6>
+                  <table class="table table-sm table-bordered">
+                    <tbody>
+                      <tr>
+                        <th>1% Frametime (High)</th>
+                        <td>{{ formatNumber(results.frametime.mangohud.p01) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Average Frametime</th>
+                        <td>{{ formatNumber(results.frametime.mangohud.avg) }}</td>
+                      </tr>
+                      <tr>
+                        <th>97th Percentile Frametime</th>
+                        <td>{{ formatNumber(results.frametime.mangohud.p97) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Standard Deviation</th>
+                        <td>{{ formatNumber(results.frametime.mangohud.stddev) }}</td>
+                      </tr>
+                      <tr>
+                        <th>Variance</th>
+                        <td>{{ formatNumber(results.frametime.mangohud.variance) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Spreadsheet Export Section -->
+        <div v-if="results" class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Spreadsheet Export</h5>
+            <p class="text-muted small">
+              Copy the data below and paste it into your spreadsheet application (Excel, Google Sheets, etc.).
+              The data includes both the raw values and calculated statistics with formulas.
+            </p>
+            <textarea
+              v-model="spreadsheetData"
+              class="form-control font-monospace"
+              rows="20"
+              readonly
+            ></textarea>
+            <div class="mt-2">
+              <button class="btn btn-sm btn-outline-primary" @click="copyToClipboard">
+                <i class="fa-solid fa-copy"></i> Copy to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { 
+  calculateStats, 
+  calculateFPSStatsFromFrametime 
+} from '../utils/statsCalculations'
+
+const EXAMPLE_DATA = `fps	frametime
+383.357	2.60854
+426.733	2.34338
+358.585	2.78874
+415.468	2.40692
+398.055	2.51222
+256.292	3.9018
+660.507	1.51399
+463.909	2.1556
+364.767	2.74148
+485.929	2.05791
+367.709	2.71954
+393.879	2.53885
+394.858	2.53255
+428.923	2.33142
+380.448	2.62848
+408.238	2.44955
+310.068	3.2251
+667.648	1.49779
+342.687	2.91812
+480.15	2.08268
+379.853	2.6326
+382.622	2.61355
+408.703	2.44676
+415.977	2.40398
+399.626	2.50234
+403.382	2.47904
+406.354	2.46091
+342.426	2.92034
+543.757	1.83906
+450.025	2.2221
+373.265	2.67906
+436.834	2.2892
+378.937	2.63896
+420.753	2.37669
+333.582	2.99776
+423.51	2.36122
+388.765	2.57225
+236.697	4.22482
+630.597	1.5858
+690.239	1.44877
+375.115	2.66585
+457.41	2.18622
+376.539	2.65577
+375.046	2.66634
+359.014	2.78541
+477.112	2.09594
+307.294	3.25422
+342.563	2.91917
+345.223	2.89668
+479.734	2.08449`
+
+const inputData = ref(EXAMPLE_DATA)
+const results = ref(null)
+const error = ref(null)
+const parsedData = ref(null)
+
+function resetToExample() {
+  inputData.value = EXAMPLE_DATA
+  results.value = null
+  error.value = null
+  parsedData.value = null
+}
+
+function parseInput(input) {
+  const lines = input.trim().split('\n')
+  if (lines.length < 2) {
+    throw new Error('Input must contain at least a header row and one data row')
+  }
+
+  // Parse header
+  const header = lines[0].split(/\s+/)
+  const fpsIndex = header.findIndex(h => h.toLowerCase() === 'fps')
+  const frametimeIndex = header.findIndex(h => h.toLowerCase() === 'frametime')
+
+  if (fpsIndex === -1 && frametimeIndex === -1) {
+    throw new Error('Header must contain "fps" and/or "frametime" columns')
+  }
+
+  const fpsValues = []
+  const frametimeValues = []
+
+  // Parse data rows
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue // Skip empty lines
+
+    const values = line.split(/\s+/)
+    
+    if (fpsIndex !== -1 && values[fpsIndex]) {
+      const fps = parseFloat(values[fpsIndex])
+      if (!isNaN(fps)) {
+        fpsValues.push(fps)
+      }
+    }
+    
+    if (frametimeIndex !== -1 && values[frametimeIndex]) {
+      const frametime = parseFloat(values[frametimeIndex])
+      if (!isNaN(frametime)) {
+        frametimeValues.push(frametime)
+      }
+    }
+  }
+
+  if (fpsValues.length === 0 && frametimeValues.length === 0) {
+    throw new Error('No valid numeric data found')
+  }
+
+  return { fpsValues, frametimeValues }
+}
+
+function calculate() {
+  try {
+    error.value = null
+    results.value = null
+
+    const data = parseInput(inputData.value)
+    parsedData.value = data
+
+    // Calculate FPS statistics
+    const fpsLinear = data.frametimeValues.length > 0
+      ? calculateFPSStatsFromFrametime(data.frametimeValues, 'linear-interpolation')
+      : calculateStats(data.fpsValues, 'linear-interpolation')
+
+    const fpsMangoHud = data.frametimeValues.length > 0
+      ? calculateFPSStatsFromFrametime(data.frametimeValues, 'mangohud-threshold')
+      : calculateStats(data.fpsValues, 'mangohud-threshold')
+
+    // Calculate Frametime statistics
+    const frametimeLinear = calculateStats(data.frametimeValues, 'linear-interpolation')
+    const frametimeMangoHud = calculateStats(data.frametimeValues, 'mangohud-threshold')
+
+    results.value = {
+      fps: {
+        linear: fpsLinear,
+        mangohud: fpsMangoHud
+      },
+      frametime: {
+        linear: frametimeLinear,
+        mangohud: frametimeMangoHud
+      }
+    }
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+const spreadsheetData = computed(() => {
+  if (!results.value || !parsedData.value) return ''
+
+  const lines = []
+  
+  // Add raw data
+  lines.push('fps,frametime')
+  const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
+  for (let i = 0; i < maxLength; i++) {
+    const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
+    const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
+    lines.push(`${fps},${frametime}`)
+  }
+  
+  // Add blank line
+  lines.push('')
+  
+  // Add FPS statistics - Linear Interpolation
+  lines.push('FPS Statistics - Linear Interpolation')
+  lines.push('Metric,Value,Formula')
+  
+  const dataRows = parsedData.value.frametimeValues.length
+  const fpsStartRow = 2 // Row where fps data starts (1-indexed, after header)
+  const fpsEndRow = fpsStartRow + parsedData.value.fpsValues.length - 1
+  const ftStartRow = 2 // Row where frametime data starts
+  const ftEndRow = ftStartRow + parsedData.value.frametimeValues.length - 1
+  
+  // For FPS calculated from frametime
+  if (parsedData.value.frametimeValues.length > 0) {
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.99)`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.03)`)
+    
+    // For standard deviation and variance, we need to convert frametimes to FPS first
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},"=STDEV(array of 1000/frametime values)"`)
+    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},"=VAR(array of 1000/frametime values)"`)
+  } else {
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=PERCENTILE(A${fpsStartRow}:A${fpsEndRow}, 0.01)`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=PERCENTILE(A${fpsStartRow}:A${fpsEndRow}, 0.97)`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+  }
+  
+  lines.push('')
+  
+  // Add FPS statistics - MangoHud Threshold
+  lines.push('FPS Statistics - MangoHud Threshold')
+  lines.push('Metric,Value,Formula')
+  
+  if (parsedData.value.frametimeValues.length > 0) {
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},"=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99, 1))"`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},"=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03, 1))"`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},"=STDEV(array of 1000/frametime values)"`)
+    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},"=VAR(array of 1000/frametime values)"`)
+  } else {
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},"=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}), FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01, 1))"`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},"=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}), FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97, 1))"`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+  }
+  
+  lines.push('')
+  
+  // Add Frametime statistics - Linear Interpolation
+  lines.push('Frametime Statistics - Linear Interpolation')
+  lines.push('Metric,Value,Formula')
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.linear.p01)},=PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.01)`)
+  lines.push(`Average Frametime,${formatNumber(results.value.frametime.linear.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.linear.p97)},=PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.97)`)
+  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.linear.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`Variance,${formatNumber(results.value.frametime.linear.variance)},=VAR(B${ftStartRow}:B${ftEndRow})`)
+  
+  lines.push('')
+  
+  // Add Frametime statistics - MangoHud Threshold
+  lines.push('Frametime Statistics - MangoHud Threshold')
+  lines.push('Metric,Value,Formula')
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},"=INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01, 1))"`)
+  lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},"=INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97, 1))"`)
+  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow})`)
+  
+  return lines.join('\n')
+})
+
+function formatNumber(value) {
+  if (value === null || value === undefined) return 'N/A'
+  return value.toFixed(2)
+}
+
+async function copyToClipboard() {
+  try {
+    await navigator.clipboard.writeText(spreadsheetData.value)
+    alert('Copied to clipboard!')
+  } catch (err) {
+    console.error('Failed to copy to clipboard:', err)
+    alert('Failed to copy to clipboard. Please select and copy manually.')
+  }
+}
+</script>
+
+<style scoped>
+.font-monospace {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table th {
+  background-color: rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+</style>
