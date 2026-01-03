@@ -114,8 +114,11 @@ export function calculateStats(values, calculationMethod = 'linear-interpolation
   const avg = sum / values.length
   
   // Calculate variance and standard deviation from FULL data
+  // Use sample variance (n-1) to match Excel/LibreOffice VAR and STDEV functions
   const squaredDiffs = values.map(val => Math.pow(val - avg, 2))
-  const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / values.length
+  const variance = values.length > 1 
+    ? squaredDiffs.reduce((acc, val) => acc + val, 0) / (values.length - 1)
+    : 0
   const stddev = Math.sqrt(variance)
   
   // Select percentile calculation method
@@ -183,10 +186,13 @@ export function calculateFPSStatsFromFrametime(frametimeValues, calculationMetho
   const minFPS = maxFrametime > 0 ? 1000 / maxFrametime : 0
   
   // Calculate standard deviation and variance from FPS values
+  // Use sample variance (n-1) to match Excel/LibreOffice VAR and STDEV functions
   const fpsSum = fpsValues.reduce((acc, val) => acc + val, 0)
   const fpsMean = fpsSum / fpsValues.length
   const squaredDiffs = fpsValues.map(val => Math.pow(val - fpsMean, 2))
-  const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / fpsValues.length
+  const variance = fpsValues.length > 1
+    ? squaredDiffs.reduce((acc, val) => acc + val, 0) / (fpsValues.length - 1)
+    : 0
   const stddev = Math.sqrt(variance)
   
   return {
