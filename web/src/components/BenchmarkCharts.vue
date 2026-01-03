@@ -99,18 +99,18 @@
                 
                 <h6 class="mt-3">How it works:</h6>
                 <p>
-                  When calculating a percentile (e.g., 99th), the algorithm finds the position in the sorted data 
+                  When calculating a percentile (e.g., 97th), the algorithm finds the position in the sorted data 
                   and interpolates between the two nearest data points to get a more precise value.
                 </p>
                 
                 <h6 class="mt-3">Example:</h6>
                 <div class="example-box p-3 bg-dark rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
-                  <p class="mb-2"><strong>99th percentile calculation:</strong></p>
+                  <p class="mb-2"><strong>97th percentile calculation:</strong></p>
                   <ul class="mb-0">
-                    <li>Position: 0.99 × 9 = 8.91 (between indices 8 and 9)</li>
+                    <li>Position: 0.97 × 9 = 8.73 (between indices 8 and 9)</li>
                     <li>Values: 90 and 100</li>
-                    <li>Interpolation: 90 × (1 - 0.91) + 100 × 0.91 = <strong>99.1</strong></li>
+                    <li>Interpolation: 90 × (1 - 0.73) + 100 × 0.73 = <strong>97.3</strong></li>
                   </ul>
                 </div>
 
@@ -145,9 +145,9 @@
                 <h6 class="mt-3">Example:</h6>
                 <div class="example-box p-3 bg-dark rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
-                  <p class="mb-2"><strong>99th percentile calculation:</strong></p>
+                  <p class="mb-2"><strong>97th percentile calculation:</strong></p>
                   <ul class="mb-0">
-                    <li>Position: floor(0.99 × 10) = floor(9.9) = 9</li>
+                    <li>Position: floor(0.97 × 10) = floor(9.7) = 9</li>
                     <li>Value at index 9: <strong>100</strong></li>
                     <li>No interpolation needed</li>
                   </ul>
@@ -172,12 +172,12 @@
             <div class="alert alert-info mt-4">
               <h6><i class="fas fa-lightbulb"></i> Key Differences</h6>
               <p class="mb-2">
-                The difference between methods is usually small (typically &lt;1% for 1% and 99% percentiles) 
+                The difference between methods is usually small (typically &lt;1% for 1% and 97% percentiles) 
                 but can be noticeable with smaller datasets (&lt;100 samples).
               </p>
               <p class="mb-0">
-                <strong>Example difference:</strong> For a dataset with 100 samples, the 99th percentile FPS 
-                might be 99.1 FPS (Linear Interpolation) vs 100 FPS (Frametime-Based Thresholds). Both are correct - they just use different 
+                <strong>Example difference:</strong> For a dataset with 100 samples, the 97th percentile FPS 
+                might be 97.3 FPS (Linear Interpolation) vs 100 FPS (Frametime-Based Thresholds). Both are correct - they just use different 
                 statistical methods.
               </p>
             </div>
@@ -860,7 +860,7 @@ const fpsStats = computed(() => {
   const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
   
   return props.benchmarkData.map((run) => {
-    const stats = run[statsKey]?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p97: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -868,7 +868,7 @@ const fpsStats = computed(() => {
       data: seriesData, // Downsampled data for line charts ONLY
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data  
-      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      max: stats.p97,  // Use pre-calculated 97th percentile from FULL data
       stddev: stats.stddev || 0,  // Use pre-calculated stddev from FULL data
       variance: stats.variance || 0,  // Use pre-calculated variance from FULL data
       // Use pre-calculated density from FULL data (calculated during download from all points)
@@ -885,7 +885,7 @@ const frametimeStats = computed(() => {
   const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
   
   return props.benchmarkData.map((run) => {
-    const stats = run[statsKey]?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p97: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -893,7 +893,7 @@ const frametimeStats = computed(() => {
       data: seriesData, // Downsampled data for line charts ONLY
       min: stats.p01,  // Use pre-calculated 1st percentile from FULL data
       avg: stats.avg,  // Use pre-calculated average from FULL data
-      max: stats.p99,  // Use pre-calculated 99th percentile from FULL data
+      max: stats.p97,  // Use pre-calculated 97th percentile from FULL data
       stddev: stats.stddev || 0,  // Use pre-calculated stddev from FULL data
       variance: stats.variance || 0,  // Use pre-calculated variance from FULL data
       // Use pre-calculated density from FULL data (calculated during download from all points)
