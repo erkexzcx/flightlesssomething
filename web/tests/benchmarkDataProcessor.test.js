@@ -47,6 +47,35 @@ function assertLessThan(actual, expected, message) {
 
 console.log('Running benchmarkDataProcessor tests...\n');
 
+// Test percentile calculation with linear interpolation
+test('Percentile calculation uses linear interpolation', () => {
+  // Create a simple dataset where we can verify interpolation
+  // Using 10 data points: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const runData = {
+    Label: 'Test Interpolation',
+    DataFPS: [], // Not used
+    DataFrameTime: [], // Not used
+    DataCPULoad: values // Use CPU load to test percentile calculation
+  };
+
+  const processed = processRun(runData, 0);
+  const stats = processed.stats.CPULoad;
+
+  // For 10 values (indices 0-9):
+  // 1st percentile: idx = 0.01 * 9 = 0.09
+  // Should interpolate between index 0 (10) and index 1 (20)
+  // fraction = 0.09, so: value[0] * (1 - 0.09) + value[1] * 0.09
+  // Result: 10 * 0.91 + 20 * 0.09 = 9.1 + 1.8 = 10.9
+  assertApprox(stats.p01, 10.9, 0.01, `1st percentile should be ~10.9, got ${stats.p01}`);
+
+  // 99th percentile: idx = 0.99 * 9 = 8.91
+  // Should interpolate between index 8 (90) and index 9 (100)
+  // fraction = 0.91, so: value[8] * (1 - 0.91) + value[9] * 0.91
+  // Result: 90 * 0.09 + 100 * 0.91 = 8.1 + 91 = 99.1
+  assertApprox(stats.p99, 99.1, 0.01, `99th percentile should be ~99.1, got ${stats.p99}`);
+});
+
 // Test data: constant FPS of 60 (frametime should be 16.667ms)
 test('FPS stats calculated from frametime - constant 60 FPS', () => {
   const runData = {
