@@ -62,7 +62,7 @@
               @change="setCalculationMethod('mangohud-threshold')"
             >
             <label class="btn btn-outline-primary" for="mangoHudThreshold">
-              Frametime-Based Thresholds
+              Mangohud
             </label>
           </div>
           <button 
@@ -94,92 +94,41 @@
                 <h5><strong>Linear Interpolation</strong></h5>
                 <p>
                   Uses mathematical interpolation between adjacent data points when calculating percentiles. 
-                  This is the standard scientific approach used by statistical tools like NumPy, R, and Excel.
-                </p>
-                
-                <h6 class="mt-3">How it works:</h6>
-                <p>
-                  When calculating a percentile (e.g., 97th), the algorithm finds the position in the sorted data 
-                  and interpolates between the two nearest data points to get a more precise value.
+                  This is the standard scientific approach used by statistical tools like NumPy, R, and Excel, 
+                  providing the most mathematically precise percentile values.
                 </p>
                 
                 <h6 class="mt-3">Example:</h6>
                 <div class="example-box p-3 bg-dark rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
-                  <p class="mb-2"><strong>97th percentile calculation:</strong></p>
+                  <p class="mb-2"><strong>97th percentile:</strong></p>
                   <ul class="mb-0">
                     <li>Position: 0.97 × 9 = 8.73 (between indices 8 and 9)</li>
                     <li>Values: 90 and 100</li>
-                    <li>Interpolation: 90 × (1 - 0.73) + 100 × 0.73 = <strong>97.3</strong></li>
+                    <li>Result: 90 × (1 - 0.73) + 100 × 0.73 = <strong>97.3</strong></li>
                   </ul>
                 </div>
-
-                <h6 class="mt-3">Best for:</h6>
-                <ul>
-                  <li><strong>Statistical accuracy:</strong> Provides the most mathematically precise percentile values</li>
-                  <li><strong>Comparing with scientific tools:</strong> Matches results from NumPy, R, Pandas</li>
-                  <li><strong>Large datasets:</strong> Smooths out statistical noise</li>
-                  <li><strong>Research and analysis:</strong> When precision and statistical rigor matter</li>
-                </ul>
-
-                <h6 class="mt-3">Use when:</h6>
-                <p class="mb-0">
-                  You need accurate, reproducible statistics that match scientific computing standards, 
-                  or when comparing performance across different tools and platforms.
-                </p>
               </div>
 
               <div class="col-md-6">
-                <h5><strong>Frametime-Based Thresholds</strong></h5>
+                <h5><strong>Mangohud</strong></h5>
                 <p>
-                  Uses a simpler floor-based approach without interpolation. This method is used by <strong>MangoHud</strong> 
-                  (a popular Linux gaming overlay) for real-time performance monitoring.
-                </p>
-                
-                <h6 class="mt-3">How it works:</h6>
-                <p>
-                  When calculating a percentile, the algorithm finds the position in the sorted data, 
-                  rounds down (floor), and returns the exact value at that position without interpolation.
+                  Uses a simpler floor-based approach without interpolation. This method is used by MangoHud 
+                  (a popular Linux gaming overlay) for real-time performance monitoring, making it directly 
+                  comparable with MangoHud screenshots and community benchmarks.
                 </p>
                 
                 <h6 class="mt-3">Example:</h6>
                 <div class="example-box p-3 bg-dark rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
-                  <p class="mb-2"><strong>97th percentile calculation:</strong></p>
+                  <p class="mb-2"><strong>97th percentile:</strong></p>
                   <ul class="mb-0">
                     <li>Position: floor(0.97 × 10) = floor(9.7) = 9</li>
                     <li>Value at index 9: <strong>100</strong></li>
-                    <li>No interpolation needed</li>
+                    <li>Result: <strong>100</strong> (no interpolation)</li>
                   </ul>
                 </div>
-
-                <h6 class="mt-3">Best for:</h6>
-                <ul>
-                  <li><strong>Gaming comparisons:</strong> Directly comparable with <strong>MangoHud</strong> overlays</li>
-                  <li><strong>Community benchmarks:</strong> Matches what other gamers see in <strong>MangoHud</strong></li>
-                  <li><strong>Simplicity:</strong> Easier to understand and explain</li>
-                  <li><strong>Real-time monitoring:</strong> Computationally faster (though negligible difference)</li>
-                </ul>
-
-                <h6 class="mt-3">Use when:</h6>
-                <p class="mb-0">
-                  You want to compare your results directly with <strong>MangoHud</strong> screenshots or community benchmarks, 
-                  or when sharing results with other Linux gamers who use <strong>MangoHud</strong>.
-                </p>
               </div>
-            </div>
-
-            <div class="alert alert-info mt-4">
-              <h6><i class="fas fa-lightbulb"></i> Key Differences</h6>
-              <p class="mb-2">
-                The difference between methods is usually small (typically &lt;1% for 1% and 97% percentiles) 
-                but can be noticeable with smaller datasets (&lt;100 samples).
-              </p>
-              <p class="mb-0">
-                <strong>Example difference:</strong> For a dataset with 100 samples, the 97th percentile FPS 
-                might be 97.3 FPS (Linear Interpolation) vs 100 FPS (Frametime-Based Thresholds). Both are correct - they just use different 
-                statistical methods.
-              </p>
             </div>
           </div>
           <div class="modal-footer">
