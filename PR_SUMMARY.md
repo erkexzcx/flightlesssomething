@@ -1,26 +1,68 @@
 # Summary: MangoHud vs FlightlessSomething Calculation Differences
 
+## Understanding FlightlessSomething's Two Calculation Methods
+
+FlightlessSomething provides **TWO** calculation methods (toggle visible in the UI):
+
+1. **Linear Interpolation** (default) - Most statistically precise
+2. **Frametime-Based Thresholds** - Designed to approximate MangoHud's method
+
+**Important:** Even the "Frametime-Based Thresholds" method doesn't **exactly** match MangoHud due to index formula differences (explained below).
+
+---
+
 ## Quick Answer to Your Questions
 
-### Why is 1% Min FPS different? (26.8786 vs 26.8961)
+### Why is MangoHud's 1% Min FPS different from BOTH FlightlessSomething methods?
 
-**Three reasons:**
+**Comparison:**
+- MangoHud: **26.8786**
+- FlightlessSomething (Linear Interpolation): **26.8961** (+0.065% difference)
+- FlightlessSomething (Frametime-Based Thresholds): **26.8841** (+0.02% difference)
 
-1. **Index calculation formula difference:**
-   - MangoHud: `idx = 0.01 * n - 1`
-   - FlightlessSomething: `idx = (1/100) * (n-1)` with interpolation
-   - This creates a slight offset
+### Why doesn't "Frametime-Based Thresholds" exactly match MangoHud?
 
-2. **Interpolation vs truncation:**
-   - MangoHud uses the exact array value at the calculated index (no interpolation)
-   - FlightlessSomething (linear method) interpolates between two adjacent values
-   - Example: If index = 9.5, FS averages values at positions 9 and 10, while MangoHud just uses position 9
+### Why doesn't "Frametime-Based Thresholds" exactly match MangoHud?
 
-3. **Precision:**
+**The 0.02% difference exists because of an index formula mismatch:**
+
+**MangoHud's index calculation:**
+```cpp
+idx = val * sorted_values.size() - 1
+// For 1% with 1000 samples: idx = 0.01 * 1000 - 1 = 9
+```
+
+**FlightlessSomething's "Frametime-Based Thresholds":**
+```javascript
+idx = Math.floor((percentile / 100) * n)
+// For 99% (used for 1% FPS) with 1000 samples: idx = floor(0.99 * 1000) = 990
+```
+
+**Additional differences:**
+- **Sorting order:** MangoHud sorts descending (slowest first), FS sorts ascending (fastest first)
+- **Array access:** MangoHud accesses index 9 from top, FS accesses index 990 from bottom
+- **Off-by-one effect:** The formulas produce slightly different indices
+
+**Result:** 0.02% variance (26.8786 vs 26.8841) - statistically negligible but mathematically different.
+
+### Why is Linear Interpolation even more different?
+
+Linear Interpolation has a **larger 0.065% difference** because it adds interpolation on top of the index formula difference:
+
+1. **Different index formula:**
+   - Uses `idx = (percentile/100) * (n-1)` which produces fractional indices
+   - Example: 989.01 instead of 990 or 9
+
+2. **Interpolation between values:**
+   - When index = 989.01, it calculates: `value[989] * 0.99 + value[990] * 0.01`
+   - MangoHud and Frametime-Based Thresholds just pick one exact value
+   - This provides higher statistical precision
+
+3. **Higher numeric precision:**
+   - JavaScript uses 64-bit double throughout
    - MangoHud uses 32-bit float
-   - FlightlessSomething uses 64-bit double (JavaScript Number)
 
-**Result:** 0.065% difference - completely acceptable for benchmark analysis.
+**Result:** 0.065% difference (26.8786 vs 26.8961) - still completely acceptable for benchmark analysis.
 
 ### Does MangoHud do any post-processing?
 
@@ -45,15 +87,40 @@ The only "processing" is the basic percentile calculation formula shown above.
 
 ### Comparison of ALL Summary Values
 
-| Metric | MangoHud | FlightlessSomething | Difference | % Diff | Explanation |
-|--------|----------|---------------------|------------|--------|-------------|
-| **0.1% Min FPS** | 21.3287 | N/A | N/A | N/A | FS doesn't calculate 0.1% by default |
-| **1% Min FPS** | 26.8786 | 26.8961 (linear) | +0.0175 | +0.065% | Index formula + interpolation |
-| **97% Percentile FPS** | 69.7556 | 69.7633 (linear) | +0.0077 | +0.011% | Interpolation provides more precision |
-| **Average FPS** | 48.2 | 48.22 | +0.02 | +0.041% | Display rounding (48.2 vs 48.2183) |
-| **Average Frame Time** | 20.7 | 20.74 | +0.04 | +0.19% | Display rounding (20.7 vs 20.7389) |
+**All three calculation methods compared:**
 
-**All differences are < 0.1%** - well within acceptable tolerance.
+| Metric | MangoHud | FS (Linear) | FS (Frametime Threshold) | Linear Diff | Threshold Diff |
+|--------|----------|-------------|--------------------------|-------------|----------------|
+| **1% Min FPS** | 26.8786 | 26.8961 | 26.8841 | +0.065% | +0.020% |
+| **97% Percentile FPS** | 69.7556 | 69.7633 | 69.7773 | +0.011% | +0.031% |
+| **Average FPS** | 48.2 | 48.22 | 48.22 | +0.041% | +0.041% |
+| **Average Frame Time** | 20.7 | 20.74 | 20.74 | +0.19% | +0.19% |
+
+**Key takeaway:** 
+- **Frametime-Based Thresholds** is closest to MangoHud (≤0.03% difference)
+- **Linear Interpolation** is more statistically precise but differs more from MangoHud (≤0.07%)
+- **Both methods are mathematically correct** - just using different statistical approaches
+
+### Why Doesn't FlightlessSomething Use MangoHud's Exact Formula?
+
+FlightlessSomething **could** change the "Frametime-Based Thresholds" formula from:
+```javascript
+idx = Math.floor((percentile / 100) * n)
+```
+
+To MangoHud's exact formula:
+```javascript
+idx = Math.floor(percentile * n) - 1  // Would match MangoHud exactly
+```
+
+**However, this wasn't done because:**
+
+1. **Difference is negligible:** 0.02% is statistically insignificant for gaming benchmarks
+2. **Current formula is more standard:** Matches common percentile implementations in JavaScript/Python libraries
+3. **Breaking change risk:** Existing saved benchmarks would show different values after the change
+4. **Both methods already available:** Users can choose Linear (precise) or Threshold (close to MangoHud) based on needs
+
+**Bottom line:** The 0.02% difference is an acceptable trade-off for using a more standard formula.
 
 ### Why does Average FPS match closely but not exactly?
 

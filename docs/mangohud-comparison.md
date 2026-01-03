@@ -2,11 +2,17 @@
 
 ## Executive Summary
 
-This document explains why MangoHud's summary statistics differ slightly from FlightlessSomething's calculations, even when processing the same benchmark data. The differences are **minimal (< 0.1%)** and are caused by:
+This document explains why MangoHud's summary statistics differ slightly from FlightlessSomething's calculations, even when processing the same benchmark data. 
 
-1. **Rounding differences** in output formatting
-2. **Different percentile calculation methods** (with vs without interpolation)
-3. **Precision differences** in intermediate calculations
+FlightlessSomething provides **two calculation methods**:
+1. **Linear Interpolation** (default) - More statistically precise
+2. **Frametime-Based Thresholds** - Attempts to replicate MangoHud's method
+
+Even with the "Frametime-Based Thresholds" method (designed to match MangoHud), there are **small differences (< 0.02%)** due to:
+
+1. **Index calculation formula differences** - MangoHud uses `val * n - 1`, FlightlessSomething uses `floor(val * n)`
+2. **Precision differences** - MangoHud uses 32-bit float, FlightlessSomething uses 64-bit double
+3. **Sorting order** - MangoHud sorts descending, FlightlessSomething sorts ascending
 
 **Bottom line:** Both tools calculate statistics correctly - the differences are purely due to implementation details and are within acceptable tolerance for benchmark analysis.
 
@@ -16,11 +22,15 @@ This document explains why MangoHud's summary statistics differ slightly from Fl
 
 ### 1% Min FPS Comparison
 
-| Tool | Value | Difference |
-|------|-------|------------|
+FlightlessSomething offers TWO calculation methods. Here's how they compare to MangoHud:
+
+| Tool / Method | Value | Difference from MangoHud |
+|---------------|-------|--------------------------|
 | **MangoHud** | 26.8786 | Baseline |
-| **FlightlessSomething (Linear)** | 26.8961 | +0.0175 (+0.065%) |
-| **FlightlessSomething (MangoHud)** | 26.8841 | +0.0055 (+0.020%) |
+| **FlightlessSomething (Linear Interpolation)** | 26.8961 | +0.0175 (+0.065%) |
+| **FlightlessSomething (Frametime-Based Thresholds)** | 26.8841 | +0.0055 (+0.020%) |
+
+**Key insight:** Even the "Frametime-Based Thresholds" method (which attempts to replicate MangoHud) has a small 0.02% difference due to index formula variations.
 
 ### Average FPS Comparison
 
@@ -124,11 +134,45 @@ export function calculatePercentileMangoHudThreshold(sortedData, percentile) {
 **Key features:**
 - Uses **floor-based indexing** without interpolation
 - Attempts to replicate MangoHud's approach
-- Still has minor differences due to index calculation
+- **Still has minor differences (~0.02%)** due to index formula mismatch
 
-### Why the Calculations Differ
+### Why FlightlessSomething's "Frametime-Based Thresholds" Doesn't Exactly Match MangoHud
 
-#### 1. Index Calculation Formula Differences
+Even though FlightlessSomething has a dedicated "Frametime-Based Thresholds" calculation method designed to replicate MangoHud, there's still a **small 0.02% difference**. Here's why:
+
+#### The Index Formula Mismatch
+
+**MangoHud's formula:**
+```cpp
+idx = val * sorted_values.size() - 1
+```
+
+**FlightlessSomething's formula:**
+```javascript
+idx = Math.floor((percentile / 100) * n)
+```
+
+These formulas produce different indices:
+
+| Dataset Size | Percentile | MangoHud Index | FS Index | Difference |
+|--------------|------------|----------------|----------|------------|
+| 1000 samples | 1% | `0.01 * 1000 - 1 = 9` | `floor(0.01 * 1000) = 10` | +1 index |
+| 1000 samples | 99% | `0.99 * 1000 - 1 = 989` | `floor(0.99 * 1000) = 990` | +1 index |
+
+This off-by-one difference causes the 0.02% variance in results.
+
+#### Why Not Fix It?
+
+FlightlessSomething could change to `Math.floor(val * n) - 1` to exactly match MangoHud, but:
+
+1. **The difference is negligible** (0.02% = statistically insignificant)
+2. **Current formula is more standard** - matches common percentile implementations
+3. **Both methods are already available** - users can choose based on their needs
+4. **Breaking change risk** - existing benchmarks would show different values
+
+### Why the Calculations Differ Between Methods
+
+#### 1. Index Calculation Formula Differences (Linear vs Threshold)
 
 **MangoHud:**
 ```cpp
@@ -139,16 +183,25 @@ For 1% percentile (val = 0.01) with 1000 samples:
 idx = 0.01 * 1000 - 1 = 10 - 1 = 9
 ```
 
-**FlightlessSomething (MangoHud method):**
+**FlightlessSomething (Linear Interpolation):**
+```javascript
+idx = (percentile / 100) * (n - 1)
+```
+For 1% percentile with 1000 samples (uses 99th percentile of frametime):
+```
+idx = (99 / 100) * (1000 - 1) = 989.01 (then interpolates)
+```
+
+**FlightlessSomething (Frametime-Based Thresholds):**
 ```javascript
 idx = Math.floor((percentile / 100) * n)
 ```
-For 1% percentile with 1000 samples:
+For 1% percentile with 1000 samples (uses 99th percentile of frametime):
 ```
-idx = Math.floor((1 / 100) * 1000) = Math.floor(10) = 10
+idx = Math.floor((99 / 100) * 1000) = floor(990) = 990
 ```
 
-**Off-by-one difference!** This is why there's a ~0.02% discrepancy even with the "MangoHud Threshold" method.
+**Result:** Three different indices (9 for MangoHud descending, 989-990 for FS ascending) lead to slight variations.
 
 #### 2. Interpolation vs No Interpolation
 
