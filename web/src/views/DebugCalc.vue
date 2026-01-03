@@ -169,10 +169,12 @@
         <!-- Spreadsheet Export Section -->
         <div v-if="results" class="card mb-4">
           <div class="card-body">
-            <h5 class="card-title">Spreadsheet Export</h5>
+            <h5 class="card-title">Spreadsheet Export for Verification</h5>
             <p class="text-muted small">
+              <i class="fa-solid fa-info-circle"></i> 
               Copy the data below and paste it into your spreadsheet application (Excel, Google Sheets, etc.).
-              The data includes both the raw values and calculated statistics with formulas.
+              The export includes raw data, FlightlessSomething's calculated values, and spreadsheet formulas.
+              Compare the "FlightlessSomething" values with the "Formula Result" values in your spreadsheet to verify accuracy.
             </p>
             <textarea
               v-model="spreadsheetData"
@@ -351,6 +353,12 @@ const spreadsheetData = computed(() => {
 
   const lines = []
   
+  // Add header with context
+  lines.push('NOTE: This export is for verification purposes only.')
+  lines.push('Compare the "FlightlessSomething" column (calculated by this app) with the "Formula Result" column (calculated by your spreadsheet).')
+  lines.push('Both values should match to verify the calculations are correct.')
+  lines.push('')
+  
   // Add raw data
   lines.push('fps,frametime')
   const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
@@ -363,74 +371,74 @@ const spreadsheetData = computed(() => {
   // Add blank line
   lines.push('')
   
+  // Calculate row numbers (accounting for header lines)
+  const headerLines = 4 // NOTE lines + blank line
+  const dataStartRow = headerLines + 2 // After header lines + data header row
+  const fpsStartRow = dataStartRow
+  const fpsEndRow = fpsStartRow + parsedData.value.fpsValues.length - 1
+  const ftStartRow = dataStartRow
+  const ftEndRow = ftStartRow + parsedData.value.frametimeValues.length - 1
+  
   // Add FPS statistics - Linear Interpolation
   lines.push('FPS Statistics - Linear Interpolation')
-  lines.push('Metric,Value,Formula')
-  
-  const dataRows = parsedData.value.frametimeValues.length
-  const fpsStartRow = 2 // Row where fps data starts (1-indexed, after header)
-  const fpsEndRow = fpsStartRow + parsedData.value.fpsValues.length - 1
-  const ftStartRow = 2 // Row where frametime data starts
-  const ftEndRow = ftStartRow + parsedData.value.frametimeValues.length - 1
+  lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   
   // For FPS calculated from frametime
   if (parsedData.value.frametimeValues.length > 0) {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.99)`)
-    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.03)`)
-    
-    // For standard deviation and variance, we need to convert frametimes to FPS first
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},"=STDEV(array of 1000/frametime values)"`)
-    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},"=VAR(array of 1000/frametime values)"`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=1000/PERCENTILE.INC(B${ftStartRow}:B${ftEndRow},0.99),`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=1000/PERCENTILE.INC(B${ftStartRow}:B${ftEndRow},0.03),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(1000/B${ftStartRow}:B${ftEndRow}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(1000/B${ftStartRow}:B${ftEndRow}),`)
   } else {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=PERCENTILE(A${fpsStartRow}:A${fpsEndRow}, 0.01)`)
-    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=PERCENTILE(A${fpsStartRow}:A${fpsEndRow}, 0.97)`)
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
-    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.linear.p01)},=PERCENTILE.INC(A${fpsStartRow}:A${fpsEndRow},0.01),`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.linear.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow}),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.linear.p97)},=PERCENTILE.INC(A${fpsStartRow}:A${fpsEndRow},0.97),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow}),`)
   }
   
   lines.push('')
   
   // Add FPS statistics - MangoHud Threshold
   lines.push('FPS Statistics - MangoHud Threshold')
-  lines.push('Metric,Value,Formula')
+  lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   
   if (parsedData.value.frametimeValues.length > 0) {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},"=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99, 1))"`)
-    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},"=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03, 1))"`)
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},"=STDEV(array of 1000/frametime values)"`)
-    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},"=VAR(array of 1000/frametime values)"`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99,1)),`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03,1)),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(1000/B${ftStartRow}:B${ftEndRow}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(1000/B${ftStartRow}:B${ftEndRow}),`)
   } else {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},"=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}), FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01, 1))"`)
-    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},"=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}), FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97, 1))"`)
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
-    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01,1)),`)
+    lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow}),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97,1)),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow}),`)
   }
   
   lines.push('')
   
   // Add Frametime statistics - Linear Interpolation
   lines.push('Frametime Statistics - Linear Interpolation')
-  lines.push('Metric,Value,Formula')
-  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.linear.p01)},=PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.01)`)
-  lines.push(`Average Frametime,${formatNumber(results.value.frametime.linear.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.linear.p97)},=PERCENTILE(B${ftStartRow}:B${ftEndRow}, 0.97)`)
-  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.linear.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`Variance,${formatNumber(results.value.frametime.linear.variance)},=VAR(B${ftStartRow}:B${ftEndRow})`)
+  lines.push('Metric,FlightlessSomething,Formula,Formula Result')
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.linear.p01)},=PERCENTILE.INC(B${ftStartRow}:B${ftEndRow},0.01),`)
+  lines.push(`Average Frametime,${formatNumber(results.value.frametime.linear.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.linear.p97)},=PERCENTILE.INC(B${ftStartRow}:B${ftEndRow},0.97),`)
+  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.linear.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow}),`)
+  lines.push(`Variance,${formatNumber(results.value.frametime.linear.variance)},=VAR(B${ftStartRow}:B${ftEndRow}),`)
   
   lines.push('')
   
   // Add Frametime statistics - MangoHud Threshold
   lines.push('Frametime Statistics - MangoHud Threshold')
-  lines.push('Metric,Value,Formula')
-  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},"=INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01, 1))"`)
-  lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},"=INDEX(SORT(B${ftStartRow}:B${ftEndRow}), FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97, 1))"`)
-  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow})`)
+  lines.push('Metric,FlightlessSomething,Formula,Formula Result')
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01,1)),`)
+  lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97,1)),`)
+  lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow}),`)
+  lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow}),`)
   
   return lines.join('\n')
 })
