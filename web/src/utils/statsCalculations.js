@@ -38,12 +38,15 @@ export function calculatePercentileLinearInterpolation(sortedData, percentile) {
 }
 
 /**
- * Calculate percentile using MangoHud's frametime-based threshold method (without interpolation)
- * This uses a simple floor-based approach to find the percentile value
+ * Calculate percentile using MangoHud's exact formula
+ * MangoHud formula: idx = floor(val * n - 1) on descending sorted data
+ * To match MangoHud when called with percentile p on ascending data:
+ *   idx = n - 1 - floor((1 - p/100) * n - 1)
  * 
- * NOTE: Used by /debugcalc page - update that page if this function changes
+ * NOTE: This uses inverted semantics compared to standard percentiles
+ * When FS calls this with p=99 for frametimes, it matches MangoHud's val=0.01
  * 
- * @param {Array<number>} sortedData - Pre-sorted array of numeric values
+ * @param {Array<number>} sortedData - Pre-sorted array of numeric values (ascending order)
  * @param {number} percentile - Percentile to calculate (0-100)
  * @returns {number} The calculated percentile value
  */
@@ -53,9 +56,13 @@ export function calculatePercentileMangoHudThreshold(sortedData, percentile) {
   }
   
   const n = sortedData.length
-  // Convert percentile (0-100) to decimal and calculate index
-  // Use floor to get the index without interpolation
-  const idx = Math.floor((percentile / 100) * n)
+  
+  // MangoHud uses val=(100-p)/100 on descending data
+  // idx_desc = floor((100-p)/100 * n - 1)
+  // Convert to ascending: idx_asc = n - 1 - idx_desc
+  const valMango = (100 - percentile) / 100
+  const idxDesc = Math.floor(valMango * n - 1)
+  const idx = n - 1 - idxDesc
   
   // Clamp index to valid range
   const clampedIdx = Math.min(Math.max(idx, 0), n - 1)

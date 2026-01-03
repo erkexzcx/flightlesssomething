@@ -406,15 +406,20 @@ const spreadsheetData = computed(() => {
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   
   if (parsedData.value.frametimeValues.length > 0) {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99,1)+1),`)
+    // MangoHud formula: idx = floor(val * n - 1) on descending
+    // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
+    // Excel 1-based: row = idx + 1 = n - floor((1-percentile/100) * n - 1)
+    // For 1% FPS (99th percentile frametime): val=0.01, row = n - floor(0.01*n - 1)
+    // For 97% FPS (3rd percentile frametime): val=0.97, row = n - floor(0.97*n - 1)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03,1)+1),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(1000/B${ftStartRow}:B${ftEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(1000/B${ftStartRow}:B${ftEndRow}),`)
   } else {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01,1)+1),`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.99*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1)),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97,1)+1),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.03*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1)),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow}),`)
   }
@@ -435,9 +440,12 @@ const spreadsheetData = computed(() => {
   // Add Frametime statistics - MangoHud Threshold
   lines.push('Frametime Statistics - MangoHud Threshold')
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
-  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01,1)+1),`)
+  // MangoHud formula: idx = floor(val * n - 1) on descending
+  // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
+  // Excel 1-based: row = n - floor((1-percentile/100) * n - 1)
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
   lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97,1)+1),`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
   lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow}),`)
   lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow}),`)
   
@@ -499,14 +507,15 @@ const spreadsheetDataLibreOffice = computed(() => {
   // currentRow continues from previous section + blank line + section header + column header
   currentRow += 4
   
-  // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
+  // MangoHud exact formula: idx = floor(val * n - 1) on descending
+  // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
+  // Excel 1-based: row = n - floor((1-percentile/100) * n - 1)
   // For FPS from frametime: slower frametimes (99th percentile) = lower FPS (1%), faster frametimes (3rd percentile) = higher FPS (97%)
-  // StdDev/Variance = use FPS column A directly (FPS values are equivalent to 1000/frametime)
-  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
@@ -540,12 +549,13 @@ const spreadsheetDataLibreOffice = computed(() => {
   // currentRow continues from previous section + blank line + section header + column header
   currentRow += 4
   
-  // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  // MangoHud exact formula: idx = floor(val * n - 1) on descending
+  // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
