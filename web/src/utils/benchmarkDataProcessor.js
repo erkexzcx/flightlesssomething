@@ -94,7 +94,7 @@ function downsampleLTTB(data, threshold) {
 
 // Calculate percentile with linear interpolation (matches scientific/numpy method)
 // This provides more accurate percentile values than simple floor-based indexing
-function calculatePercentile(sortedData, percentile) {
+function calculatePercentileLinearInterpolation(sortedData, percentile) {
   if (!sortedData || sortedData.length === 0) {
     return 0
   }
@@ -115,15 +115,36 @@ function calculatePercentile(sortedData, percentile) {
   return sortedData[lower] * (1 - fraction) + sortedData[upper] * fraction
 }
 
+// Calculate percentile using MangoHud's frametime-based threshold method (without interpolation)
+// This uses a simple floor-based approach to find the percentile value
+function calculatePercentileMangoHudThreshold(sortedData, percentile) {
+  if (!sortedData || sortedData.length === 0) {
+    return 0
+  }
+  
+  const n = sortedData.length
+  // Convert percentile (0-100) to decimal and calculate index
+  // Use floor to get the index without interpolation
+  const idx = Math.floor((percentile / 100) * n)
+  
+  // Clamp index to valid range
+  const clampedIdx = Math.min(Math.max(idx, 0), n - 1)
+  
+  return sortedData[clampedIdx]
+}
+
 // Calculate density data for histogram/area charts
 // Filters outliers (1st-99th percentile) and counts occurrences
 // No arbitrary limit - natural bin count based on data range
 // (e.g., FPS 0-2000 = max 2000 bins, FrameTime 0-100 = max 100 bins)
-function calculateDensityData(values) {
+function calculateDensityData(values, calculationMethod = 'linear-interpolation') {
   if (!values || values.length === 0) return []
   
   // Filter outliers (keep only 1st-99th percentile)
   const sorted = [...values].sort((a, b) => a - b)
+  const calculatePercentile = calculationMethod === 'mangohud-threshold' 
+    ? calculatePercentileMangoHudThreshold 
+    : calculatePercentileLinearInterpolation
   const p01Value = calculatePercentile(sorted, 1)
   const p99Value = calculatePercentile(sorted, 99)
   const filtered = sorted.filter(v => v >= p01Value && v <= p99Value)
@@ -143,7 +164,7 @@ function calculateDensityData(values) {
 }
 
 // Calculate statistics for an array of values
-function calculateStats(values) {
+function calculateStats(values, calculationMethod = 'linear-interpolation') {
   if (!values || values.length === 0) {
     return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
   }
@@ -157,6 +178,11 @@ function calculateStats(values) {
   const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / values.length
   const stddev = Math.sqrt(variance)
   
+  // Select percentile calculation method
+  const calculatePercentile = calculationMethod === 'mangohud-threshold' 
+    ? calculatePercentileMangoHudThreshold 
+    : calculatePercentileLinearInterpolation
+  
   return {
     min: sorted[0],
     max: sorted[sorted.length - 1],
@@ -165,19 +191,24 @@ function calculateStats(values) {
     p99: calculatePercentile(sorted, 99),
     stddev: stddev,  // Pre-calculated from FULL data
     variance: variance,  // Pre-calculated from FULL data
-    density: calculateDensityData(values) // Pre-calculate density from FULL data
+    density: calculateDensityData(values, calculationMethod) // Pre-calculate density from FULL data
   }
 }
 
 // Calculate FPS statistics from frametime data
 // This is the correct way to calculate FPS statistics, as averaging FPS values directly is incorrect
-function calculateFPSStatsFromFrametime(frametimeValues) {
+function calculateFPSStatsFromFrametime(frametimeValues, calculationMethod = 'linear-interpolation') {
   if (!frametimeValues || frametimeValues.length === 0) {
     return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
   }
 
   // Sort frametime values
   const sorted = [...frametimeValues].sort((a, b) => a - b)
+  
+  // Select percentile calculation method
+  const calculatePercentile = calculationMethod === 'mangohud-threshold' 
+    ? calculatePercentileMangoHudThreshold 
+    : calculatePercentileLinearInterpolation
   
   // Calculate FPS percentiles from frametime percentiles (inverted relationship)
   // Low frametime = high FPS, so percentiles are inverted
@@ -218,7 +249,7 @@ function calculateFPSStatsFromFrametime(frametimeValues) {
     p99: fpsP99,
     stddev: stddev,
     variance: variance,
-    density: calculateDensityData(fpsValues)
+    density: calculateDensityData(fpsValues, calculationMethod)
   }
 }
 
@@ -247,8 +278,9 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     // Downsampled time-series data for line charts
     series: {},
     
-    // Statistical summaries for bar charts
-    stats: {}
+    // Statistical summaries for bar charts (both calculation methods)
+    stats: {},
+    statsMangoHud: {}
   }
 
   // Extract all metrics
@@ -270,6 +302,7 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     if (!data || data.length === 0) {
       processed.series[metric] = []
       processed.stats[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
+      processed.statsMangoHud[metric] = { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
       return
     }
 
@@ -277,12 +310,14 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     const points = data.map((value, index) => [index, value])
     processed.series[metric] = downsampleLTTB(points, Math.min(maxPoints, data.length))
     
-    // Calculate statistics
+    // Calculate statistics with both methods
     // For FPS, use frametime data if available (correct method)
     if (metric === 'FPS' && frametimeData && frametimeData.length > 0) {
-      processed.stats[metric] = calculateFPSStatsFromFrametime(frametimeData)
+      processed.stats[metric] = calculateFPSStatsFromFrametime(frametimeData, 'linear-interpolation')
+      processed.statsMangoHud[metric] = calculateFPSStatsFromFrametime(frametimeData, 'mangohud-threshold')
     } else {
-      processed.stats[metric] = calculateStats(data)
+      processed.stats[metric] = calculateStats(data, 'linear-interpolation')
+      processed.statsMangoHud[metric] = calculateStats(data, 'mangohud-threshold')
     }
   })
 

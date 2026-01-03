@@ -4,7 +4,7 @@
  * Unit tests for benchmarkDataProcessor.js
  * 
  * Tests that FPS statistics are correctly calculated from frametime data
- * rather than directly from FPS values.
+ * using both linear interpolation and MangoHud threshold methods.
  * 
  * Run with: node tests/benchmarkDataProcessor.test.js
  */
@@ -48,7 +48,7 @@ function assertLessThan(actual, expected, message) {
 console.log('Running benchmarkDataProcessor tests...\n');
 
 // Test percentile calculation with linear interpolation
-test('Percentile calculation uses linear interpolation', () => {
+test('Linear interpolation: Percentile calculation uses linear interpolation', () => {
   // Create a simple dataset where we can verify interpolation
   // Using 10 data points: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -74,6 +74,29 @@ test('Percentile calculation uses linear interpolation', () => {
   // fraction = 0.91, so: value[8] * (1 - 0.91) + value[9] * 0.91
   // Result: 90 * 0.09 + 100 * 0.91 = 8.1 + 91 = 99.1
   assertApprox(stats.p99, 99.1, 0.01, `99th percentile should be ~99.1, got ${stats.p99}`);
+});
+
+// Test MangoHud threshold method
+test('MangoHud threshold: Percentile calculation uses floor-based approach', () => {
+  const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const runData = {
+    Label: 'Test MangoHud',
+    DataFPS: [],
+    DataFrameTime: [],
+    DataCPULoad: values
+  };
+
+  const processed = processRun(runData, 0);
+  const statsMangoHud = processed.statsMangoHud.CPULoad;
+
+  // For 10 values (indices 0-9):
+  // 1st percentile: idx = floor(0.01 * 10) = floor(0.1) = 0
+  // Should return value at index 0 = 10
+  assertApprox(statsMangoHud.p01, 10, 0.01, `MangoHud 1st percentile should be 10, got ${statsMangoHud.p01}`);
+
+  // 99th percentile: idx = floor(0.99 * 10) = floor(9.9) = 9
+  // Should return value at index 9 = 100
+  assertApprox(statsMangoHud.p99, 100, 0.01, `MangoHud 99th percentile should be 100, got ${statsMangoHud.p99}`);
 });
 
 // Test data: constant FPS of 60 (frametime should be 16.667ms)
@@ -122,7 +145,7 @@ test('FPS stats calculated from frametime - varying frametimes', () => {
 // Test percentile calculation
 test('FPS percentiles calculated correctly from frametime', () => {
   // Create 100 data points with varying frametimes
-  // Sorted frametimes will range from 10ms to 100ms
+  // Sorted frametimes will range from 10ms to 109ms
   const frametimes = Array.from({ length: 100 }, (_, i) => 10 + i); // 10ms to 109ms
   const runData = {
     Label: 'Test Run Percentiles',
@@ -190,6 +213,33 @@ test('FPS stats fallback when no frametime data', () => {
   // Should still have some stats (using FPS data directly as fallback)
   // This might not be accurate, but should not crash
   assertApprox(fpsStats.avg, 60, 0.1, `Should fallback to FPS data when frametime missing`);
+});
+
+// Test that both calculation methods are present
+test('Both calculation methods are present in processed data', () => {
+  const runData = {
+    Label: 'Test Both Methods',
+    DataFPS: Array(10).fill(60),
+    DataFrameTime: Array(10).fill(16.667)
+  };
+
+  const processed = processRun(runData, 0);
+  
+  // Check that both stats and statsMangoHud exist
+  if (!processed.stats) {
+    throw new Error('stats object is missing');
+  }
+  if (!processed.statsMangoHud) {
+    throw new Error('statsMangoHud object is missing');
+  }
+  
+  // Both should have FPS data
+  if (!processed.stats.FPS) {
+    throw new Error('stats.FPS is missing');
+  }
+  if (!processed.statsMangoHud.FPS) {
+    throw new Error('statsMangoHud.FPS is missing');
+  }
 });
 
 // Print results

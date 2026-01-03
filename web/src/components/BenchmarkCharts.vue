@@ -31,6 +31,45 @@
       </div>
     </div>
 
+    <!-- Calculation Method Selector -->
+    <div class="row mb-3" v-if="benchmarkData && benchmarkData.length > 0">
+      <div class="col-12">
+        <div class="calculation-method-selector">
+          <label class="form-label me-2">
+            <strong>Calculation method:</strong>
+          </label>
+          <select 
+            class="form-select form-select-sm d-inline-block"
+            v-model="appStore.calculationMethod"
+            @change="handleCalculationMethodChange"
+          >
+            <option value="linear-interpolation">Linear interpolation (FlightlessSomething)</option>
+            <option value="mangohud-threshold">MangoHud's frametime-based thresholds</option>
+          </select>
+          <button 
+            class="btn btn-sm btn-outline-secondary ms-2" 
+            type="button"
+            @click="showCalculationMethodInfo = !showCalculationMethodInfo"
+            title="Learn more about calculation methods"
+          >
+            <i class="fas fa-info-circle"></i>
+          </button>
+        </div>
+        <!-- Info panel that shows when button is clicked -->
+        <div v-if="showCalculationMethodInfo" class="alert alert-info mt-2">
+          <h6><i class="fas fa-info-circle"></i> Calculation Methods Explained</h6>
+          <p class="mb-2">
+            <strong>Linear Interpolation (FlightlessSomething):</strong> Uses mathematical interpolation between adjacent data points when calculating percentiles. 
+            This provides more precise percentile values and is the standard scientific approach used by tools like NumPy.
+          </p>
+          <p class="mb-0">
+            <strong>MangoHud's Frametime-Based Thresholds:</strong> Uses a simpler floor-based approach without interpolation. 
+            This matches how MangoHud calculates percentiles and may produce slightly different results, especially with smaller datasets.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabs for different chart categories -->
     <ul class="nav nav-tabs" id="chartTabs" role="tablist">
       <li class="nav-item" role="presentation">
@@ -299,6 +338,9 @@ const renderedTabs = ref({
 // Track selected baseline for comparison charts
 const fpsBaselineIndex = ref(null) // null means auto (slowest)
 const frametimeBaselineIndex = ref(null) // null means auto (fastest)
+
+// Track calculation method info panel visibility
+const showCalculationMethodInfo = ref(false)
 
 // Refs for chart containers
 const fpsChart = ref(null)
@@ -698,8 +740,11 @@ const dataArrays = computed(() => {
 const fpsStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return props.benchmarkData.map((run) => {
-    const stats = run.stats?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -720,8 +765,11 @@ const fpsStats = computed(() => {
 const frametimeStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return props.benchmarkData.map((run) => {
-    const stats = run.stats?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -742,15 +790,18 @@ const frametimeStats = computed(() => {
 const summaryStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return {
-    fpsAverages: props.benchmarkData.map(run => run.stats?.FPS?.avg || 0),
-    frametimeAverages: props.benchmarkData.map(run => run.stats?.FrameTime?.avg || 0),
-    cpuLoadAverages: props.benchmarkData.map(run => run.stats?.CPULoad?.avg || 0),
-    gpuLoadAverages: props.benchmarkData.map(run => run.stats?.GPULoad?.avg || 0),
-    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats?.GPUCoreClock?.avg || 0),
-    gpuMemClockAverages: props.benchmarkData.map(run => run.stats?.GPUMemClock?.avg || 0),
-    cpuPowerAverages: props.benchmarkData.map(run => run.stats?.CPUPower?.avg || 0),
-    gpuPowerAverages: props.benchmarkData.map(run => run.stats?.GPUPower?.avg || 0)
+    fpsAverages: props.benchmarkData.map(run => run[statsKey]?.FPS?.avg || 0),
+    frametimeAverages: props.benchmarkData.map(run => run[statsKey]?.FrameTime?.avg || 0),
+    cpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.CPULoad?.avg || 0),
+    gpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.GPULoad?.avg || 0),
+    gpuCoreClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUMemClock?.avg || 0),
+    cpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.CPUPower?.avg || 0),
+    gpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.GPUPower?.avg || 0)
   }
 })
 
@@ -1053,7 +1104,7 @@ function handleTabClick(tabName) {
 }
 
 // Shared function to re-render all rendered tabs
-// Used by theme changes and DPI changes
+// Used by theme changes, DPI changes, and calculation method changes
 function reRenderAllTabs() {
   nextTick(() => {
     if (renderedTabs.value.fps) {
@@ -1069,6 +1120,14 @@ function reRenderAllTabs() {
       renderMoreMetricsTab()
     }
   })
+}
+
+// Handle calculation method change
+function handleCalculationMethodChange() {
+  // Store the new calculation method
+  appStore.setCalculationMethod(appStore.calculationMethod)
+  // Re-render all tabs to update charts with new calculation method
+  reRenderAllTabs()
 }
 
 // Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
@@ -1177,4 +1236,24 @@ watch(() => appStore.theme, () => {
 .baseline-selector .form-select {
   max-width: 300px;
 }
+
+.calculation-method-selector {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+}
+
+.calculation-method-selector .form-label {
+  margin-bottom: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.calculation-method-selector .form-select {
+  max-width: 400px;
+}
+
 </style>
