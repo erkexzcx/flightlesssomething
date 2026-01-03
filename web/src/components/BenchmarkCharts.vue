@@ -99,7 +99,7 @@
                 </p>
                 
                 <h6 class="mt-3">Example:</h6>
-                <div class="example-box p-3 bg-dark rounded">
+                <div class="example-box p-3 bg-dark text-white rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
                   <p class="mb-2"><strong>97th percentile:</strong></p>
                   <ul class="mb-0">
@@ -119,7 +119,7 @@
                 </p>
                 
                 <h6 class="mt-3">Example:</h6>
-                <div class="example-box p-3 bg-dark rounded">
+                <div class="example-box p-3 bg-dark text-white rounded">
                   <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
                   <p class="mb-2"><strong>97th percentile:</strong></p>
                   <ul class="mb-0">
