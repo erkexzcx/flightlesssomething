@@ -459,9 +459,21 @@ const renderedTabs = ref({
 const fpsBaselineIndex = ref(null) // null means auto (slowest)
 const frametimeBaselineIndex = ref(null) // null means auto (fastest)
 
-// Track display mode for comparison charts (true = percentage, false = numbers)
-const fpsComparisonMode = ref(true) // default to percentage
-const frametimeComparisonMode = ref(true) // default to percentage
+// Track display mode for comparison charts using app store for persistence
+// Computed to react to store changes and provide boolean for easier checking
+const fpsComparisonMode = computed({
+  get: () => appStore.comparisonMode === 'percentage',
+  set: (value) => {
+    appStore.setComparisonMode(value ? 'percentage' : 'numbers')
+  }
+})
+
+const frametimeComparisonMode = computed({
+  get: () => appStore.comparisonMode === 'percentage',
+  set: (value) => {
+    appStore.setComparisonMode(value ? 'percentage' : 'numbers')
+  }
+})
 
 // Refs for chart containers
 const fpsChart = ref(null)
