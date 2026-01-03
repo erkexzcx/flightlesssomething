@@ -63,7 +63,7 @@ console.log('Running benchmarkDataProcessor tests...\n');
     const stats = processed.stats.CPULoad;
 
     assertApprox(stats.p01, 10.9, 0.01, `1st percentile should be ~10.9, got ${stats.p01}`);
-    assertApprox(stats.p99, 99.1, 0.01, `99th percentile should be ~99.1, got ${stats.p99}`);
+    assertApprox(stats.p97, 97.3, 0.01, `97th percentile should be ~97.3, got ${stats.p97}`);
   });
 
   await test('MangoHud threshold: Percentile calculation uses floor-based approach', async () => {
@@ -79,7 +79,7 @@ console.log('Running benchmarkDataProcessor tests...\n');
     const statsMangoHud = processed.statsMangoHud.CPULoad;
 
     assertApprox(statsMangoHud.p01, 10, 0.01, `MangoHud 1st percentile should be 10, got ${statsMangoHud.p01}`);
-    assertApprox(statsMangoHud.p99, 100, 0.01, `MangoHud 99th percentile should be 100, got ${statsMangoHud.p99}`);
+    assertApprox(statsMangoHud.p97, 100, 0.01, `MangoHud 97th percentile should be 100, got ${statsMangoHud.p97}`);
   });
 
   await test('FPS stats calculated from frametime - constant 60 FPS', async () => {
@@ -126,8 +126,8 @@ console.log('Running benchmarkDataProcessor tests...\n');
 
     assertLessThan(fpsStats.p01, fpsStats.avg, 
       `p01 (${fpsStats.p01}) should be less than avg (${fpsStats.avg})`);
-    assertGreaterThan(fpsStats.p99, fpsStats.avg, 
-      `p99 (${fpsStats.p99}) should be greater than avg (${fpsStats.avg})`);
+    assertGreaterThan(fpsStats.p97, fpsStats.avg, 
+      `p97 (${fpsStats.p97}) should be greater than avg (${fpsStats.avg})`);
   });
 
   await test('FPS stats use frametime data, not FPS data', async () => {
