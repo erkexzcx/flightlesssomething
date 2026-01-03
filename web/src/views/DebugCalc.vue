@@ -470,51 +470,80 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   // Add FPS statistics - Linear Interpolation
   lines.push('FPS Statistics - Linear Interpolation')
-  lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
+  lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
+  
+  // Calculate the starting row for this section (after data + blank line + section header + column header)
+  let currentRow = fpsEndRow + 4
   
   // Use FPS column (A) directly for all FPS calculations
-  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)`)
-  lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
-  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
-  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
   // Add FPS statistics - MangoHud Threshold
   lines.push('FPS Statistics - MangoHud Threshold')
-  lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
+  lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
+  
+  // currentRow continues from previous section + blank line + section header + column header
+  currentRow += 4
   
   // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
-  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.01*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)`)
-  lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
-  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.97*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
-  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.01*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow});FLOOR(0.97*COUNT(A${fpsStartRow}:A${fpsEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
   // Add Frametime statistics - Linear Interpolation
   lines.push('Frametime Statistics - Linear Interpolation')
-  lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.linear.p01)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)`)
-  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.linear.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.linear.p97)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.linear.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`Variance\t${formatNumber(results.value.frametime.linear.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})`)
+  lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
+  
+  // currentRow continues from previous section + blank line + section header + column header
+  currentRow += 4
+  
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.linear.p01)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.linear.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.linear.p97)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.linear.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Variance\t${formatNumber(results.value.frametime.linear.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
   // Add Frametime statistics - MangoHud Threshold
   lines.push('Frametime Statistics - MangoHud Threshold')
-  lines.push('Metric\tFlightlessSomething\tSpreadsheet calculation')
+  lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
+  
+  // currentRow continues from previous section + blank line + section header + column header
+  currentRow += 4
   
   // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)`)
-  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})`)
-  lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  currentRow++
+  lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   return lines.join('\n')
 })
