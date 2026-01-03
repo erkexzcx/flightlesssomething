@@ -406,15 +406,15 @@ const spreadsheetData = computed(() => {
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
   
   if (parsedData.value.frametimeValues.length > 0) {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99,1)),`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.99,1)+1),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03,1)),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.03,1)+1),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(1000/B${ftStartRow}:B${ftEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(1000/B${ftStartRow}:B${ftEndRow}),`)
   } else {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01,1)),`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.01,1)+1),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97,1)),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),FLOOR(COUNT(A${fpsStartRow}:A${fpsEndRow})*0.97,1)+1),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow}),`)
   }
@@ -435,9 +435,9 @@ const spreadsheetData = computed(() => {
   // Add Frametime statistics - MangoHud Threshold
   lines.push('Frametime Statistics - MangoHud Threshold')
   lines.push('Metric,FlightlessSomething,Formula,Formula Result')
-  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01,1)),`)
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.01,1)+1),`)
   lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97,1)),`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),FLOOR(COUNT(B${ftStartRow}:B${ftEndRow})*0.97,1)+1),`)
   lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow}),`)
   lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow}),`)
   
