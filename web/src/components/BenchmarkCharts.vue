@@ -35,37 +35,59 @@
     <div class="row mb-3" v-if="benchmarkData && benchmarkData.length > 0">
       <div class="col-12">
         <div class="calculation-method-selector">
-          <label class="form-label me-2">
+          <label class="form-label me-3">
             <strong>Calculation method:</strong>
           </label>
-          <select 
-            class="form-select form-select-sm d-inline-block"
-            v-model="appStore.calculationMethod"
-            @change="handleCalculationMethodChange"
-          >
-            <option value="linear-interpolation">Linear interpolation (FlightlessSomething)</option>
-            <option value="mangohud-threshold">MangoHud's frametime-based thresholds</option>
-          </select>
+          <span class="method-label">Linear interpolation (FlightlessSomething)</span>
+          <div class="form-check form-switch d-inline-block mx-3">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              role="switch" 
+              id="calculationMethodSwitch"
+              :checked="appStore.calculationMethod === 'mangohud-threshold'"
+              @change="toggleCalculationMethod"
+            >
+          </div>
+          <span class="method-label">MangoHud's frametime-based thresholds</span>
           <button 
             class="btn btn-sm btn-outline-secondary ms-2" 
             type="button"
-            @click="showCalculationMethodInfo = !showCalculationMethodInfo"
+            data-bs-toggle="modal"
+            data-bs-target="#calculationMethodModal"
             title="Learn more about calculation methods"
           >
             <i class="fas fa-info-circle"></i>
           </button>
         </div>
-        <!-- Info panel that shows when button is clicked -->
-        <div v-if="showCalculationMethodInfo" class="alert alert-info mt-2">
-          <h6><i class="fas fa-info-circle"></i> Calculation Methods Explained</h6>
-          <p class="mb-2">
-            <strong>Linear Interpolation (FlightlessSomething):</strong> Uses mathematical interpolation between adjacent data points when calculating percentiles. 
-            This provides more precise percentile values and is the standard scientific approach used by tools like NumPy.
-          </p>
-          <p class="mb-0">
-            <strong>MangoHud's Frametime-Based Thresholds:</strong> Uses a simpler floor-based approach without interpolation. 
-            This matches how MangoHud calculates percentiles and may produce slightly different results, especially with smaller datasets.
-          </p>
+      </div>
+    </div>
+
+    <!-- Calculation Method Info Modal -->
+    <div class="modal fade" id="calculationMethodModal" tabindex="-1" aria-labelledby="calculationMethodModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="calculationMethodModalLabel">
+              <i class="fas fa-info-circle"></i> Calculation Methods Explained
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <h6><strong>Linear Interpolation (FlightlessSomething)</strong></h6>
+            <p>
+              Uses mathematical interpolation between adjacent data points when calculating percentiles. 
+              This provides more precise percentile values and is the standard scientific approach used by tools like NumPy.
+            </p>
+            <h6 class="mt-3"><strong>MangoHud's Frametime-Based Thresholds</strong></h6>
+            <p class="mb-0">
+              Uses a simpler floor-based approach without interpolation. 
+              This matches how MangoHud calculates percentiles and may produce slightly different results, especially with smaller datasets.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
         </div>
       </div>
     </div>
@@ -338,9 +360,6 @@ const renderedTabs = ref({
 // Track selected baseline for comparison charts
 const fpsBaselineIndex = ref(null) // null means auto (slowest)
 const frametimeBaselineIndex = ref(null) // null means auto (fastest)
-
-// Track calculation method info panel visibility
-const showCalculationMethodInfo = ref(false)
 
 // Refs for chart containers
 const fpsChart = ref(null)
@@ -1122,10 +1141,12 @@ function reRenderAllTabs() {
   })
 }
 
-// Handle calculation method change
-function handleCalculationMethodChange() {
-  // Store the new calculation method
-  appStore.setCalculationMethod(appStore.calculationMethod)
+// Handle calculation method toggle
+function toggleCalculationMethod() {
+  const newMethod = appStore.calculationMethod === 'linear-interpolation' 
+    ? 'mangohud-threshold' 
+    : 'linear-interpolation'
+  appStore.setCalculationMethod(newMethod)
   // Re-render all tabs to update charts with new calculation method
   reRenderAllTabs()
 }
@@ -1252,8 +1273,14 @@ watch(() => appStore.theme, () => {
   white-space: nowrap;
 }
 
-.calculation-method-selector .form-select {
-  max-width: 400px;
+.calculation-method-selector .method-label {
+  font-size: 14px;
+}
+
+.calculation-method-selector .form-check-input {
+  cursor: pointer;
+  width: 3rem;
+  height: 1.5rem;
 }
 
 </style>
