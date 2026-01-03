@@ -451,15 +451,14 @@ const spreadsheetDataLibreOffice = computed(() => {
   const lines = []
   
   // Add raw data (no header text, start directly with column headers)
-  lines.push('fps\tframetime\tfps_from_ft')
+  lines.push('fps\tframetime')
   const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
   const dataStartRow = 2 // After column headers
   
   for (let i = 0; i < maxLength; i++) {
     const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
     const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
-    const fpsFromFt = frametime ? `=1000/B${dataStartRow + i}` : ''
-    lines.push(`${fps}\t${frametime}\t${fpsFromFt}`)
+    lines.push(`${fps}\t${frametime}`)
   }
   
   lines.push('')
@@ -468,30 +467,28 @@ const spreadsheetDataLibreOffice = computed(() => {
   const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
   const ftStartRow = dataStartRow
   const ftEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
-  const fpsFromFtStartRow = dataStartRow
-  const fpsFromFtEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
   
   // Add FPS statistics - Linear Interpolation
   lines.push('FPS Statistics - Linear Interpolation')
   lines.push('Metric\tFlightlessSomething\tSpreadsheet\tMatch')
   
   // Calculate the starting row for this section (after data + blank line + section header + column header)
-  let currentRow = fpsFromFtEndRow + 4
+  let currentRow = fpsEndRow + 4
   
   // Calculate FPS statistics from frametime (matches JavaScript implementation)
   // 1% FPS = 1000 / 99th percentile frametime (slower frametimes = lower FPS)
   // Average FPS = 1000 / average frametime (harmonic mean)
   // 97% FPS = 1000 / 3rd percentile frametime (faster frametimes = higher FPS)
-  // StdDev/Variance = calculated from FPS values in column C (derived from frametime)
+  // StdDev/Variance = use FPS column A directly (FPS values are equivalent to 1000/frametime)
   lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.99)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.03)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(C${fpsFromFtStartRow}:C${fpsFromFtEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(C${fpsFromFtStartRow}:C${fpsFromFtEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
@@ -504,15 +501,16 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   // MangoHud threshold method: floor(percentile * count) to get 0-based index, then add 1 for spreadsheet 1-based INDEX
   // For FPS from frametime: slower frametimes (99th percentile) = lower FPS (1%), faster frametimes (3rd percentile) = higher FPS (97%)
+  // StdDev/Variance = use FPS column A directly (FPS values are equivalent to 1000/frametime)
   lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow});1)+1)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(C${fpsFromFtStartRow}:C${fpsFromFtEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(C${fpsFromFtStartRow}:C${fpsFromFtEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
