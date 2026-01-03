@@ -450,57 +450,34 @@ const spreadsheetDataLibreOffice = computed(() => {
 
   const lines = []
   
-  // Add header with context
-  lines.push('NOTE: This export is for LibreOffice Calc and Excel.')
-  lines.push('Compare the "FlightlessSomething" column (calculated by this app) with the "Formula Result" column (calculated by your spreadsheet).')
-  lines.push('Both values should match to verify the calculations are correct.')
-  lines.push('')
-  
-  // Add raw data with helper column for FPS conversion
-  lines.push('fps\tframetime\tfps_converted')
+  // Add raw data (no header text, start directly with column headers)
+  lines.push('fps\tframetime')
   const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
-  const dataStartRow = 6 // After 4 header lines + blank + column headers
+  const dataStartRow = 2 // After column headers
   
   for (let i = 0; i < maxLength; i++) {
     const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
     const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
-    const rowNum = dataStartRow + i
-    // Add formula in column C to convert frametime to FPS
-    if (frametime) {
-      lines.push(`${fps}\t${frametime}\t=1000/B${rowNum}`)
-    } else {
-      lines.push(`${fps}\t${frametime}\t`)
-    }
+    lines.push(`${fps}\t${frametime}`)
   }
   
   lines.push('')
   
+  const fpsStartRow = dataStartRow
+  const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
   const ftStartRow = dataStartRow
   const ftEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
-  const fpsConvertedStartRow = dataStartRow
-  const fpsConvertedEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
   
   // Add FPS statistics - Linear Interpolation
   lines.push('FPS Statistics - Linear Interpolation')
   lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
   
-  if (parsedData.value.frametimeValues.length > 0) {
-    // For FPS from frametime, use PERCENTILE on frametime (inverted percentiles) then convert
-    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.99)\t`)
-    lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
-    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.03)\t`)
-    // Use the converted FPS column for STDEV and VAR
-    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
-    lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
-  } else {
-    const fpsStartRow = dataStartRow
-    const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
-    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)\t`)
-    lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t`)
-    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)\t`)
-    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t`)
-    lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t`)
-  }
+  // Use FPS column (A) directly for all FPS calculations
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.01)`)
+  lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)\t=PERCENTILE(A${fpsStartRow}:A${fpsEndRow};0.97)`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=VAR(A${fpsStartRow}:A${fpsEndRow})`)
   
   lines.push('')
   
@@ -508,41 +485,26 @@ const spreadsheetDataLibreOffice = computed(() => {
   lines.push('FPS Statistics - MangoHud Threshold')
   lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
   
-  if (parsedData.value.frametimeValues.length > 0) {
-    const count = parsedData.value.frametimeValues.length
-    const p99Index = Math.floor(count * 0.99)
-    const p03Index = Math.floor(count * 0.03)
-    
-    // Use SMALL/LARGE functions which work in LibreOffice
-    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/LARGE(B${ftStartRow}:B${ftEndRow};${p99Index})\t`)
-    lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
-    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/SMALL(B${ftStartRow}:B${ftEndRow};${p03Index})\t`)
-    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
-    lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(C${fpsConvertedStartRow}:C${fpsConvertedEndRow})\t`)
-  } else {
-    const fpsStartRow = dataStartRow
-    const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
-    const count = parsedData.value.fpsValues.length
-    const p01Index = Math.floor(count * 0.01)
-    const p97Index = Math.floor(count * 0.97)
-    
-    lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${p01Index})\t`)
-    lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t`)
-    lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=LARGE(A${fpsStartRow}:A${fpsEndRow};${p97Index})\t`)
-    lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t`)
-    lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t`)
-  }
+  const fpsCount = parsedData.value.fpsValues.length
+  const fpsP01Index = Math.floor(fpsCount * 0.01) + 1  // SMALL is 1-indexed
+  const fpsP97Index = fpsCount - Math.floor(fpsCount * 0.97) + 1  // LARGE is 1-indexed from the largest
+  
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${fpsP01Index})\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${fpsP01Index})`)
+  lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=LARGE(A${fpsStartRow}:A${fpsEndRow};${fpsP97Index})\t=LARGE(A${fpsStartRow}:A${fpsEndRow};${fpsP97Index})`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=STDEV(A${fpsStartRow}:A${fpsEndRow})`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=VAR(A${fpsStartRow}:A${fpsEndRow})`)
   
   lines.push('')
   
   // Add Frametime statistics - Linear Interpolation
   lines.push('Frametime Statistics - Linear Interpolation')
   lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.linear.p01)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)\t`)
-  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.linear.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.linear.p97)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)\t`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.linear.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t`)
-  lines.push(`Variance\t${formatNumber(results.value.frametime.linear.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.linear.p01)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.01)`)
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.linear.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.linear.p97)}\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)\t=PERCENTILE(B${ftStartRow}:B${ftEndRow};0.97)`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.linear.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=STDEV(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`Variance\t${formatNumber(results.value.frametime.linear.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t=VAR(B${ftStartRow}:B${ftEndRow})`)
   
   lines.push('')
   
@@ -550,15 +512,15 @@ const spreadsheetDataLibreOffice = computed(() => {
   lines.push('Frametime Statistics - MangoHud Threshold')
   lines.push('Metric\tFlightlessSomething\tFormula\tFormula Result')
   
-  const count = parsedData.value.frametimeValues.length
-  const p01Index = Math.floor(count * 0.01)
-  const p97Index = Math.floor(count * 0.97)
+  const ftCount = parsedData.value.frametimeValues.length
+  const ftP01Index = Math.floor(ftCount * 0.01) + 1  // SMALL is 1-indexed
+  const ftP97Index = ftCount - Math.floor(ftCount * 0.97) + 1  // LARGE is 1-indexed from the largest
   
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=SMALL(B${ftStartRow}:B${ftEndRow};${p01Index})\t`)
-  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t`)
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=LARGE(B${ftStartRow}:B${ftEndRow};${p97Index})\t`)
-  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t`)
-  lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t`)
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=SMALL(B${ftStartRow}:B${ftEndRow};${ftP01Index})\t=SMALL(B${ftStartRow}:B${ftEndRow};${ftP01Index})`)
+  lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=LARGE(B${ftStartRow}:B${ftEndRow};${ftP97Index})\t=LARGE(B${ftStartRow}:B${ftEndRow};${ftP97Index})`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=STDEV(B${ftStartRow}:B${ftEndRow})`)
+  lines.push(`Variance\t${formatNumber(results.value.frametime.mangohud.variance)}\t=VAR(B${ftStartRow}:B${ftEndRow})\t=VAR(B${ftStartRow}:B${ftEndRow})`)
   
   return lines.join('\n')
 })
