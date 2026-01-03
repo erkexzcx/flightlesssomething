@@ -288,30 +288,3 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
 
   return processed
 }
-
-/**
- * Merge processed runs into a single dataset for charts
- * @param {Array} processedRuns - Array of processed run data
- * @returns {Object} Combined dataset ready for chart rendering
- */
-export function mergeProcessedRuns(processedRuns) {
-  return {
-    runs: processedRuns,
-    runCount: processedRuns.length,
-    labels: processedRuns.map(r => r.label),
-    
-    // Helper to get series data for all runs for a specific metric
-    getSeriesData: (metric) => {
-      return processedRuns.map((run, index) => ({
-        name: run.label,
-        data: run.series[metric] || [],
-        color: undefined // Let Highcharts assign colors
-      }))
-    },
-    
-    // Helper to get stats for all runs for a specific metric
-    getStats: (metric) => {
-      return processedRuns.map(run => run.stats[metric] || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] })
-    }
-  }
-}
