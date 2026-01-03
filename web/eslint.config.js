@@ -29,6 +29,7 @@ export default [
         File: 'readonly',
         Blob: 'readonly',
         TextDecoder: 'readonly',
+        Worker: 'readonly',
         // Web Worker globals
         self: 'readonly',
         // Node globals

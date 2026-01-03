@@ -31,6 +31,164 @@
       </div>
     </div>
 
+    <!-- Calculation Method Selector -->
+    <div class="row mb-3" v-if="benchmarkData && benchmarkData.length > 0">
+      <div class="col-12">
+        <div class="calculation-method-selector">
+          <label class="form-label me-3">
+            <strong>Calculation method:</strong>
+          </label>
+          <div class="btn-group btn-group-sm method-toggle" role="group">
+            <input 
+              type="radio" 
+              class="btn-check" 
+              name="calculationMethod" 
+              id="linearInterpolation" 
+              autocomplete="off"
+              :checked="appStore.calculationMethod === 'linear-interpolation'"
+              @change="setCalculationMethod('linear-interpolation')"
+            >
+            <label class="btn btn-outline-primary" for="linearInterpolation">
+              Linear Interpolation
+            </label>
+
+            <input 
+              type="radio" 
+              class="btn-check" 
+              name="calculationMethod" 
+              id="mangoHudThreshold" 
+              autocomplete="off"
+              :checked="appStore.calculationMethod === 'mangohud-threshold'"
+              @change="setCalculationMethod('mangohud-threshold')"
+            >
+            <label class="btn btn-outline-primary" for="mangoHudThreshold">
+              Frametime-Based Thresholds
+            </label>
+          </div>
+          <button 
+            class="btn btn-sm btn-outline-secondary ms-2" 
+            type="button"
+            data-bs-toggle="modal"
+            data-bs-target="#calculationMethodModal"
+            title="Learn more about calculation methods"
+          >
+            <i class="fas fa-info-circle"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculation Method Info Modal -->
+    <div class="modal fade" id="calculationMethodModal" tabindex="-1" aria-labelledby="calculationMethodModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="calculationMethodModalLabel">
+              <i class="fas fa-info-circle"></i> Calculation Methods Explained
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row">
+              <div class="col-md-6">
+                <h5><strong>Linear Interpolation</strong></h5>
+                <p>
+                  Uses mathematical interpolation between adjacent data points when calculating percentiles. 
+                  This is the standard scientific approach used by statistical tools like NumPy, R, and Excel.
+                </p>
+                
+                <h6 class="mt-3">How it works:</h6>
+                <p>
+                  When calculating a percentile (e.g., 99th), the algorithm finds the position in the sorted data 
+                  and interpolates between the two nearest data points to get a more precise value.
+                </p>
+                
+                <h6 class="mt-3">Example:</h6>
+                <div class="example-box p-3 bg-dark rounded">
+                  <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
+                  <p class="mb-2"><strong>99th percentile calculation:</strong></p>
+                  <ul class="mb-0">
+                    <li>Position: 0.99 × 9 = 8.91 (between indices 8 and 9)</li>
+                    <li>Values: 90 and 100</li>
+                    <li>Interpolation: 90 × (1 - 0.91) + 100 × 0.91 = <strong>99.1</strong></li>
+                  </ul>
+                </div>
+
+                <h6 class="mt-3">Best for:</h6>
+                <ul>
+                  <li><strong>Statistical accuracy:</strong> Provides the most mathematically precise percentile values</li>
+                  <li><strong>Comparing with scientific tools:</strong> Matches results from NumPy, R, Pandas</li>
+                  <li><strong>Large datasets:</strong> Smooths out statistical noise</li>
+                  <li><strong>Research and analysis:</strong> When precision and statistical rigor matter</li>
+                </ul>
+
+                <h6 class="mt-3">Use when:</h6>
+                <p class="mb-0">
+                  You need accurate, reproducible statistics that match scientific computing standards, 
+                  or when comparing performance across different tools and platforms.
+                </p>
+              </div>
+
+              <div class="col-md-6">
+                <h5><strong>Frametime-Based Thresholds</strong></h5>
+                <p>
+                  Uses a simpler floor-based approach without interpolation. This method is used by <strong>MangoHud</strong> 
+                  (a popular Linux gaming overlay) for real-time performance monitoring.
+                </p>
+                
+                <h6 class="mt-3">How it works:</h6>
+                <p>
+                  When calculating a percentile, the algorithm finds the position in the sorted data, 
+                  rounds down (floor), and returns the exact value at that position without interpolation.
+                </p>
+                
+                <h6 class="mt-3">Example:</h6>
+                <div class="example-box p-3 bg-dark rounded">
+                  <p class="mb-2"><strong>Dataset:</strong> [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]</p>
+                  <p class="mb-2"><strong>99th percentile calculation:</strong></p>
+                  <ul class="mb-0">
+                    <li>Position: floor(0.99 × 10) = floor(9.9) = 9</li>
+                    <li>Value at index 9: <strong>100</strong></li>
+                    <li>No interpolation needed</li>
+                  </ul>
+                </div>
+
+                <h6 class="mt-3">Best for:</h6>
+                <ul>
+                  <li><strong>Gaming comparisons:</strong> Directly comparable with <strong>MangoHud</strong> overlays</li>
+                  <li><strong>Community benchmarks:</strong> Matches what other gamers see in <strong>MangoHud</strong></li>
+                  <li><strong>Simplicity:</strong> Easier to understand and explain</li>
+                  <li><strong>Real-time monitoring:</strong> Computationally faster (though negligible difference)</li>
+                </ul>
+
+                <h6 class="mt-3">Use when:</h6>
+                <p class="mb-0">
+                  You want to compare your results directly with <strong>MangoHud</strong> screenshots or community benchmarks, 
+                  or when sharing results with other Linux gamers who use <strong>MangoHud</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div class="alert alert-info mt-4">
+              <h6><i class="fas fa-lightbulb"></i> Key Differences</h6>
+              <p class="mb-2">
+                The difference between methods is usually small (typically &lt;1% for 1% and 99% percentiles) 
+                but can be noticeable with smaller datasets (&lt;100 samples).
+              </p>
+              <p class="mb-0">
+                <strong>Example difference:</strong> For a dataset with 100 samples, the 99th percentile FPS 
+                might be 99.1 FPS (Linear Interpolation) vs 100 FPS (Frametime-Based Thresholds). Both are correct - they just use different 
+                statistical methods.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabs for different chart categories -->
     <ul class="nav nav-tabs" id="chartTabs" role="tablist">
       <li class="nav-item" role="presentation">
@@ -698,8 +856,11 @@ const dataArrays = computed(() => {
 const fpsStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return props.benchmarkData.map((run) => {
-    const stats = run.stats?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -720,8 +881,11 @@ const fpsStats = computed(() => {
 const frametimeStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return props.benchmarkData.map((run) => {
-    const stats = run.stats?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
+    const stats = run[statsKey]?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p99: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
     
     return {
@@ -742,15 +906,18 @@ const frametimeStats = computed(() => {
 const summaryStats = computed(() => {
   if (!props.benchmarkData || props.benchmarkData.length === 0) return null
   
+  // Select stats based on calculation method
+  const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
+  
   return {
-    fpsAverages: props.benchmarkData.map(run => run.stats?.FPS?.avg || 0),
-    frametimeAverages: props.benchmarkData.map(run => run.stats?.FrameTime?.avg || 0),
-    cpuLoadAverages: props.benchmarkData.map(run => run.stats?.CPULoad?.avg || 0),
-    gpuLoadAverages: props.benchmarkData.map(run => run.stats?.GPULoad?.avg || 0),
-    gpuCoreClockAverages: props.benchmarkData.map(run => run.stats?.GPUCoreClock?.avg || 0),
-    gpuMemClockAverages: props.benchmarkData.map(run => run.stats?.GPUMemClock?.avg || 0),
-    cpuPowerAverages: props.benchmarkData.map(run => run.stats?.CPUPower?.avg || 0),
-    gpuPowerAverages: props.benchmarkData.map(run => run.stats?.GPUPower?.avg || 0)
+    fpsAverages: props.benchmarkData.map(run => run[statsKey]?.FPS?.avg || 0),
+    frametimeAverages: props.benchmarkData.map(run => run[statsKey]?.FrameTime?.avg || 0),
+    cpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.CPULoad?.avg || 0),
+    gpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.GPULoad?.avg || 0),
+    gpuCoreClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUMemClock?.avg || 0),
+    cpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.CPUPower?.avg || 0),
+    gpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.GPUPower?.avg || 0)
   }
 })
 
@@ -1053,7 +1220,7 @@ function handleTabClick(tabName) {
 }
 
 // Shared function to re-render all rendered tabs
-// Used by theme changes and DPI changes
+// Used by theme changes, DPI changes, and calculation method changes
 function reRenderAllTabs() {
   nextTick(() => {
     if (renderedTabs.value.fps) {
@@ -1069,6 +1236,13 @@ function reRenderAllTabs() {
       renderMoreMetricsTab()
     }
   })
+}
+
+// Handle calculation method change
+function setCalculationMethod(method) {
+  appStore.setCalculationMethod(method)
+  // Re-render all tabs to update charts with new calculation method
+  reRenderAllTabs()
 }
 
 // Handle device pixel ratio changes (e.g., moving window between displays with different DPI)
@@ -1177,4 +1351,37 @@ watch(() => appStore.theme, () => {
 .baseline-selector .form-select {
   max-width: 300px;
 }
+
+.calculation-method-selector {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+}
+
+.calculation-method-selector .form-label {
+  margin-bottom: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.calculation-method-selector .method-toggle {
+  flex-wrap: wrap;
+}
+
+.calculation-method-selector .method-toggle .btn {
+  font-size: 14px;
+}
+
+.example-box {
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+}
+
+.example-box ul {
+  padding-left: 20px;
+}
+
 </style>

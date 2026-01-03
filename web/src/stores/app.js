@@ -15,6 +15,15 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('theme', 'dark')
   }
 
+  // Calculation method: 'linear-interpolation' or 'mangohud-threshold'
+  const storedCalculationMethod = localStorage.getItem('calculationMethod')
+  const calculationMethod = ref(storedCalculationMethod || 'linear-interpolation')
+  
+  // Initialize calculation method if not set
+  if (!storedCalculationMethod) {
+    localStorage.setItem('calculationMethod', 'linear-interpolation')
+  }
+
   // Fetch version from backend
   async function fetchVersion() {
     try {
@@ -45,12 +54,20 @@ export const useAppStore = defineStore('app', () => {
     setTheme(newTheme)
   }
 
+  // Set calculation method
+  function setCalculationMethod(newMethod) {
+    calculationMethod.value = newMethod
+    localStorage.setItem('calculationMethod', newMethod)
+  }
+
   return {
     version,
     loading,
     theme,
+    calculationMethod,
     fetchVersion,
     setTheme,
     toggleTheme,
+    setCalculationMethod,
   }
 })

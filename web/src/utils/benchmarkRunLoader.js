@@ -78,7 +78,8 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
       // **CRITICAL: Process run immediately and discard raw data**
       // Extract only downsampled points and statistics
       // This prevents Vue from creating reactive watchers on massive arrays (thousands of points per run)
-      const processedRun = processRun(runData, runIndex, 2000) // Max 2000 points per metric per run
+      // processRun is now async and uses Web Workers for parallel calculation
+      const processedRun = await processRun(runData, runIndex, 2000) // Max 2000 points per metric per run
       processedRuns.push(processedRun)
       
       // Explicitly clear the raw data to help garbage collection
