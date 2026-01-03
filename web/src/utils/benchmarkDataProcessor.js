@@ -255,12 +255,13 @@ function calculateFPSStatsFromFrametime(frametimeValues, calculationMethod = 'li
 
 /**
  * Process a single benchmark run and extract chart-ready data
+ * Uses Web Workers for parallel calculation of both methods
  * @param {Object} runData - Raw benchmark data for one run
  * @param {number} runIndex - Index of this run
  * @param {number} maxPoints - Maximum points to keep for line charts (default: 2000)
- * @returns {Object} Processed data ready for charts
+ * @returns {Promise<Object>} Processed data ready for charts
  */
-export function processRun(runData, runIndex, maxPoints = 2000) {
+export async function processRun(runData, runIndex, maxPoints = 2000) {
   const processed = {
     // Metadata
     runIndex,
@@ -291,11 +292,8 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     'GPUVRAMUsed', 'GPUPower', 'RAMUsed', 'SwapUsed'
   ]
 
-  // First pass: extract frametime data for FPS statistics calculation
-  const frametimeData = runData.DataFrameTime
-
+  // Process downsampled series data (not CPU intensive, do in main thread)
   metrics.forEach(metric => {
-    // Backend sends data with "Data" prefix
     const backendFieldName = 'Data' + metric
     const data = runData[backendFieldName]
     
@@ -309,17 +307,96 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     // Convert to [x, y] format and downsample
     const points = data.map((value, index) => [index, value])
     processed.series[metric] = downsampleLTTB(points, Math.min(maxPoints, data.length))
-    
-    // Calculate statistics with both methods
-    // For FPS, use frametime data if available (correct method)
-    if (metric === 'FPS' && frametimeData && frametimeData.length > 0) {
-      processed.stats[metric] = calculateFPSStatsFromFrametime(frametimeData, 'linear-interpolation')
-      processed.statsMangoHud[metric] = calculateFPSStatsFromFrametime(frametimeData, 'mangohud-threshold')
-    } else {
-      processed.stats[metric] = calculateStats(data, 'linear-interpolation')
-      processed.statsMangoHud[metric] = calculateStats(data, 'mangohud-threshold')
-    }
   })
+  
+  // Calculate statistics in parallel using Web Workers
+  try {
+    const results = await calculateStatsInParallel(runData, metrics)
+    processed.stats = results.stats
+    processed.statsMangoHud = results.statsMangoHud
+  } catch (error) {
+    console.error('Failed to calculate stats in parallel, falling back to sequential:', error)
+    // Fallback to sequential calculation
+    const frametimeData = runData.DataFrameTime
+    metrics.forEach(metric => {
+      const backendFieldName = 'Data' + metric
+      const data = runData[backendFieldName]
+      
+      if (!data || data.length === 0) {
+        return
+      }
+      
+      if (metric === 'FPS' && frametimeData && frametimeData.length > 0) {
+        processed.stats[metric] = calculateFPSStatsFromFrametime(frametimeData, 'linear-interpolation')
+        processed.statsMangoHud[metric] = calculateFPSStatsFromFrametime(frametimeData, 'mangohud-threshold')
+      } else {
+        processed.stats[metric] = calculateStats(data, 'linear-interpolation')
+        processed.statsMangoHud[metric] = calculateStats(data, 'mangohud-threshold')
+      }
+    })
+  }
 
   return processed
+}
+
+/**
+ * Calculate statistics in parallel using Web Workers
+ * Creates 2 workers - one for each calculation method
+ * @param {Object} runData - Raw benchmark data
+ * @param {Array} metrics - List of metrics to calculate
+ * @returns {Promise<Object>} Object with stats and statsMangoHud
+ */
+function calculateStatsInParallel(runData, metrics) {
+  return new Promise((resolve, reject) => {
+    // Create two workers for parallel calculation
+    const worker1 = new Worker(new URL('../workers/statsCalculator.worker.js', import.meta.url), { type: 'module' })
+    const worker2 = new Worker(new URL('../workers/statsCalculator.worker.js', import.meta.url), { type: 'module' })
+    
+    const results = {}
+    let completedWorkers = 0
+    
+    const handleWorkerMessage = (e) => {
+      const { stats, calculationMethod } = e.data
+      
+      if (calculationMethod === 'linear-interpolation') {
+        results.stats = stats
+      } else {
+        results.statsMangoHud = stats
+      }
+      
+      completedWorkers++
+      
+      if (completedWorkers === 2) {
+        // Both workers completed
+        worker1.terminate()
+        worker2.terminate()
+        resolve(results)
+      }
+    }
+    
+    const handleWorkerError = (error) => {
+      worker1.terminate()
+      worker2.terminate()
+      reject(error)
+    }
+    
+    worker1.onmessage = handleWorkerMessage
+    worker1.onerror = handleWorkerError
+    
+    worker2.onmessage = handleWorkerMessage
+    worker2.onerror = handleWorkerError
+    
+    // Send calculation tasks to workers
+    worker1.postMessage({
+      runData,
+      calculationMethod: 'linear-interpolation',
+      metrics
+    })
+    
+    worker2.postMessage({
+      runData,
+      calculationMethod: 'mangohud-threshold',
+      metrics
+    })
+  })
 }

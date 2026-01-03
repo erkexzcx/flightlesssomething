@@ -5,6 +5,7 @@
  * 
  * Tests that FPS statistics are correctly calculated from frametime data
  * using both linear interpolation and MangoHud threshold methods.
+ * Now supports async processRun with Web Workers.
  * 
  * Run with: node tests/benchmarkDataProcessor.test.js
  */
@@ -15,9 +16,9 @@ import { processRun } from '../src/utils/benchmarkDataProcessor.js';
 let testsPassed = 0;
 let testsFailed = 0;
 
-function test(description, fn) {
+async function test(description, fn) {
   try {
-    fn();
+    await fn();
     console.log(`✓ ${description}`);
     testsPassed++;
   } catch (error) {
@@ -47,209 +48,147 @@ function assertLessThan(actual, expected, message) {
 
 console.log('Running benchmarkDataProcessor tests...\n');
 
-// Test percentile calculation with linear interpolation
-test('Linear interpolation: Percentile calculation uses linear interpolation', () => {
-  // Create a simple dataset where we can verify interpolation
-  // Using 10 data points: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-  const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-  const runData = {
-    Label: 'Test Interpolation',
-    DataFPS: [], // Not used
-    DataFrameTime: [], // Not used
-    DataCPULoad: values // Use CPU load to test percentile calculation
-  };
+// Run all tests
+(async () => {
+  await test('Linear interpolation: Percentile calculation uses linear interpolation', async () => {
+    const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    const runData = {
+      Label: 'Test Interpolation',
+      DataFPS: [],
+      DataFrameTime: [],
+      DataCPULoad: values
+    };
 
-  const processed = processRun(runData, 0);
-  const stats = processed.stats.CPULoad;
+    const processed = await processRun(runData, 0);
+    const stats = processed.stats.CPULoad;
 
-  // For 10 values (indices 0-9):
-  // 1st percentile: idx = 0.01 * 9 = 0.09
-  // Should interpolate between index 0 (10) and index 1 (20)
-  // fraction = 0.09, so: value[0] * (1 - 0.09) + value[1] * 0.09
-  // Result: 10 * 0.91 + 20 * 0.09 = 9.1 + 1.8 = 10.9
-  assertApprox(stats.p01, 10.9, 0.01, `1st percentile should be ~10.9, got ${stats.p01}`);
+    assertApprox(stats.p01, 10.9, 0.01, `1st percentile should be ~10.9, got ${stats.p01}`);
+    assertApprox(stats.p99, 99.1, 0.01, `99th percentile should be ~99.1, got ${stats.p99}`);
+  });
 
-  // 99th percentile: idx = 0.99 * 9 = 8.91
-  // Should interpolate between index 8 (90) and index 9 (100)
-  // fraction = 0.91, so: value[8] * (1 - 0.91) + value[9] * 0.91
-  // Result: 90 * 0.09 + 100 * 0.91 = 8.1 + 91 = 99.1
-  assertApprox(stats.p99, 99.1, 0.01, `99th percentile should be ~99.1, got ${stats.p99}`);
-});
+  await test('MangoHud threshold: Percentile calculation uses floor-based approach', async () => {
+    const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    const runData = {
+      Label: 'Test MangoHud',
+      DataFPS: [],
+      DataFrameTime: [],
+      DataCPULoad: values
+    };
 
-// Test MangoHud threshold method
-test('MangoHud threshold: Percentile calculation uses floor-based approach', () => {
-  const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-  const runData = {
-    Label: 'Test MangoHud',
-    DataFPS: [],
-    DataFrameTime: [],
-    DataCPULoad: values
-  };
+    const processed = await processRun(runData, 0);
+    const statsMangoHud = processed.statsMangoHud.CPULoad;
 
-  const processed = processRun(runData, 0);
-  const statsMangoHud = processed.statsMangoHud.CPULoad;
+    assertApprox(statsMangoHud.p01, 10, 0.01, `MangoHud 1st percentile should be 10, got ${statsMangoHud.p01}`);
+    assertApprox(statsMangoHud.p99, 100, 0.01, `MangoHud 99th percentile should be 100, got ${statsMangoHud.p99}`);
+  });
 
-  // For 10 values (indices 0-9):
-  // 1st percentile: idx = floor(0.01 * 10) = floor(0.1) = 0
-  // Should return value at index 0 = 10
-  assertApprox(statsMangoHud.p01, 10, 0.01, `MangoHud 1st percentile should be 10, got ${statsMangoHud.p01}`);
+  await test('FPS stats calculated from frametime - constant 60 FPS', async () => {
+    const runData = {
+      Label: 'Test Run',
+      DataFPS: Array(100).fill(60),
+      DataFrameTime: Array(100).fill(16.667)
+    };
 
-  // 99th percentile: idx = floor(0.99 * 10) = floor(9.9) = 9
-  // Should return value at index 9 = 100
-  assertApprox(statsMangoHud.p99, 100, 0.01, `MangoHud 99th percentile should be 100, got ${statsMangoHud.p99}`);
-});
+    const processed = await processRun(runData, 0);
+    const fpsStats = processed.stats.FPS;
 
-// Test data: constant FPS of 60 (frametime should be 16.667ms)
-test('FPS stats calculated from frametime - constant 60 FPS', () => {
-  const runData = {
-    Label: 'Test Run',
-    DataFPS: Array(100).fill(60),
-    DataFrameTime: Array(100).fill(16.667) // 1000/60 = 16.667ms
-  };
+    assertApprox(fpsStats.avg, 60, 0.1, `Average FPS should be ~60, got ${fpsStats.avg}`);
+    assertApprox(fpsStats.min, 60, 0.1, `Min FPS should be ~60, got ${fpsStats.min}`);
+    assertApprox(fpsStats.max, 60, 0.1, `Max FPS should be ~60, got ${fpsStats.max}`);
+  });
 
-  const processed = processRun(runData, 0);
-  const fpsStats = processed.stats.FPS;
+  await test('FPS stats calculated from frametime - varying frametimes', async () => {
+    const frametimes = [10, 20, 30];
+    const runData = {
+      Label: 'Test Run Varying',
+      DataFPS: frametimes.map(ft => 1000 / ft),
+      DataFrameTime: frametimes
+    };
 
-  // Average should be close to 60 FPS (1000 / 16.667)
-  assertApprox(fpsStats.avg, 60, 0.1, `Average FPS should be ~60, got ${fpsStats.avg}`);
-  
-  // Min and max should also be close to 60
-  assertApprox(fpsStats.min, 60, 0.1, `Min FPS should be ~60, got ${fpsStats.min}`);
-  assertApprox(fpsStats.max, 60, 0.1, `Max FPS should be ~60, got ${fpsStats.max}`);
-});
+    const processed = await processRun(runData, 0);
+    const fpsStats = processed.stats.FPS;
 
-// Test data: varying frametimes
-test('FPS stats calculated from frametime - varying frametimes', () => {
-  // Create frametimes: 10ms, 20ms, 30ms (corresponds to 100, 50, 33.33 FPS)
-  const frametimes = [10, 20, 30];
-  const runData = {
-    Label: 'Test Run Varying',
-    DataFPS: frametimes.map(ft => 1000 / ft), // Calculate FPS from frametime for consistency
-    DataFrameTime: frametimes
-  };
+    assertApprox(fpsStats.avg, 50, 0.1, `Average FPS should be ~50, got ${fpsStats.avg}`);
+    assertApprox(fpsStats.max, 100, 0.1, `Max FPS should be ~100, got ${fpsStats.max}`);
+    assertApprox(fpsStats.min, 33.33, 0.1, `Min FPS should be ~33.33, got ${fpsStats.min}`);
+  });
 
-  const processed = processRun(runData, 0);
-  const fpsStats = processed.stats.FPS;
+  await test('FPS percentiles calculated correctly from frametime', async () => {
+    const frametimes = Array.from({ length: 100 }, (_, i) => 10 + i);
+    const runData = {
+      Label: 'Test Run Percentiles',
+      DataFPS: frametimes.map(ft => 1000 / ft),
+      DataFrameTime: frametimes
+    };
 
-  // Average frametime = (10 + 20 + 30) / 3 = 20ms
-  // Average FPS should be 1000 / 20 = 50 FPS
-  assertApprox(fpsStats.avg, 50, 0.1, `Average FPS should be ~50, got ${fpsStats.avg}`);
-  
-  // Min frametime (10ms) = Max FPS (100)
-  assertApprox(fpsStats.max, 100, 0.1, `Max FPS should be ~100, got ${fpsStats.max}`);
-  
-  // Max frametime (30ms) = Min FPS (33.33)
-  assertApprox(fpsStats.min, 33.33, 0.1, `Min FPS should be ~33.33, got ${fpsStats.min}`);
-});
+    const processed = await processRun(runData, 0);
+    const fpsStats = processed.stats.FPS;
 
-// Test percentile calculation
-test('FPS percentiles calculated correctly from frametime', () => {
-  // Create 100 data points with varying frametimes
-  // Sorted frametimes will range from 10ms to 109ms
-  const frametimes = Array.from({ length: 100 }, (_, i) => 10 + i); // 10ms to 109ms
-  const runData = {
-    Label: 'Test Run Percentiles',
-    DataFPS: frametimes.map(ft => 1000 / ft),
-    DataFrameTime: frametimes
-  };
+    assertLessThan(fpsStats.p01, fpsStats.avg, 
+      `p01 (${fpsStats.p01}) should be less than avg (${fpsStats.avg})`);
+    assertGreaterThan(fpsStats.p99, fpsStats.avg, 
+      `p99 (${fpsStats.p99}) should be greater than avg (${fpsStats.avg})`);
+  });
 
-  const processed = processRun(runData, 0);
-  const fpsStats = processed.stats.FPS;
+  await test('FPS stats use frametime data, not FPS data', async () => {
+    const runData2 = {
+      Label: 'Test Run Verification 2',
+      DataFPS: [100, 50],
+      DataFrameTime: [10, 20]
+    };
 
-  // 1st percentile frametime (~11ms) should give ~90.9 FPS
-  // 99th percentile frametime (~109ms) should give ~9.17 FPS
-  // Note: These are approximate due to rounding in percentile calculation
-  
-  // p01 (1% low FPS) should be lower than average
-  assertLessThan(fpsStats.p01, fpsStats.avg, 
-    `p01 (${fpsStats.p01}) should be less than avg (${fpsStats.avg})`);
-  
-  // p99 (99th percentile FPS) should be higher than average
-  assertGreaterThan(fpsStats.p99, fpsStats.avg, 
-    `p99 (${fpsStats.p99}) should be greater than avg (${fpsStats.avg})`);
-});
+    const processed2 = await processRun(runData2, 0);
+    const fpsStats2 = processed2.stats.FPS;
 
-// Test that the fix is working: ensure we're using frametime, not FPS
-test('FPS stats use frametime data, not FPS data', () => {
-  // Create inconsistent data to verify which source is used
-  // If FPS is used directly: avg would be 50
-  // If frametime is used: avg should be 1000/20 = 50
-  const runData = {
-    Label: 'Test Run Verification',
-    DataFPS: Array(10).fill(50), // If this is used, avg = 50
-    DataFrameTime: Array(10).fill(20) // If this is used, avg = 1000/20 = 50
-  };
+    assertApprox(fpsStats2.avg, 66.67, 0.1, 
+      `Average FPS should be ~66.67 (from frametime), got ${fpsStats2.avg}`);
+  });
 
-  const processed = processRun(runData, 0);
-  const fpsStats = processed.stats.FPS;
+  await test('FPS stats fallback when no frametime data', async () => {
+    const runData = {
+      Label: 'Test Run No Frametime',
+      DataFPS: Array(10).fill(60),
+      DataFrameTime: []
+    };
 
-  // Both should give 50, but let's create a more distinct test
-  // Use frametimes that would give different result if FPS was averaged
-  const runData2 = {
-    Label: 'Test Run Verification 2',
-    DataFPS: [100, 50], // Direct average would be 75 FPS (WRONG)
-    DataFrameTime: [10, 20] // Average frametime = 15ms, so 1000/15 = 66.67 FPS (CORRECT)
-  };
+    const processed = await processRun(runData, 0);
+    const fpsStats = processed.stats.FPS;
 
-  const processed2 = processRun(runData2, 0);
-  const fpsStats2 = processed2.stats.FPS;
+    assertApprox(fpsStats.avg, 60, 0.1, `Should fallback to FPS data when frametime missing`);
+  });
 
-  // The correct average should be 66.67 (from frametime), not 75 (from FPS)
-  assertApprox(fpsStats2.avg, 66.67, 0.1, 
-    `Average FPS should be ~66.67 (from frametime), got ${fpsStats2.avg}`);
-});
+  await test('Both calculation methods are present in processed data', async () => {
+    const runData = {
+      Label: 'Test Both Methods',
+      DataFPS: Array(10).fill(60),
+      DataFrameTime: Array(10).fill(16.667)
+    };
 
-// Test fallback when no frametime data is available
-test('FPS stats fallback when no frametime data', () => {
-  const runData = {
-    Label: 'Test Run No Frametime',
-    DataFPS: Array(10).fill(60),
-    DataFrameTime: [] // No frametime data
-  };
+    const processed = await processRun(runData, 0);
+    
+    if (!processed.stats) {
+      throw new Error('stats object is missing');
+    }
+    if (!processed.statsMangoHud) {
+      throw new Error('statsMangoHud object is missing');
+    }
+    if (!processed.stats.FPS) {
+      throw new Error('stats.FPS is missing');
+    }
+    if (!processed.statsMangoHud.FPS) {
+      throw new Error('statsMangoHud.FPS is missing');
+    }
+  });
 
-  const processed = processRun(runData, 0);
-  const fpsStats = processed.stats.FPS;
+  // Print results
+  console.log('\n' + '='.repeat(50));
+  console.log(`Tests passed: ${testsPassed}`);
+  console.log(`Tests failed: ${testsFailed}`);
+  console.log('='.repeat(50));
 
-  // Should still have some stats (using FPS data directly as fallback)
-  // This might not be accurate, but should not crash
-  assertApprox(fpsStats.avg, 60, 0.1, `Should fallback to FPS data when frametime missing`);
-});
-
-// Test that both calculation methods are present
-test('Both calculation methods are present in processed data', () => {
-  const runData = {
-    Label: 'Test Both Methods',
-    DataFPS: Array(10).fill(60),
-    DataFrameTime: Array(10).fill(16.667)
-  };
-
-  const processed = processRun(runData, 0);
-  
-  // Check that both stats and statsMangoHud exist
-  if (!processed.stats) {
-    throw new Error('stats object is missing');
+  if (testsFailed > 0) {
+    process.exit(1);
+  } else {
+    console.log('\n✓ All tests passed!');
   }
-  if (!processed.statsMangoHud) {
-    throw new Error('statsMangoHud object is missing');
-  }
-  
-  // Both should have FPS data
-  if (!processed.stats.FPS) {
-    throw new Error('stats.FPS is missing');
-  }
-  if (!processed.statsMangoHud.FPS) {
-    throw new Error('statsMangoHud.FPS is missing');
-  }
-});
-
-// Print results
-console.log('\n' + '='.repeat(50));
-console.log(`Tests passed: ${testsPassed}`);
-console.log(`Tests failed: ${testsFailed}`);
-console.log('='.repeat(50));
-
-if (testsFailed > 0) {
-  process.exit(1);
-} else {
-  console.log('\n✓ All tests passed!');
-}
+})();
