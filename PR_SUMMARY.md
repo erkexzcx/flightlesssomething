@@ -22,8 +22,6 @@ FlightlessSomething provides **TWO** calculation methods (toggle visible in the 
 
 ### Why doesn't "Frametime-Based Thresholds" exactly match MangoHud?
 
-### Why doesn't "Frametime-Based Thresholds" exactly match MangoHud?
-
 **The 0.02% difference exists because of an index formula mismatch:**
 
 **MangoHud's index calculation:**
