@@ -66,7 +66,7 @@ console.log('Running benchmarkDataProcessor tests...\n');
     assertApprox(stats.p97, 97.3, 0.01, `97th percentile should be ~97.3, got ${stats.p97}`);
   });
 
-  await test('MangoHud threshold: Percentile calculation uses floor-based approach', async () => {
+  await test('MangoHud threshold: Percentile calculation uses MangoHud exact formula', async () => {
     const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const runData = {
       Label: 'Test MangoHud',
@@ -78,7 +78,10 @@ console.log('Running benchmarkDataProcessor tests...\n');
     const processed = await processRun(runData, 0);
     const statsMangoHud = processed.statsMangoHud.CPULoad;
 
-    assertApprox(statsMangoHud.p01, 10, 0.01, `MangoHud 1st percentile should be 10, got ${statsMangoHud.p01}`);
+    // With MangoHud's formula on ascending [10,20,...,100]:
+    // 1st percentile: valMango=0.99, idxDesc=floor(8.9)=8, idx=10-1-8=1 -> value=20
+    // 97th percentile: valMango=0.03, idxDesc=floor(-0.7)=-1, idx=10-1-(-1)=10->9 -> value=100
+    assertApprox(statsMangoHud.p01, 20, 0.01, `MangoHud 1st percentile should be 20, got ${statsMangoHud.p01}`);
     assertApprox(statsMangoHud.p97, 100, 0.01, `MangoHud 97th percentile should be 100, got ${statsMangoHud.p97}`);
   });
 
