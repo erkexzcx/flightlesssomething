@@ -487,7 +487,7 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   const fpsCount = parsedData.value.fpsValues.length
   const fpsP01Index = Math.floor(fpsCount * 0.01) + 1  // SMALL is 1-indexed
-  const fpsP97Index = fpsCount - Math.floor(fpsCount * 0.97) + 1  // LARGE is 1-indexed from the largest
+  const fpsP97Index = fpsCount - Math.floor(fpsCount * 0.97)  // LARGE is 1-indexed from the largest
   
   lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=SMALL(A${fpsStartRow}:A${fpsEndRow};${fpsP01Index})`)
   lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=AVERAGE(A${fpsStartRow}:A${fpsEndRow})`)
@@ -514,7 +514,7 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   const ftCount = parsedData.value.frametimeValues.length
   const ftP01Index = Math.floor(ftCount * 0.01) + 1  // SMALL is 1-indexed
-  const ftP97Index = ftCount - Math.floor(ftCount * 0.97) + 1  // LARGE is 1-indexed from the largest
+  const ftP97Index = ftCount - Math.floor(ftCount * 0.97)  // LARGE is 1-indexed from the largest
   
   lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=SMALL(B${ftStartRow}:B${ftEndRow};${ftP01Index})`)
   lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})`)
