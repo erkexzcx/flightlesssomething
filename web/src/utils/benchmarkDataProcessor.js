@@ -146,6 +146,59 @@ function calculateStats(values) {
   }
 }
 
+// Calculate FPS statistics from frametime data
+// This is the correct way to calculate FPS statistics, as averaging FPS values directly is incorrect
+function calculateFPSStatsFromFrametime(frametimeValues) {
+  if (!frametimeValues || frametimeValues.length === 0) {
+    return { min: 0, max: 0, avg: 0, p01: 0, p99: 0, stddev: 0, variance: 0, density: [] }
+  }
+
+  // Sort frametime values
+  const sorted = [...frametimeValues].sort((a, b) => a - b)
+  
+  // Calculate FPS percentiles from frametime percentiles (inverted relationship)
+  // Low frametime = high FPS, so percentiles are inverted
+  // 1st percentile frametime (fastest) = 99th percentile FPS (p99)
+  // 99th percentile frametime (slowest) = 1st percentile FPS (p01)
+  const frametimeP01 = sorted[Math.floor(frametimeValues.length * 0.01)]
+  const frametimeP99 = sorted[Math.floor(frametimeValues.length * 0.99)]
+  
+  // Convert frametime percentiles to FPS
+  const fpsP99 = frametimeP01 > 0 ? 1000 / frametimeP01 : 0  // 1st percentile frametime -> 99th percentile FPS
+  const fpsP01 = frametimeP99 > 0 ? 1000 / frametimeP99 : 0  // 99th percentile frametime -> 1st percentile FPS
+  
+  // Calculate average FPS from average frametime
+  const avgFrametime = frametimeValues.reduce((acc, val) => acc + val, 0) / frametimeValues.length
+  const avgFPS = avgFrametime > 0 ? 1000 / avgFrametime : 0
+  
+  // Convert all frametime values to FPS for min/max and density calculation
+  const fpsValues = frametimeValues.map(ft => ft > 0 ? 1000 / ft : 0)
+  
+  // Calculate min/max FPS (note: min frametime = max FPS, max frametime = min FPS)
+  const minFrametime = sorted[0]
+  const maxFrametime = sorted[sorted.length - 1]
+  const maxFPS = minFrametime > 0 ? 1000 / minFrametime : 0
+  const minFPS = maxFrametime > 0 ? 1000 / maxFrametime : 0
+  
+  // Calculate standard deviation and variance from FPS values
+  const fpsSum = fpsValues.reduce((acc, val) => acc + val, 0)
+  const fpsMean = fpsSum / fpsValues.length
+  const squaredDiffs = fpsValues.map(val => Math.pow(val - fpsMean, 2))
+  const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / fpsValues.length
+  const stddev = Math.sqrt(variance)
+  
+  return {
+    min: minFPS,
+    max: maxFPS,
+    avg: avgFPS,
+    p01: fpsP01,
+    p99: fpsP99,
+    stddev: stddev,
+    variance: variance,
+    density: calculateDensityData(fpsValues)
+  }
+}
+
 /**
  * Process a single benchmark run and extract chart-ready data
  * @param {Object} runData - Raw benchmark data for one run
@@ -183,6 +236,9 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     'GPUVRAMUsed', 'GPUPower', 'RAMUsed', 'SwapUsed'
   ]
 
+  // First pass: extract frametime data for FPS statistics calculation
+  const frametimeData = runData.DataFrameTime
+
   metrics.forEach(metric => {
     // Backend sends data with "Data" prefix
     const backendFieldName = 'Data' + metric
@@ -199,7 +255,12 @@ export function processRun(runData, runIndex, maxPoints = 2000) {
     processed.series[metric] = downsampleLTTB(points, Math.min(maxPoints, data.length))
     
     // Calculate statistics
-    processed.stats[metric] = calculateStats(data)
+    // For FPS, use frametime data if available (correct method)
+    if (metric === 'FPS' && frametimeData && frametimeData.length > 0) {
+      processed.stats[metric] = calculateFPSStatsFromFrametime(frametimeData)
+    } else {
+      processed.stats[metric] = calculateStats(data)
+    }
   })
 
   return processed

@@ -281,12 +281,6 @@ const getThemeColors = computed(() => {
   }
 })
 
-// Constants for data processing
-const OUTLIER_LOW_PERCENTILE = 0.01  // Remove bottom 1% outliers
-const OUTLIER_HIGH_PERCENTILE = 0.97 // Remove top 3% outliers
-const MAX_DENSITY_POINTS = 100       // Maximum points for density charts
-const MAX_FRAMETIME_FOR_INVALID_FPS = 1000000  // Very large frametime for invalid FPS (0 or negative)
-
 const props = defineProps({
   benchmarkData: {
     type: Array,
@@ -424,111 +418,6 @@ function decimateForLineChart(data, targetPoints = 2000) {
 function calculateAverage(data) {
   if (!data || data.length === 0) return 0
   return data.reduce((acc, value) => acc + value, 0) / data.length
-}
-
-// Calculate average FPS using harmonic mean (via frametimes)
-// This is the standard way to calculate average FPS
-// Formula: 1000 / (sum of frametimes / count)
-function calculateAverageFPS(fpsData) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (ms): frametime = 1000 / fps
-  // Handle edge case where FPS is 0 or negative by using a very large frametime
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // Calculate sum of frametimes
-  const sumFrametimes = frametimes.reduce((acc, ft) => acc + ft, 0)
-  
-  // Average frametime
-  const avgFrametime = sumFrametimes / frametimes.length
-  
-  // Convert back to FPS: 1000 / avgFrametime
-  return avgFrametime > 0 ? 1000 / avgFrametime : 0
-}
-
-function calculatePercentile(data, percentile) {
-  if (!data || data.length === 0) return 0
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted[Math.ceil(percentile / 100 * sorted.length) - 1]
-}
-
-// Calculate percentile FPS using harmonic mean method (via frametimes)
-// All FPS data is processed without filtering - users should filter data before uploading
-function calculatePercentileFPS(fpsData, percentile) {
-  if (!fpsData || fpsData.length === 0) return 0
-  
-  // Convert FPS to frametimes (all frames included, no filtering applied)
-  const frametimes = fpsData.map(fps => fps > 0 ? 1000 / fps : MAX_FRAMETIME_FOR_INVALID_FPS)
-  
-  // IMPORTANT: Percentiles must be inverted when working with frametimes
-  // Because low percentile of frametimes = fast frames = HIGH FPS (inverted relationship)
-  // - 1% low FPS (worst performance) = 99th percentile of frametimes (slowest frames)
-  // - 97th percentile FPS (good performance) = 3rd percentile of frametimes (fastest frames)
-  const invertedPercentile = 100 - percentile
-  const sorted = [...frametimes].sort((a, b) => a - b)
-  const n = sorted.length
-  
-  // Simple percentile calculation without interpolation
-  // Index = round((percentile / 100) * (n + 1))
-  const index = Math.round((invertedPercentile / 100) * (n + 1))
-  const clampedIndex = Math.max(0, Math.min(index, n - 1))
-  const frametimePercentile = sorted[clampedIndex]
-  
-  // Convert back to FPS
-  return frametimePercentile > 0 ? 1000 / frametimePercentile : 0
-}
-
-function calculateStandardDeviation(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  const avgSquaredDiff = calculateAverage(squaredDiffs)
-  return Math.sqrt(avgSquaredDiff)
-}
-
-function calculateVariance(data) {
-  if (!data || data.length === 0) return 0
-  const mean = calculateAverage(data)
-  const squaredDiffs = data.map(value => Math.pow(value - mean, 2))
-  return calculateAverage(squaredDiffs)
-}
-
-function filterOutliers(data) {
-  if (!data || data.length === 0) return []
-  const sorted = [...data].sort((a, b) => a - b)
-  return sorted.slice(
-    Math.floor(sorted.length * OUTLIER_LOW_PERCENTILE), 
-    Math.ceil(sorted.length * OUTLIER_HIGH_PERCENTILE)
-  )
-}
-
-function countOccurrences(data) {
-  const counts = {}
-  data.forEach(value => {
-    const rounded = Math.round(value)
-    counts[rounded] = (counts[rounded] || 0) + 1
-  })
-
-  let array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
-
-  while (array.length > MAX_DENSITY_POINTS) {
-    let minDiff = Infinity
-    let minIndex = -1
-
-    for (let i = 0; i < array.length - 1; i++) {
-      const diff = array[i + 1][0] - array[i][0]
-      if (diff < minDiff) {
-        minDiff = diff
-        minIndex = i
-      }
-    }
-
-    array[minIndex][1] += array[minIndex + 1][1]
-    array[minIndex][0] = (array[minIndex][0] + array[minIndex + 1][0]) / 2
-    array.splice(minIndex + 1, 1)
-  }
-
-  return array
 }
 
 function renderFPSComparisonChart() {
