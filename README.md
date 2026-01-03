@@ -79,6 +79,8 @@ All settings can be configured via CLI flags or environment variables (with `FS_
 All detailed documentation is available in the [`docs/`](docs/) directory:
 
 - [Benchmark Guide](docs/benchmarks.md) - How to capture and upload benchmark data
+- [FPS Calculation Methods](docs/fps-calculation-methods.md) - How FlightlessSomething calculates FPS statistics vs MangoHud
+- [FPS Filtering Explained](docs/fps-filtering-explained.md) - Why and how extreme frames are filtered for percentiles
 - [API Documentation](docs/api.md) - REST API endpoints and examples
 - [Deployment Guide](docs/deployment.md) - Production deployment and CI/CD
 - [Testing Guide](docs/testing.md) - Running tests and contributing
