@@ -86,6 +86,8 @@
           <li v-if="benchmark.HasLowQualityTitle">Title is too short (less than 10 characters)</li>
           <li v-if="benchmark.HasLowQualityDescription">Description is too short or missing (less than 15 characters)</li>
           <li v-if="benchmark.HasLowQualityRunNames">Run names contain date/time patterns or are too long (over 25 characters)</li>
+          <li v-if="benchmark.HasDuplicateRuns">Benchmark has duplicate run names or identical data</li>
+          <li v-if="benchmark.HasInsufficientData">One or more runs have insufficient data (less than 100 data lines)</li>
         </ul>
       </div>
 
@@ -423,7 +425,9 @@ const isLowQuality = computed(() => {
   return benchmark.value.IsSingleRun || 
          benchmark.value.HasLowQualityRunNames || 
          benchmark.value.HasLowQualityDescription || 
-         benchmark.value.HasLowQualityTitle
+         benchmark.value.HasLowQualityTitle ||
+         benchmark.value.HasDuplicateRuns ||
+         benchmark.value.HasInsufficientData
 })
 
 const renderedDescription = computed(() => {
