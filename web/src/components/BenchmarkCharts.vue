@@ -290,6 +290,11 @@
               </div>
             </div>
           </div>
+          <!-- Info message when only 1 run exists -->
+          <div v-else-if="benchmarkData && benchmarkData.length === 1" class="alert alert-info mt-4" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Note:</strong> Comparison charts are not displayed when only one benchmark run is available. Upload additional runs to enable comparative analysis.
+          </div>
         </div>
       </div>
 
@@ -381,6 +386,11 @@
                 <div ref="frametimeVarianceChart" style="height:400pt;"></div>
               </div>
             </div>
+          </div>
+          <!-- Info message when only 1 run exists -->
+          <div v-else-if="benchmarkData && benchmarkData.length === 1" class="alert alert-info mt-4" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Note:</strong> Comparison charts are not displayed when only one benchmark run is available. Upload additional runs to enable comparative analysis.
           </div>
         </div>
       </div>
