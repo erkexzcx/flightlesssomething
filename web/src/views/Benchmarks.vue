@@ -93,7 +93,7 @@
         <h6 class="mb-0 d-flex justify-content-between align-items-center">
           <span>
             <i class="fa-solid" :class="qualityFiltersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-            {{ qualityFiltersMode === 'hide' ? 'Hide' : 'Show only' }} low quality benchmarks
+            Hide low quality benchmarks
           </span>
           <small v-if="hasActiveQualityFilters" class="badge bg-primary">
             {{ activeQualityFiltersCount }} active
@@ -102,20 +102,20 @@
       </div>
       <div v-show="qualityFiltersExpanded" class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Filter mode">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Quick filters">
             <button 
               type="button" 
-              :class="['btn', qualityFiltersMode === 'hide' ? 'btn-primary' : 'btn-outline-primary']"
-              @click.stop="setQualityFiltersMode('hide')"
+              class="btn btn-outline-secondary"
+              @click.stop="setAllQualityFilters(true)"
             >
               Hide
             </button>
             <button 
               type="button" 
-              :class="['btn', qualityFiltersMode === 'show_only' ? 'btn-primary' : 'btn-outline-primary']"
-              @click.stop="setQualityFiltersMode('show_only')"
+              class="btn btn-outline-secondary"
+              @click.stop="setAllQualityFilters(false)"
             >
-              Show only
+              Show
             </button>
           </div>
         </div>
@@ -196,7 +196,7 @@
         <div class="mt-2">
           <small class="text-muted">
             <i class="fa-solid fa-info-circle"></i>
-            {{ qualityFiltersMode === 'hide' ? 'These filters help hide low-quality benchmarks' : 'These filters show only low-quality benchmarks' }} (auto-generated names, short descriptions, duplicate runs, insufficient data, etc.)
+            These filters help hide low-quality benchmarks (auto-generated names, short descriptions, duplicate runs, insufficient data, etc.)
           </small>
         </div>
       </div>
@@ -480,7 +480,6 @@ const qualityFilters = ref({
   hideDuplicateRuns: true,
   hideInsufficientData: true
 })
-const qualityFiltersMode = ref('hide') // 'hide' or 'show_only'
 const qualityFiltersExpanded = ref(false)
 let searchDebounceTimer = null
 
@@ -534,26 +533,23 @@ function loadQualityFiltersFromStorage() {
     // First time user - save the defaults to localStorage
     saveQualityFiltersToStorage()
   }
-  
-  // Load quality filters mode
-  const mode = localStorage.getItem('qualityFiltersMode')
-  if (mode && (mode === 'hide' || mode === 'show_only')) {
-    qualityFiltersMode.value = mode
-  }
 }
 
 // Save quality filters to localStorage
 function saveQualityFiltersToStorage() {
   localStorage.setItem('qualityFilters', JSON.stringify(qualityFilters.value))
-  localStorage.setItem('qualityFiltersMode', qualityFiltersMode.value)
 }
 
-// Set quality filters mode
-function setQualityFiltersMode(mode) {
-  qualityFiltersMode.value = mode
-  saveQualityFiltersToStorage()
+// Set all quality filters (for Hide/Show buttons)
+function setAllQualityFilters(value) {
+  qualityFilters.value.hideSingleRun = value
+  qualityFilters.value.hideLowQualityRunNames = value
+  qualityFilters.value.hideLowQualityDescription = value
+  qualityFilters.value.hideLowQualityTitle = value
+  qualityFilters.value.hideDuplicateRuns = value
+  qualityFilters.value.hideInsufficientData = value
   
-  // Reload benchmarks with new mode
+  saveQualityFiltersToStorage()
   currentPage.value = 1
   loadBenchmarks()
 }
@@ -769,8 +765,7 @@ async function loadBenchmarks() {
         perPage.value,
         sortByParam,
         sortOrderParam,
-        qualityFilters.value,
-        qualityFiltersMode.value
+        qualityFilters.value
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
       if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
@@ -787,8 +782,7 @@ async function loadBenchmarks() {
         sortByParam,
         sortOrderParam,
         enabledFields,
-        qualityFilters.value,
-        qualityFiltersMode.value
+        qualityFilters.value
       )
     }
 

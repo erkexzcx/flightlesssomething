@@ -31,51 +31,24 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			query = query.Where("user_id = ?", userID)
 		}
 		
-		// Quality filters mode - determines whether to hide or show only low-quality benchmarks
-		qualityFiltersMode := c.DefaultQuery("quality_filters_mode", "hide")
-		
-		// Quality filters - apply based on mode
+		// Quality filters - hide benchmarks that match the selected quality criteria
 		if c.Query("hide_single_run") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("is_single_run = ?", true)
-			} else {
-				query = query.Where("is_single_run = ?", false)
-			}
+			query = query.Where("is_single_run = ?", false)
 		}
 		if c.Query("hide_low_quality_run_names") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("has_low_quality_run_names = ?", true)
-			} else {
-				query = query.Where("has_low_quality_run_names = ?", false)
-			}
+			query = query.Where("has_low_quality_run_names = ?", false)
 		}
 		if c.Query("hide_low_quality_description") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("has_low_quality_description = ?", true)
-			} else {
-				query = query.Where("has_low_quality_description = ?", false)
-			}
+			query = query.Where("has_low_quality_description = ?", false)
 		}
 		if c.Query("hide_low_quality_title") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("has_low_quality_title = ?", true)
-			} else {
-				query = query.Where("has_low_quality_title = ?", false)
-			}
+			query = query.Where("has_low_quality_title = ?", false)
 		}
 		if c.Query("hide_duplicate_runs") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("has_duplicate_runs = ?", true)
-			} else {
-				query = query.Where("has_duplicate_runs = ?", false)
-			}
+			query = query.Where("has_duplicate_runs = ?", false)
 		}
 		if c.Query("hide_insufficient_data") == "true" {
-			if qualityFiltersMode == "show_only" {
-				query = query.Where("has_insufficient_data = ?", true)
-			} else {
-				query = query.Where("has_insufficient_data = ?", false)
-			}
+			query = query.Where("has_insufficient_data = ?", false)
 		}
 		
 		if search := c.Query("search"); search != "" {
