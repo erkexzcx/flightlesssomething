@@ -110,7 +110,7 @@
               id="hideSingleRun"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideSingleRun">
+            <label class="form-check-label" for="hideSingleRun" title="Hide benchmarks with only one run">
               Single run
             </label>
           </div>
@@ -122,7 +122,7 @@
               id="hideLowQualityRunNames"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideLowQualityRunNames">
+            <label class="form-check-label" for="hideLowQualityRunNames" title="Hide benchmarks with auto-generated run names (date/time patterns) or overly long run names (>25 characters)">
               Low quality run names
             </label>
           </div>
@@ -134,7 +134,7 @@
               id="hideLowQualityDescription"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideLowQualityDescription">
+            <label class="form-check-label" for="hideLowQualityDescription" title="Hide benchmarks with short or missing descriptions (<15 characters)">
               Low quality description
             </label>
           </div>
@@ -146,7 +146,7 @@
               id="hideLowQualityTitle"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideLowQualityTitle">
+            <label class="form-check-label" for="hideLowQualityTitle" title="Hide benchmarks with short titles (<10 characters)">
               Low quality title
             </label>
           </div>
@@ -158,7 +158,7 @@
               id="hideDuplicateRuns"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideDuplicateRuns">
+            <label class="form-check-label" for="hideDuplicateRuns" title="Hide benchmarks with duplicate run names or identical data">
               Duplicate runs
             </label>
           </div>
@@ -170,7 +170,7 @@
               id="hideInsufficientData"
               @change="handleQualityFiltersChange"
             >
-            <label class="form-check-label" for="hideInsufficientData">
+            <label class="form-check-label" for="hideInsufficientData" title="Hide benchmarks with runs that have insufficient data (<100 data lines)">
               Insufficient data
             </label>
           </div>
@@ -178,7 +178,7 @@
         <div class="mt-2">
           <small class="text-muted">
             <i class="fa-solid fa-info-circle"></i>
-            These filters help hide benchmarks with low-quality metadata (auto-generated names, short descriptions, etc.)
+            These filters help hide low-quality benchmarks (auto-generated names, short descriptions, duplicate runs, insufficient data, etc.)
           </small>
         </div>
       </div>
