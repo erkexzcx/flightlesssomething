@@ -24,6 +24,15 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('calculationMethod', 'linear-interpolation')
   }
 
+  // Comparison mode: 'percentage', 'numbers', or 'numbers-diff'
+  const storedComparisonMode = localStorage.getItem('comparisonMode')
+  const comparisonMode = ref(storedComparisonMode || 'percentage')
+  
+  // Initialize comparison mode if not set
+  if (!storedComparisonMode) {
+    localStorage.setItem('comparisonMode', 'percentage')
+  }
+
   // Fetch version from backend
   async function fetchVersion() {
     try {
@@ -60,14 +69,22 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('calculationMethod', newMethod)
   }
 
+  // Set comparison mode
+  function setComparisonMode(newMode) {
+    comparisonMode.value = newMode
+    localStorage.setItem('comparisonMode', newMode)
+  }
+
   return {
     version,
     loading,
     theme,
     calculationMethod,
+    comparisonMode,
     fetchVersion,
     setTheme,
     toggleTheme,
     setCalculationMethod,
+    setComparisonMode,
   }
 })
