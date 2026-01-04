@@ -35,45 +35,51 @@
     <div class="row mb-3" v-if="benchmarkData && benchmarkData.length > 0">
       <div class="col-12">
         <div class="calculation-method-selector">
-          <label class="form-label me-3">
-            <strong>Calculation method:</strong>
-          </label>
-          <div class="btn-group btn-group-sm method-toggle" role="group">
-            <input 
-              type="radio" 
-              class="btn-check" 
-              name="calculationMethod" 
-              id="linearInterpolation" 
-              autocomplete="off"
-              :checked="appStore.calculationMethod === 'linear-interpolation'"
-              @change="setCalculationMethod('linear-interpolation')"
-            >
-            <label class="btn btn-outline-primary" for="linearInterpolation">
-              Linear Interpolation
-            </label>
+          <div class="row g-2 justify-content-center justify-content-md-start">
+            <div class="col-12 col-md-auto text-center text-md-start">
+              <label class="form-label mb-0">
+                <strong>Calculation method:</strong>
+              </label>
+            </div>
+            <div class="col-12 col-md-auto d-flex justify-content-center justify-content-md-start">
+              <div class="btn-group btn-group-sm method-toggle" role="group">
+                <input 
+                  type="radio" 
+                  class="btn-check" 
+                  name="calculationMethod" 
+                  id="linearInterpolation" 
+                  autocomplete="off"
+                  :checked="appStore.calculationMethod === 'linear-interpolation'"
+                  @change="setCalculationMethod('linear-interpolation')"
+                >
+                <label class="btn btn-outline-primary" for="linearInterpolation">
+                  Linear Interpolation
+                </label>
 
-            <input 
-              type="radio" 
-              class="btn-check" 
-              name="calculationMethod" 
-              id="mangoHudThreshold" 
-              autocomplete="off"
-              :checked="appStore.calculationMethod === 'mangohud-threshold'"
-              @change="setCalculationMethod('mangohud-threshold')"
-            >
-            <label class="btn btn-outline-primary" for="mangoHudThreshold">
-              Mangohud
-            </label>
+                <input 
+                  type="radio" 
+                  class="btn-check" 
+                  name="calculationMethod" 
+                  id="mangoHudThreshold" 
+                  autocomplete="off"
+                  :checked="appStore.calculationMethod === 'mangohud-threshold'"
+                  @change="setCalculationMethod('mangohud-threshold')"
+                >
+                <label class="btn btn-outline-primary" for="mangoHudThreshold">
+                  Mangohud
+                </label>
+              </div>
+              <button 
+                class="btn btn-sm btn-outline-secondary ms-2" 
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#calculationMethodModal"
+                title="Learn more about calculation methods"
+              >
+                <i class="fas fa-info-circle"></i>
+              </button>
+            </div>
           </div>
-          <button 
-            class="btn btn-sm btn-outline-secondary ms-2" 
-            type="button"
-            data-bs-toggle="modal"
-            data-bs-target="#calculationMethodModal"
-            title="Learn more about calculation methods"
-          >
-            <i class="fas fa-info-circle"></i>
-          </button>
         </div>
       </div>
     </div>
@@ -211,11 +217,11 @@
           <div v-if="benchmarkData && benchmarkData.length > 1">
             <!-- Baseline selector and mode toggle -->
             <div class="baseline-selector mb-3">
-              <div class="row g-2">
-                <div class="col-12 col-md-auto d-flex align-items-center">
+              <div class="row g-2 justify-content-center justify-content-md-start">
+                <div class="col-12 col-md-auto d-flex align-items-center justify-content-center justify-content-md-start">
                   <label for="fpsBaselineSelect" class="form-label mb-0 me-2">Baseline (0%):</label>
                 </div>
-                <div class="col-12 col-md-auto">
+                <div class="col-12 col-md-auto d-flex justify-content-center justify-content-md-start">
                   <select 
                     id="fpsBaselineSelect" 
                     class="form-select form-select-sm"
@@ -232,7 +238,7 @@
                     </option>
                   </select>
                 </div>
-                <div class="col-12 col-md-auto">
+                <div class="col-12 col-md-auto d-flex justify-content-center justify-content-md-start">
                   <div class="btn-group btn-group-sm w-100" role="group">
                     <input 
                       type="radio" 
@@ -303,11 +309,11 @@
           <div v-if="benchmarkData && benchmarkData.length > 1">
             <!-- Baseline selector and mode toggle -->
             <div class="baseline-selector mb-3">
-              <div class="row g-2">
-                <div class="col-12 col-md-auto d-flex align-items-center">
+              <div class="row g-2 justify-content-center justify-content-md-start">
+                <div class="col-12 col-md-auto d-flex align-items-center justify-content-center justify-content-md-start">
                   <label for="frametimeBaselineSelect" class="form-label mb-0 me-2">Baseline (0%):</label>
                 </div>
-                <div class="col-12 col-md-auto">
+                <div class="col-12 col-md-auto d-flex justify-content-center justify-content-md-start">
                   <select 
                     id="frametimeBaselineSelect" 
                     class="form-select form-select-sm"
@@ -324,7 +330,7 @@
                     </option>
                   </select>
                 </div>
-                <div class="col-12 col-md-auto">
+                <div class="col-12 col-md-auto d-flex justify-content-center justify-content-md-start">
                   <div class="btn-group btn-group-sm w-100" role="group">
                     <input 
                       type="radio" 
