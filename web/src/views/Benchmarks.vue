@@ -300,7 +300,7 @@
               class="benchmark-metadata text-nowrap low-quality-icon" 
               title="Low quality benchmark"
             >
-              <i class="fa-solid fa-face-frown"></i>
+              <i class="fa-solid fa-triangle-exclamation"></i>
             </small>
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
