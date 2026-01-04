@@ -30,6 +30,21 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		if userID := c.Query("user_id"); userID != "" {
 			query = query.Where("user_id = ?", userID)
 		}
+		
+		// Quality filters (hide low-quality benchmarks)
+		if c.Query("hide_single_run") == "true" {
+			query = query.Where("is_single_run = ?", false)
+		}
+		if c.Query("hide_low_quality_run_names") == "true" {
+			query = query.Where("has_low_quality_run_names = ?", false)
+		}
+		if c.Query("hide_low_quality_description") == "true" {
+			query = query.Where("has_low_quality_description = ?", false)
+		}
+		if c.Query("hide_low_quality_title") == "true" {
+			query = query.Where("has_low_quality_title = ?", false)
+		}
+		
 		if search := c.Query("search"); search != "" {
 			// Get search fields from query parameter (comma-separated)
 			// Default to title,description to match frontend defaults
@@ -327,6 +342,15 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Calculate quality indicators
+		runLabels := make([]string, len(benchmarkData))
+		for i, data := range benchmarkData {
+			runLabels[i] = data.Label
+		}
+		benchmark.IsSingleRun, benchmark.HasLowQualityRunNames, benchmark.HasLowQualityDescription, benchmark.HasLowQualityTitle = 
+			CalculateQualityIndicators(benchmark.Title, benchmark.Description, runLabels)
+		
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			// Log error but don't fail - this is just for search optimization
 			fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, err)
@@ -409,6 +433,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Update labels if provided
+		var needsQualityRecalc bool
 		if len(req.Labels) > 0 {
 			benchmarkID, err := strconv.ParseUint(id, 10, 32)
 			if err != nil {
@@ -441,6 +466,17 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			
 			// Trigger GC to reclaim memory from loaded benchmark data
 			runtime.GC()
+			needsQualityRecalc = true
+		}
+		
+		// Recalculate quality indicators if title, description, or labels changed
+		if req.Title != "" || req.Description != "" || needsQualityRecalc {
+			// Get run labels from metadata
+			_, runLabels, err := GetBenchmarkRunCount(benchmark.ID)
+			if err == nil {
+				benchmark.IsSingleRun, benchmark.HasLowQualityRunNames, benchmark.HasLowQualityDescription, benchmark.HasLowQualityTitle = 
+					CalculateQualityIndicators(benchmark.Title, benchmark.Description, runLabels)
+			}
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -651,6 +687,14 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Recalculate quality indicators after deleting run
+		runLabels := make([]string, len(benchmarkData))
+		for i, data := range benchmarkData {
+			runLabels[i] = data.Label
+		}
+		benchmark.IsSingleRun, benchmark.HasLowQualityRunNames, benchmark.HasLowQualityDescription, benchmark.HasLowQualityTitle = 
+			CalculateQualityIndicators(benchmark.Title, benchmark.Description, runLabels)
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -776,6 +820,14 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(existingData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Recalculate quality indicators after adding runs
+		runLabels := make([]string, len(existingData))
+		for i, data := range existingData {
+			runLabels[i] = data.Label
+		}
+		benchmark.IsSingleRun, benchmark.HasLowQualityRunNames, benchmark.HasLowQualityDescription, benchmark.HasLowQualityTitle = 
+			CalculateQualityIndicators(benchmark.Title, benchmark.Description, runLabels)
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -830,4 +882,39 @@ return
 
 c.JSON(http.StatusOK, run)
 }
+}
+
+// HandleValidateBenchmarkQuality validates benchmark quality before upload
+func HandleValidateBenchmarkQuality() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Title       string   `json:"title" binding:"required,max=100"`
+			Description string   `json:"description" binding:"max=5000"`
+			RunLabels   []string `json:"run_labels" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+			return
+		}
+
+		// Calculate quality indicators
+		isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle := 
+			CalculateQualityIndicators(req.Title, req.Description, req.RunLabels)
+
+		// Get list of quality issues
+		issues := GetQualityIssues(isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle, req.RunLabels)
+
+		// Determine if benchmark is considered low quality
+		isLowQuality := isSingleRun || hasLowQualityRunNames || hasLowQualityDescription || hasLowQualityTitle
+
+		c.JSON(http.StatusOK, gin.H{
+			"is_low_quality":                isLowQuality,
+			"is_single_run":                 isSingleRun,
+			"has_low_quality_run_names":     hasLowQualityRunNames,
+			"has_low_quality_description":   hasLowQualityDescription,
+			"has_low_quality_title":         hasLowQualityTitle,
+			"issues":                        issues,
+		})
+	}
 }
