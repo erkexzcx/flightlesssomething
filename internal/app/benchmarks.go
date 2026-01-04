@@ -44,6 +44,12 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		if c.Query("hide_low_quality_title") == "true" {
 			query = query.Where("has_low_quality_title = ?", false)
 		}
+		if c.Query("hide_duplicate_runs") == "true" {
+			query = query.Where("has_duplicate_runs = ?", false)
+		}
+		if c.Query("hide_insufficient_data") == "true" {
+			query = query.Where("has_insufficient_data = ?", false)
+		}
 		
 		if search := c.Query("search"); search != "" {
 			// Get search fields from query parameter (comma-separated)

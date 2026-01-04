@@ -150,6 +150,30 @@
               Low quality title
             </label>
           </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideDuplicateRuns" 
+              id="hideDuplicateRuns"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideDuplicateRuns">
+              Duplicate runs
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideInsufficientData" 
+              id="hideInsufficientData"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideInsufficientData">
+              Insufficient data
+            </label>
+          </div>
         </div>
         <div class="mt-2">
           <small class="text-muted">
@@ -427,7 +451,9 @@ const qualityFilters = ref({
   hideSingleRun: true,
   hideLowQualityRunNames: true,
   hideLowQualityDescription: true,
-  hideLowQualityTitle: true
+  hideLowQualityTitle: true,
+  hideDuplicateRuns: true,
+  hideInsufficientData: true
 })
 const qualityFiltersExpanded = ref(false)
 let searchDebounceTimer = null
@@ -451,7 +477,9 @@ const hasActiveQualityFilters = computed(() => {
   return qualityFilters.value.hideSingleRun ||
          qualityFilters.value.hideLowQualityRunNames ||
          qualityFilters.value.hideLowQualityDescription ||
-         qualityFilters.value.hideLowQualityTitle
+         qualityFilters.value.hideLowQualityTitle ||
+         qualityFilters.value.hideDuplicateRuns ||
+         qualityFilters.value.hideInsufficientData
 })
 
 // Computed property to count active quality filters
@@ -461,6 +489,8 @@ const activeQualityFiltersCount = computed(() => {
   if (qualityFilters.value.hideLowQualityRunNames) count++
   if (qualityFilters.value.hideLowQualityDescription) count++
   if (qualityFilters.value.hideLowQualityTitle) count++
+  if (qualityFilters.value.hideDuplicateRuns) count++
+  if (qualityFilters.value.hideInsufficientData) count++
   return count
 })
 

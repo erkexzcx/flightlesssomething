@@ -91,6 +91,12 @@ export const api = {
       if (qualityFilters.hideLowQualityTitle) {
         params.append('hide_low_quality_title', 'true')
       }
+      if (qualityFilters.hideDuplicateRuns) {
+        params.append('hide_duplicate_runs', 'true')
+      }
+      if (qualityFilters.hideInsufficientData) {
+        params.append('hide_insufficient_data', 'true')
+      }
       return fetchJSON(`/api/benchmarks?${params}`)
     },
 
@@ -118,6 +124,12 @@ export const api = {
       }
       if (qualityFilters.hideLowQualityTitle) {
         params.append('hide_low_quality_title', 'true')
+      }
+      if (qualityFilters.hideDuplicateRuns) {
+        params.append('hide_duplicate_runs', 'true')
+      }
+      if (qualityFilters.hideInsufficientData) {
+        params.append('hide_insufficient_data', 'true')
       }
       return fetchJSON(`/api/benchmarks?${params}`)
     },
