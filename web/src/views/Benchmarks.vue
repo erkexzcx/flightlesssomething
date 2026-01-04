@@ -295,15 +295,15 @@
             <small>{{ benchmark.Description || 'No description' }}</small>
           </p>
           <div class="benchmark-meta-group">
-            <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
-              {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
-            </small>
             <small 
               v-if="isLowQualityBenchmark(benchmark)" 
-              class="text-warning benchmark-metadata text-nowrap" 
+              class="benchmark-metadata text-nowrap low-quality-icon" 
               title="Low quality benchmark"
             >
-              <i class="fa-solid fa-triangle-exclamation"></i>
+              <i class="fa-solid fa-thumbs-down"></i>
+            </small>
+            <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
+              {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
             <small class="text-nowrap benchmark-date-mobile">
               <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
@@ -1239,6 +1239,10 @@ watch(() => route.path, (newPath, oldPath) => {
 .benchmark-metadata {
   font-size: 0.8125rem;
   color: var(--bs-secondary-color);
+}
+
+.low-quality-icon {
+  color: #cc8800;
 }
 
 .benchmark-description {
