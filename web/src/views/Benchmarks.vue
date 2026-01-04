@@ -86,6 +86,79 @@
         </div>
       </div>
     </form>
+    
+    <!-- Quality filter panel -->
+    <div class="card mb-3 quality-filters-card" v-if="!isMyBenchmarksPage">
+      <div class="card-header" @click="toggleQualityFilters" style="cursor: pointer;">
+        <h6 class="mb-0 d-flex justify-content-between align-items-center">
+          <span>
+            <i class="fa-solid" :class="qualityFiltersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+            Hide Benchmarks
+          </span>
+          <small v-if="hasActiveQualityFilters" class="badge bg-primary">
+            {{ activeQualityFiltersCount }} active
+          </small>
+        </h6>
+      </div>
+      <div v-show="qualityFiltersExpanded" class="card-body">
+        <div class="d-flex flex-wrap gap-3">
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideSingleRun" 
+              id="hideSingleRun"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideSingleRun">
+              Single run
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityRunNames" 
+              id="hideLowQualityRunNames"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityRunNames">
+              Low quality run names
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityDescription" 
+              id="hideLowQualityDescription"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityDescription">
+              Low quality description
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityTitle" 
+              id="hideLowQualityTitle"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityTitle">
+              Low quality title
+            </label>
+          </div>
+        </div>
+        <div class="mt-2">
+          <small class="text-muted">
+            <i class="fa-solid fa-info-circle"></i>
+            These filters help hide benchmarks with low-quality metadata (auto-generated names, short descriptions, etc.)
+          </small>
+        </div>
+      </div>
+    </div>
 
     <!-- Filter indicator -->
     <div v-if="(route.query.user_id || filterUserId) && !isMyBenchmarksPage" class="alert alert-info d-flex justify-content-between align-items-center mb-3" role="alert">
@@ -350,6 +423,13 @@ const searchFields = ref({
   runName: false,
   specifications: false
 })
+const qualityFilters = ref({
+  hideSingleRun: false,
+  hideLowQualityRunNames: false,
+  hideLowQualityDescription: false,
+  hideLowQualityTitle: false
+})
+const qualityFiltersExpanded = ref(false)
 let searchDebounceTimer = null
 
 // Computed property to check if we're on "My Benchmarks" page
@@ -365,6 +445,57 @@ const hasAnySearchFieldSelected = computed(() => {
          searchFields.value.runName || 
          searchFields.value.specifications
 })
+
+// Computed property to check if any quality filters are active
+const hasActiveQualityFilters = computed(() => {
+  return qualityFilters.value.hideSingleRun ||
+         qualityFilters.value.hideLowQualityRunNames ||
+         qualityFilters.value.hideLowQualityDescription ||
+         qualityFilters.value.hideLowQualityTitle
+})
+
+// Computed property to count active quality filters
+const activeQualityFiltersCount = computed(() => {
+  let count = 0
+  if (qualityFilters.value.hideSingleRun) count++
+  if (qualityFilters.value.hideLowQualityRunNames) count++
+  if (qualityFilters.value.hideLowQualityDescription) count++
+  if (qualityFilters.value.hideLowQualityTitle) count++
+  return count
+})
+
+// Load quality filters from localStorage
+function loadQualityFiltersFromStorage() {
+  const stored = localStorage.getItem('qualityFilters')
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored)
+      qualityFilters.value = { ...qualityFilters.value, ...parsed }
+    } catch (e) {
+      console.error('Failed to parse quality filters from localStorage', e)
+    }
+  }
+}
+
+// Save quality filters to localStorage
+function saveQualityFiltersToStorage() {
+  localStorage.setItem('qualityFilters', JSON.stringify(qualityFilters.value))
+}
+
+// Toggle quality filters panel
+function toggleQualityFilters() {
+  qualityFiltersExpanded.value = !qualityFiltersExpanded.value
+}
+
+// Handle quality filters change
+function handleQualityFiltersChange() {
+  // Save to localStorage
+  saveQualityFiltersToStorage()
+  
+  // Reload benchmarks with new filters
+  currentPage.value = 1
+  loadBenchmarks()
+}
 
 // Initialize state from URL query parameters
 function initializeFromURL() {
@@ -567,7 +698,8 @@ async function loadBenchmarks() {
         searchQueryParam,
         sortByParam,
         sortOrderParam,
-        enabledFields
+        enabledFields,
+        qualityFilters.value
       )
     }
 
@@ -732,6 +864,8 @@ watch(searchQuery, (newValue) => {
 })
 
 onMounted(() => {
+  // Load quality filters from localStorage
+  loadQualityFiltersFromStorage()
   // Initialize state from URL parameters
   initializeFromURL()
   // Load benchmarks with initialized state
@@ -878,6 +1012,33 @@ watch(() => route.path, (newPath, oldPath) => {
 }
 
 .search-fields .form-check-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Quality filters card */
+.quality-filters-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quality-filters-card .card-header {
+  background-color: rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+.quality-filters-card .card-header:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.quality-filters-card .form-check {
+  margin-bottom: 0;
+}
+
+.quality-filters-card .form-check-input {
+  cursor: pointer;
+}
+
+.quality-filters-card .form-check-label {
   cursor: pointer;
   user-select: none;
 }

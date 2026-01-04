@@ -61,7 +61,7 @@ export const api = {
 
   // Benchmark endpoints
   benchmarks: {
-    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '', searchFields = []) {
+    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '', searchFields = [], qualityFilters = {}) {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -77,6 +77,19 @@ export const api = {
       }
       if (searchFields.length > 0) {
         params.append('search_fields', searchFields.join(','))
+      }
+      // Add quality filters
+      if (qualityFilters.hideSingleRun) {
+        params.append('hide_single_run', 'true')
+      }
+      if (qualityFilters.hideLowQualityRunNames) {
+        params.append('hide_low_quality_run_names', 'true')
+      }
+      if (qualityFilters.hideLowQualityDescription) {
+        params.append('hide_low_quality_description', 'true')
+      }
+      if (qualityFilters.hideLowQualityTitle) {
+        params.append('hide_low_quality_title', 'true')
       }
       return fetchJSON(`/api/benchmarks?${params}`)
     },
@@ -98,6 +111,17 @@ export const api = {
 
     async get(id) {
       return fetchJSON(`/api/benchmarks/${id}`)
+    },
+    
+    async validateQuality(title, description, runLabels) {
+      return fetchJSON('/api/benchmarks/validate', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          description,
+          run_labels: runLabels,
+        }),
+      })
     },
 
     async create(formData) {
