@@ -50,6 +50,8 @@ type Benchmark struct {
 	HasLowQualityRunNames    bool `gorm:"default:false"` // True if run names contain datetime patterns or are too long
 	HasLowQualityDescription bool `gorm:"default:false"` // True if description is too short or empty
 	HasLowQualityTitle       bool `gorm:"default:false"` // True if title is too short
+	HasDuplicateRuns         bool `gorm:"default:false"` // True if benchmark has duplicate run names or identical data
+	HasInsufficientData      bool `gorm:"default:false"` // True if any run has less than 100 data lines
 
 	CreatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of CreatedAt
 	UpdatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of UpdatedAt

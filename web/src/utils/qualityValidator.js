@@ -4,6 +4,7 @@
 const MIN_TITLE_LENGTH = 10
 const MIN_DESCRIPTION_LENGTH = 15
 const MAX_RUN_NAME_LENGTH = 25
+const MIN_DATA_LINES = 100
 
 // DateTime patterns that indicate auto-generated filenames
 const DATE_TIME_PATTERNS = [
@@ -51,6 +52,21 @@ function hasLowQualityRunNames(runLabels) {
 }
 
 /**
+ * Check if there are duplicate run names
+ */
+function hasDuplicateRunNames(runLabels) {
+  const seen = new Set()
+  for (const label of runLabels) {
+    const trimmed = label.trim()
+    if (seen.has(trimmed)) {
+      return true
+    }
+    seen.add(trimmed)
+  }
+  return false
+}
+
+/**
  * Calculate all quality indicators for a benchmark
  */
 export function calculateQualityIndicators(title, description, runLabels) {
@@ -58,12 +74,16 @@ export function calculateQualityIndicators(title, description, runLabels) {
   const hasLowQualityTitle = title.trim().length < MIN_TITLE_LENGTH
   const hasLowQualityDescription = description.trim().length < MIN_DESCRIPTION_LENGTH
   const hasLowQualityRunNamesFlag = hasLowQualityRunNames(runLabels)
+  const hasDuplicateRuns = hasDuplicateRunNames(runLabels)
   
   return {
     isSingleRun,
     hasLowQualityRunNames: hasLowQualityRunNamesFlag,
     hasLowQualityDescription,
     hasLowQualityTitle,
+    hasDuplicateRuns,
+    // Note: hasInsufficientData cannot be determined client-side without parsing files
+    hasInsufficientData: false,
   }
 }
 
@@ -99,6 +119,10 @@ export function getQualityIssues(title, description, runLabels) {
     }
   }
   
+  if (indicators.hasDuplicateRuns) {
+    issues.push('Benchmark has duplicate run names')
+  }
+  
   return issues
 }
 
@@ -110,5 +134,6 @@ export function isLowQuality(title, description, runLabels) {
   return indicators.isSingleRun || 
          indicators.hasLowQualityRunNames || 
          indicators.hasLowQualityDescription || 
-         indicators.hasLowQualityTitle
+         indicators.hasLowQualityTitle ||
+         indicators.hasDuplicateRuns
 }

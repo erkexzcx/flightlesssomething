@@ -117,18 +117,16 @@
           </div>
 
           <!-- Quality warnings -->
-          <div class="alert alert-warning" role="alert">
+          <div v-if="qualityIssues.length > 0" class="alert alert-warning" role="alert">
             <h6 class="alert-heading">
               <i class="fa-solid fa-exclamation-triangle"></i>
               <strong>Quality Warning</strong>
             </h6>
-            <div v-if="qualityIssues.length > 0">
-              <p class="mb-2">This benchmark has the following quality issues:</p>
-              <ul class="mb-0">
-                <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
-              </ul>
-              <hr>
-            </div>
+            <p class="mb-2">This benchmark has the following quality issues:</p>
+            <ul class="mb-0">
+              <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
+            </ul>
+            <hr>
             <p class="mb-0">
               <small>
                 <i class="fa-solid fa-info-circle"></i>

@@ -93,7 +93,7 @@
         <h6 class="mb-0 d-flex justify-content-between align-items-center">
           <span>
             <i class="fa-solid" :class="qualityFiltersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-            Hide Benchmarks
+            Hide low quality benchmarks
           </span>
           <small v-if="hasActiveQualityFilters" class="badge bg-primary">
             {{ activeQualityFiltersCount }} active
