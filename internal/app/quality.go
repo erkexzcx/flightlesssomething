@@ -50,23 +50,34 @@ func CalculateQualityIndicators(title, description string, runLabels []string) (
 	return
 }
 
+// QualityIndicators holds all quality flags for a benchmark
+type QualityIndicators struct {
+	IsSingleRun              bool
+	HasLowQualityRunNames    bool
+	HasLowQualityDescription bool
+	HasLowQualityTitle       bool
+	HasDuplicateRuns         bool
+	HasInsufficientData      bool
+}
+
 // CalculateQualityIndicatorsWithData determines quality flags for a benchmark including data analysis
-func CalculateQualityIndicatorsWithData(title, description string, benchmarkData []*BenchmarkData) (isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle, hasDuplicateRuns, hasInsufficientData bool) {
+func CalculateQualityIndicatorsWithData(title, description string, benchmarkData []*BenchmarkData) QualityIndicators {
 	runLabels := make([]string, len(benchmarkData))
 	for i, data := range benchmarkData {
 		runLabels[i] = data.Label
 	}
 	
 	// Use existing checks
-	isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle = CalculateQualityIndicators(title, description, runLabels)
+	isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle := CalculateQualityIndicators(title, description, runLabels)
 	
-	// Check for duplicate runs
-	hasDuplicateRuns = HasDuplicateRuns(benchmarkData)
-	
-	// Check for insufficient data
-	hasInsufficientData = HasInsufficientData(benchmarkData)
-	
-	return
+	return QualityIndicators{
+		IsSingleRun:              isSingleRun,
+		HasLowQualityRunNames:    hasLowQualityRunNames,
+		HasLowQualityDescription: hasLowQualityDescription,
+		HasLowQualityTitle:       hasLowQualityTitle,
+		HasDuplicateRuns:         HasDuplicateRuns(benchmarkData),
+		HasInsufficientData:      HasInsufficientData(benchmarkData),
+	}
 }
 
 // HasLowQualityRunNames checks if any run name contains datetime patterns or is too long
@@ -212,7 +223,7 @@ func GetQualityIssuesWithData(isSingleRun, hasLowQualityRunNames, hasLowQualityD
 		// Provide specific details about which runs have insufficient data
 		for _, data := range benchmarkData {
 			if len(data.DataFPS) < minDataLines {
-				issues = append(issues, fmt.Sprintf("Run \"%s\" has insufficient data (%d lines, minimum %d required)", data.Label, len(data.DataFPS), minDataLines))
+				issues = append(issues, fmt.Sprintf("Run %q has insufficient data (%d lines, minimum %d required)", data.Label, len(data.DataFPS), minDataLines))
 			}
 		}
 	}
