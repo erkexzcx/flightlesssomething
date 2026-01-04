@@ -204,6 +204,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { hasAnyDateTimePattern, getDateTimeWarningMessage } from '../utils/filenameValidator'
+import { getQualityIssues, isLowQuality as checkIsLowQuality } from '../utils/qualityValidator'
 
 const router = useRouter()
 
@@ -213,7 +214,6 @@ const title = ref('')
 const description = ref('')
 const uploading = ref(false)
 const error = ref(null)
-const qualityValidation = ref(null)
 const showConfirmModal = ref(false)
 
 // Computed property to check if any filenames have date/time patterns
@@ -222,44 +222,23 @@ const hasDateTimeWarning = computed(() => {
   return hasAnyDateTimePattern(labels)
 })
 
-// Computed property for quality issues
+// Computed property for quality issues (client-side validation)
 const qualityIssues = computed(() => {
-  if (!qualityValidation.value) return []
-  return qualityValidation.value.issues || []
+  if (!title.value || selectedFiles.value.length === 0) return []
+  
+  const runLabels = selectedFiles.value.map(f => f.label)
+  return getQualityIssues(title.value, description.value, runLabels)
 })
 
-// Computed property to check if benchmark is low quality
+// Computed property to check if benchmark is low quality (client-side validation)
 const isLowQuality = computed(() => {
-  return qualityValidation.value?.is_low_quality || false
+  if (!title.value || selectedFiles.value.length === 0) return false
+  
+  const runLabels = selectedFiles.value.map(f => f.label)
+  return checkIsLowQuality(title.value, description.value, runLabels)
 })
 
 const dateTimeWarningMessage = getDateTimeWarningMessage()
-
-// Watch for changes to title, description, or file labels to re-validate
-watch([title, description, selectedFiles], () => {
-  validateQuality()
-}, { deep: true })
-
-async function validateQuality() {
-  if (!title.value || selectedFiles.value.length === 0) {
-    qualityValidation.value = null
-    return
-  }
-  
-  try {
-    const runLabels = selectedFiles.value.map(f => f.label)
-    const result = await api.benchmarks.validateQuality(
-      title.value,
-      description.value,
-      runLabels
-    )
-    qualityValidation.value = result
-  } catch (err) {
-    // Silently fail - validation is not critical
-    console.error('Quality validation failed:', err)
-    qualityValidation.value = null
-  }
-}
 
 function handleFileSelect(event) {
   const files = Array.from(event.target.files)

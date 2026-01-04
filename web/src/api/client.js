@@ -125,17 +125,6 @@ export const api = {
     async get(id) {
       return fetchJSON(`/api/benchmarks/${id}`)
     },
-    
-    async validateQuality(title, description, runLabels) {
-      return fetchJSON('/api/benchmarks/validate', {
-        method: 'POST',
-        body: JSON.stringify({
-          title,
-          description,
-          run_labels: runLabels,
-        }),
-      })
-    },
 
     async create(formData) {
       const response = await fetch(API_BASE + '/api/benchmarks', {

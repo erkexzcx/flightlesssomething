@@ -77,7 +77,6 @@ func Start(config *Config, version string) error {
 	authorized := r.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.POST("/benchmarks", HandleCreateBenchmark(db))
-	authorized.POST("/benchmarks/validate", HandleValidateBenchmarkQuality())
 	authorized.PUT("/benchmarks/:id", HandleUpdateBenchmark(db))
 	authorized.DELETE("/benchmarks/:id", HandleDeleteBenchmark(db))
 	authorized.DELETE("/benchmarks/:id/runs/:run_index", HandleDeleteBenchmarkRun(db))

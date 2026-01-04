@@ -883,38 +883,3 @@ return
 c.JSON(http.StatusOK, run)
 }
 }
-
-// HandleValidateBenchmarkQuality validates benchmark quality before upload
-func HandleValidateBenchmarkQuality() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var req struct {
-			Title       string   `json:"title" binding:"required,max=100"`
-			Description string   `json:"description" binding:"max=5000"`
-			RunLabels   []string `json:"run_labels" binding:"required"`
-		}
-
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
-			return
-		}
-
-		// Calculate quality indicators
-		isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle := 
-			CalculateQualityIndicators(req.Title, req.Description, req.RunLabels)
-
-		// Get list of quality issues
-		issues := GetQualityIssues(isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle, req.RunLabels)
-
-		// Determine if benchmark is considered low quality
-		isLowQuality := isSingleRun || hasLowQualityRunNames || hasLowQualityDescription || hasLowQualityTitle
-
-		c.JSON(http.StatusOK, gin.H{
-			"is_low_quality":                isLowQuality,
-			"is_single_run":                 isSingleRun,
-			"has_low_quality_run_names":     hasLowQualityRunNames,
-			"has_low_quality_description":   hasLowQualityDescription,
-			"has_low_quality_title":         hasLowQualityTitle,
-			"issues":                        issues,
-		})
-	}
-}
