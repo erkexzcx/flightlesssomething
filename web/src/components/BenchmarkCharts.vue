@@ -207,70 +207,81 @@
           <div ref="fpsChart2" style="height:250pt;"></div>
           <div ref="fpsMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="fpsDensityChart" style="height:250pt;"></div>
-          <!-- Dropdown for selecting baseline -->
-          <div v-if="benchmarkData && benchmarkData.length > 1" class="baseline-selector mb-2">
-            <label for="fpsBaselineSelect" class="form-label me-2">Baseline (0%):</label>
-            <select 
-              id="fpsBaselineSelect" 
-              class="form-select form-select-sm d-inline-block w-auto me-3"
-              v-model="fpsBaselineIndex"
-              @change="renderFPSComparison"
-            >
-              <option :value="null">Auto (slowest)</option>
-              <option 
-                v-for="(data, index) in benchmarkData" 
-                :key="index" 
-                :value="index"
-              >
-                {{ data.label }}
-              </option>
-            </select>
-            <div class="btn-group btn-group-sm" role="group">
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="fpsComparisonMode" 
-                id="fpsNumbersMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'numbers'"
-                @change="appStore.setComparisonMode('numbers'); renderFPSComparison()"
-              >
-              <label class="btn btn-outline-primary" for="fpsNumbersMode">
-                Numbers
-              </label>
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="fpsComparisonMode" 
-                id="fpsNumbersDiffMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'numbers-diff'"
-                @change="appStore.setComparisonMode('numbers-diff'); renderFPSComparison()"
-              >
-              <label class="btn btn-outline-primary" for="fpsNumbersDiffMode">
-                Numbers diff
-              </label>
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="fpsComparisonMode" 
-                id="fpsPercentageMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'percentage'"
-                @change="appStore.setComparisonMode('percentage'); renderFPSComparison()"
-              >
-              <label class="btn btn-outline-primary" for="fpsPercentageMode">
-                Percent diff
-              </label>
+          <!-- Comparison charts - only show when there are multiple runs -->
+          <div v-if="benchmarkData && benchmarkData.length > 1">
+            <!-- Baseline selector and mode toggle -->
+            <div class="baseline-selector mb-3">
+              <div class="row g-2">
+                <div class="col-12 col-md-auto d-flex align-items-center">
+                  <label for="fpsBaselineSelect" class="form-label mb-0 me-2">Baseline (0%):</label>
+                </div>
+                <div class="col-12 col-md-auto">
+                  <select 
+                    id="fpsBaselineSelect" 
+                    class="form-select form-select-sm"
+                    v-model="fpsBaselineIndex"
+                    @change="renderFPSComparison"
+                  >
+                    <option :value="null">Auto (slowest)</option>
+                    <option 
+                      v-for="(data, index) in benchmarkData" 
+                      :key="index" 
+                      :value="index"
+                    >
+                      {{ data.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-auto">
+                  <div class="btn-group btn-group-sm w-100" role="group">
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="fpsComparisonMode" 
+                      id="fpsNumbersMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'numbers'"
+                      @change="appStore.setComparisonMode('numbers'); renderFPSComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="fpsNumbersMode">
+                      Numbers
+                    </label>
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="fpsComparisonMode" 
+                      id="fpsNumbersDiffMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'numbers-diff'"
+                      @change="appStore.setComparisonMode('numbers-diff'); renderFPSComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="fpsNumbersDiffMode">
+                      Numbers diff
+                    </label>
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="fpsComparisonMode" 
+                      id="fpsPercentageMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'percentage'"
+                      @change="appStore.setComparisonMode('percentage'); renderFPSComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="fpsPercentageMode">
+                      Percent diff
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div ref="fpsAvgChart" style="height:250pt;"></div>
-          <div class="row">
-            <div class="col-12 col-md-6">
-              <div ref="fpsStddevChart" style="height:400pt;"></div>
-            </div>
-            <div class="col-12 col-md-6">
-              <div ref="fpsVarianceChart" style="height:400pt;"></div>
+            <div ref="fpsAvgChart" style="height:250pt;"></div>
+            <div class="row">
+              <div class="col-12 col-md-6">
+                <div ref="fpsStddevChart" style="height:400pt;"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div ref="fpsVarianceChart" style="height:400pt;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -288,70 +299,81 @@
           <div ref="frameTimeChart2" style="height:250pt;"></div>
           <div ref="frametimeMinMaxAvgChart" style="height:500pt;"></div>
           <div ref="frametimeDensityChart" style="height:250pt;"></div>
-          <!-- Dropdown for selecting baseline -->
-          <div v-if="benchmarkData && benchmarkData.length > 1" class="baseline-selector mb-2">
-            <label for="frametimeBaselineSelect" class="form-label me-2">Baseline (0%):</label>
-            <select 
-              id="frametimeBaselineSelect" 
-              class="form-select form-select-sm d-inline-block w-auto me-3"
-              v-model="frametimeBaselineIndex"
-              @change="renderFrametimeComparison"
-            >
-              <option :value="null">Auto (fastest)</option>
-              <option 
-                v-for="(data, index) in benchmarkData" 
-                :key="index" 
-                :value="index"
-              >
-                {{ data.label }}
-              </option>
-            </select>
-            <div class="btn-group btn-group-sm" role="group">
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="frametimeComparisonMode" 
-                id="frametimeNumbersMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'numbers'"
-                @change="appStore.setComparisonMode('numbers'); renderFrametimeComparison()"
-              >
-              <label class="btn btn-outline-primary" for="frametimeNumbersMode">
-                Numbers
-              </label>
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="frametimeComparisonMode" 
-                id="frametimeNumbersDiffMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'numbers-diff'"
-                @change="appStore.setComparisonMode('numbers-diff'); renderFrametimeComparison()"
-              >
-              <label class="btn btn-outline-primary" for="frametimeNumbersDiffMode">
-                Numbers diff
-              </label>
-              <input 
-                type="radio" 
-                class="btn-check" 
-                name="frametimeComparisonMode" 
-                id="frametimePercentageMode" 
-                autocomplete="off"
-                :checked="comparisonMode === 'percentage'"
-                @change="appStore.setComparisonMode('percentage'); renderFrametimeComparison()"
-              >
-              <label class="btn btn-outline-primary" for="frametimePercentageMode">
-                Percent diff
-              </label>
+          <!-- Comparison charts - only show when there are multiple runs -->
+          <div v-if="benchmarkData && benchmarkData.length > 1">
+            <!-- Baseline selector and mode toggle -->
+            <div class="baseline-selector mb-3">
+              <div class="row g-2">
+                <div class="col-12 col-md-auto d-flex align-items-center">
+                  <label for="frametimeBaselineSelect" class="form-label mb-0 me-2">Baseline (0%):</label>
+                </div>
+                <div class="col-12 col-md-auto">
+                  <select 
+                    id="frametimeBaselineSelect" 
+                    class="form-select form-select-sm"
+                    v-model="frametimeBaselineIndex"
+                    @change="renderFrametimeComparison"
+                  >
+                    <option :value="null">Auto (fastest)</option>
+                    <option 
+                      v-for="(data, index) in benchmarkData" 
+                      :key="index" 
+                      :value="index"
+                    >
+                      {{ data.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-auto">
+                  <div class="btn-group btn-group-sm w-100" role="group">
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="frametimeComparisonMode" 
+                      id="frametimeNumbersMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'numbers'"
+                      @change="appStore.setComparisonMode('numbers'); renderFrametimeComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="frametimeNumbersMode">
+                      Numbers
+                    </label>
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="frametimeComparisonMode" 
+                      id="frametimeNumbersDiffMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'numbers-diff'"
+                      @change="appStore.setComparisonMode('numbers-diff'); renderFrametimeComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="frametimeNumbersDiffMode">
+                      Numbers diff
+                    </label>
+                    <input 
+                      type="radio" 
+                      class="btn-check" 
+                      name="frametimeComparisonMode" 
+                      id="frametimePercentageMode" 
+                      autocomplete="off"
+                      :checked="comparisonMode === 'percentage'"
+                      @change="appStore.setComparisonMode('percentage'); renderFrametimeComparison()"
+                    >
+                    <label class="btn btn-outline-primary" for="frametimePercentageMode">
+                      Percent diff
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div ref="frametimeAvgChart" style="height:250pt;"></div>
-          <div class="row">
-            <div class="col-12 col-md-6">
-              <div ref="frametimeStddevChart" style="height:400pt;"></div>
-            </div>
-            <div class="col-12 col-md-6">
-              <div ref="frametimeVarianceChart" style="height:400pt;"></div>
+            <div ref="frametimeAvgChart" style="height:250pt;"></div>
+            <div class="row">
+              <div class="col-12 col-md-6">
+                <div ref="frametimeStddevChart" style="height:400pt;"></div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div ref="frametimeVarianceChart" style="height:400pt;"></div>
+              </div>
             </div>
           </div>
         </div>
