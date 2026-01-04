@@ -79,17 +79,6 @@
               </div>
             </li>
           </ul>
-
-          <!-- Date/Time Warning -->
-          <div v-if="hasDateTimeWarning" class="alert alert-warning mt-3" role="alert">
-            <h6 class="alert-heading">
-              <i class="fa-solid fa-exclamation-triangle"></i> 
-              <strong>Warning - Default Filenames Detected</strong>
-            </h6>
-            <p class="mb-0">
-              {{ dateTimeWarningMessage }}
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -128,16 +117,18 @@
           </div>
 
           <!-- Quality warnings -->
-          <div v-if="qualityIssues.length > 0" class="alert alert-warning" role="alert">
+          <div class="alert alert-warning" role="alert">
             <h6 class="alert-heading">
               <i class="fa-solid fa-exclamation-triangle"></i>
               <strong>Quality Warning</strong>
             </h6>
-            <p class="mb-2">This benchmark has the following quality issues:</p>
-            <ul class="mb-0">
-              <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
-            </ul>
-            <hr>
+            <div v-if="qualityIssues.length > 0">
+              <p class="mb-2">This benchmark has the following quality issues:</p>
+              <ul class="mb-0">
+                <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
+              </ul>
+              <hr>
+            </div>
             <p class="mb-0">
               <small>
                 <i class="fa-solid fa-info-circle"></i>
@@ -200,10 +191,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
-import { hasAnyDateTimePattern, getDateTimeWarningMessage } from '../utils/filenameValidator'
 import { getQualityIssues, isLowQuality as checkIsLowQuality } from '../utils/qualityValidator'
 
 const router = useRouter()
@@ -216,15 +206,10 @@ const uploading = ref(false)
 const error = ref(null)
 const showConfirmModal = ref(false)
 
-// Computed property to check if any filenames have date/time patterns
-const hasDateTimeWarning = computed(() => {
-  const labels = selectedFiles.value.map(fileObj => fileObj.label)
-  return hasAnyDateTimePattern(labels)
-})
-
 // Computed property for quality issues (client-side validation)
 const qualityIssues = computed(() => {
-  if (!title.value || selectedFiles.value.length === 0) return []
+  // Always calculate quality issues if we have at least a title or files
+  if (!title.value && selectedFiles.value.length === 0) return []
   
   const runLabels = selectedFiles.value.map(f => f.label)
   return getQualityIssues(title.value, description.value, runLabels)
@@ -237,8 +222,6 @@ const isLowQuality = computed(() => {
   const runLabels = selectedFiles.value.map(f => f.label)
   return checkIsLowQuality(title.value, description.value, runLabels)
 })
-
-const dateTimeWarningMessage = getDateTimeWarningMessage()
 
 function handleFileSelect(event) {
   const files = Array.from(event.target.files)

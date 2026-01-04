@@ -424,10 +424,10 @@ const searchFields = ref({
   specifications: false
 })
 const qualityFilters = ref({
-  hideSingleRun: false,
-  hideLowQualityRunNames: false,
-  hideLowQualityDescription: false,
-  hideLowQualityTitle: false
+  hideSingleRun: true,
+  hideLowQualityRunNames: true,
+  hideLowQualityDescription: true,
+  hideLowQualityTitle: true
 })
 const qualityFiltersExpanded = ref(false)
 let searchDebounceTimer = null
@@ -474,6 +474,9 @@ function loadQualityFiltersFromStorage() {
     } catch (e) {
       console.error('Failed to parse quality filters from localStorage', e)
     }
+  } else {
+    // First time user - save the defaults to localStorage
+    saveQualityFiltersToStorage()
   }
 }
 
