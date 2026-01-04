@@ -230,25 +230,37 @@
                 type="radio" 
                 class="btn-check" 
                 name="fpsComparisonMode" 
-                id="fpsPercentageMode" 
+                id="fpsNumbersMode" 
                 autocomplete="off"
-                :checked="fpsComparisonMode"
-                @change="fpsComparisonMode = true; renderFPSComparison()"
+                :checked="comparisonMode === 'numbers'"
+                @change="appStore.setComparisonMode('numbers'); renderFPSComparison()"
               >
-              <label class="btn btn-outline-primary" for="fpsPercentageMode">
-                Percentage
+              <label class="btn btn-outline-primary" for="fpsNumbersMode">
+                Numbers
               </label>
               <input 
                 type="radio" 
                 class="btn-check" 
                 name="fpsComparisonMode" 
-                id="fpsNumbersMode" 
+                id="fpsNumbersDiffMode" 
                 autocomplete="off"
-                :checked="!fpsComparisonMode"
-                @change="fpsComparisonMode = false; renderFPSComparison()"
+                :checked="comparisonMode === 'numbers-diff'"
+                @change="appStore.setComparisonMode('numbers-diff'); renderFPSComparison()"
               >
-              <label class="btn btn-outline-primary" for="fpsNumbersMode">
-                Numbers
+              <label class="btn btn-outline-primary" for="fpsNumbersDiffMode">
+                Numbers diff
+              </label>
+              <input 
+                type="radio" 
+                class="btn-check" 
+                name="fpsComparisonMode" 
+                id="fpsPercentageMode" 
+                autocomplete="off"
+                :checked="comparisonMode === 'percentage'"
+                @change="appStore.setComparisonMode('percentage'); renderFPSComparison()"
+              >
+              <label class="btn btn-outline-primary" for="fpsPercentageMode">
+                Percent diff
               </label>
             </div>
           </div>
@@ -299,25 +311,37 @@
                 type="radio" 
                 class="btn-check" 
                 name="frametimeComparisonMode" 
-                id="frametimePercentageMode" 
+                id="frametimeNumbersMode" 
                 autocomplete="off"
-                :checked="frametimeComparisonMode"
-                @change="frametimeComparisonMode = true; renderFrametimeComparison()"
+                :checked="comparisonMode === 'numbers'"
+                @change="appStore.setComparisonMode('numbers'); renderFrametimeComparison()"
               >
-              <label class="btn btn-outline-primary" for="frametimePercentageMode">
-                Percentage
+              <label class="btn btn-outline-primary" for="frametimeNumbersMode">
+                Numbers
               </label>
               <input 
                 type="radio" 
                 class="btn-check" 
                 name="frametimeComparisonMode" 
-                id="frametimeNumbersMode" 
+                id="frametimeNumbersDiffMode" 
                 autocomplete="off"
-                :checked="!frametimeComparisonMode"
-                @change="frametimeComparisonMode = false; renderFrametimeComparison()"
+                :checked="comparisonMode === 'numbers-diff'"
+                @change="appStore.setComparisonMode('numbers-diff'); renderFrametimeComparison()"
               >
-              <label class="btn btn-outline-primary" for="frametimeNumbersMode">
-                Numbers
+              <label class="btn btn-outline-primary" for="frametimeNumbersDiffMode">
+                Numbers diff
+              </label>
+              <input 
+                type="radio" 
+                class="btn-check" 
+                name="frametimeComparisonMode" 
+                id="frametimePercentageMode" 
+                autocomplete="off"
+                :checked="comparisonMode === 'percentage'"
+                @change="appStore.setComparisonMode('percentage'); renderFrametimeComparison()"
+              >
+              <label class="btn btn-outline-primary" for="frametimePercentageMode">
+                Percent diff
               </label>
             </div>
           </div>
@@ -460,20 +484,8 @@ const fpsBaselineIndex = ref(null) // null means auto (slowest)
 const frametimeBaselineIndex = ref(null) // null means auto (fastest)
 
 // Track display mode for comparison charts using app store for persistence
-// Computed to react to store changes and provide boolean for easier checking
-const fpsComparisonMode = computed({
-  get: () => appStore.comparisonMode === 'percentage',
-  set: (value) => {
-    appStore.setComparisonMode(value ? 'percentage' : 'numbers')
-  }
-})
-
-const frametimeComparisonMode = computed({
-  get: () => appStore.comparisonMode === 'percentage',
-  set: (value) => {
-    appStore.setComparisonMode(value ? 'percentage' : 'numbers')
-  }
-})
+// Mode can be: 'percentage', 'numbers', or 'numbers-diff'
+const comparisonMode = computed(() => appStore.comparisonMode)
 
 // Refs for chart containers
 const fpsChart = ref(null)
@@ -629,8 +641,8 @@ function renderFPSComparisonChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
   
-  if (fpsComparisonMode.value) {
-    // Percentage mode
+  if (comparisonMode.value === 'percentage') {
+    // Percentage mode - show percentage differences from baseline
     // Calculate percentage differences from baseline (0% = baseline)
     const percentageFPSData = fpsAverages.map(fps => ((fps - baselineFPS) / baselineFPS) * 100)
 
@@ -692,8 +704,70 @@ function renderFPSComparisonChart() {
       legend: { enabled: false },
       series: [{ name: 'FPS Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
+  } else if (comparisonMode.value === 'numbers-diff') {
+    // Numbers diff mode - show absolute differences from baseline
+    const differenceData = fpsAverages.map(fps => fps - baselineFPS)
+
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
+
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedDifferences = sortedData.map(item => item.difference)
+
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
+
+    Highcharts.chart(fpsAvgChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Avg FPS comparison' },
+      subtitle: { ...chartOpts.subtitle, text: 'More is better' },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
+      yAxis: { 
+        ...chartOpts.yAxis, 
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference (FPS)', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
+      },
+      tooltip: { 
+        ...chartOpts.tooltip, 
+        valueSuffix: ' fps', 
+        formatter: function() { 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)} fps` 
+        } 
+      },
+      plotOptions: { 
+        bar: { 
+          borderColor: colors.barBorderColor,
+          borderWidth: 1,
+          dataLabels: { 
+            enabled: true, 
+            style: { color: colors.textColor }, 
+            formatter: function() { 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) + ' fps' 
+            } 
+          } 
+        } 
+      },
+      legend: { enabled: false },
+      series: [{ name: 'FPS Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
+    })
   } else {
-    // Numbers mode
+    // Numbers mode - show absolute FPS values
     const sortedData = stats.map((s, index) => ({
       label: s.label,
       value: fpsAverages[index]
@@ -714,9 +788,9 @@ function renderFPSComparisonChart() {
       },
       tooltip: { 
         ...chartOpts.tooltip, 
-        valueSuffix: ' FPS', 
+        valueSuffix: ' fps', 
         formatter: function() { 
-          return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} FPS` 
+          return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} fps` 
         } 
       },
       plotOptions: { 
@@ -758,7 +832,7 @@ function renderFrametimeComparisonChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
 
-  if (frametimeComparisonMode.value) {
+  if (comparisonMode.value === 'percentage') {
     // Percentage mode
     // Calculate percentage differences from baseline (0% = baseline)
     const percentageData = frametimeAverages.map(ft => ((ft - baselineFrametime) / baselineFrametime) * 100)
@@ -821,15 +895,25 @@ function renderFrametimeComparisonChart() {
       legend: { enabled: false },
       series: [{ name: 'Frametime Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
-  } else {
-    // Numbers mode
+  } else if (comparisonMode.value === 'numbers-diff') {
+
+    // Numbers diff mode - show absolute differences from baseline
+    const differenceData = frametimeAverages.map(ft => ft - baselineFrametime)
+
     const sortedData = stats.map((s, index) => ({
       label: s.label,
-      value: frametimeAverages[index]
-    })).sort((a, b) => a.value - b.value)
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
 
     const sortedCategories = sortedData.map(item => item.label)
-    const sortedValues = sortedData.map(item => item.value)
+    const sortedDifferences = sortedData.map(item => item.difference)
+
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
 
     Highcharts.chart(frametimeAvgChart.value, {
       ...chartOpts,
@@ -839,13 +923,22 @@ function renderFrametimeComparisonChart() {
       xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
       yAxis: { 
         ...chartOpts.yAxis, 
-        title: { text: 'Frametime (ms)', align: 'high', style: { color: colors.textColor } }
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference (ms)', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
       },
       tooltip: { 
         ...chartOpts.tooltip, 
         valueSuffix: ' ms', 
         formatter: function() { 
-          return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ms` 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)} ms` 
         } 
       },
       plotOptions: { 
@@ -856,13 +949,14 @@ function renderFrametimeComparisonChart() {
             enabled: true, 
             style: { color: colors.textColor }, 
             formatter: function() { 
-              return this.y.toFixed(2) + ' ms' 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) + ' ms' 
             } 
           } 
         } 
       },
       legend: { enabled: false },
-      series: [{ name: 'Avg Frametime', data: sortedValues, colorByPoint: true, colors: Highcharts.getOptions().colors }]
+      series: [{ name: 'Frametime Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
   }
 }
@@ -1119,7 +1213,7 @@ function renderFPSStddevChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
   
-  if (fpsComparisonMode.value) {
+  if (comparisonMode.value === 'percentage') {
     // Percentage mode - show percentage difference from baseline
     const stddevValues = stats.map(s => s.stddev)
     
@@ -1194,24 +1288,102 @@ function renderFPSStddevChart() {
       legend: { enabled: false },
       series: [{ name: 'Std. Dev. Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
-  } else {
-    // Numbers mode - show raw stddev values
-    const categories = stats.map(s => s.label)
-    const standardDeviations = stats.map(s => s.stddev)
+  } else if (comparisonMode.value === 'numbers-diff') {
+
+    // Numbers diff mode - show absolute differences from baseline
+    const stddevValues = stats.map(s => s.stddev)
+    
+    // Determine baseline stddev
+    let baselineStddev
+    const fpsAverages = stats.map(s => s.avg)
+    if (fpsBaselineIndex.value !== null && fpsBaselineIndex.value >= 0 && fpsBaselineIndex.value < stddevValues.length) {
+      baselineStddev = stddevValues[fpsBaselineIndex.value]
+    } else {
+      // Auto mode: use stddev of slowest (min FPS)
+      const minFPSIndex = fpsAverages.indexOf(Math.min(...fpsAverages))
+      baselineStddev = stddevValues[minFPSIndex]
+    }
+    
+    // Calculate absolute differences from baseline
+    const differenceData = stddevValues.map(val => val - baselineStddev)
+    
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedDifferences = sortedData.map(item => item.difference)
+    
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
 
     Highcharts.chart(fpsStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Standard Deviation' },
       subtitle: { ...chartOpts.subtitle, text: 'Measures FPS consistency. Less is better.' },
-      xAxis: { ...chartOpts.xAxis, categories: categories },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
+      yAxis: { 
+        ...chartOpts.yAxis, 
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
+      },
+      tooltip: { 
+        ...chartOpts.tooltip, 
+        formatter: function() { 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)}` 
+        } 
+      },
+      plotOptions: { 
+        bar: { 
+          borderColor: colors.barBorderColor, 
+          borderWidth: 1, 
+          dataLabels: { 
+            enabled: true, 
+            style: { color: colors.textColor }, 
+            formatter: function() { 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) 
+            } 
+          } 
+        } 
+      },
+      legend: { enabled: false },
+      series: [{ name: 'Std. Dev. Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
+    })  } else {
+    // Numbers mode - show absolute stddev values
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      value: stats[index].stddev
+    })).sort((a, b) => a.value - b.value)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedValues = sortedData.map(item => item.value)
+
+    Highcharts.chart(fpsStddevChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'FPS Standard Deviation' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures FPS consistency. Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Std. Dev.', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)}` } },
       plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
       legend: { enabled: false },
-      series: [
-        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' }
-      ]
+      series: [{ name: 'Std. Dev.', data: sortedValues, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
   }
 }
@@ -1226,7 +1398,7 @@ function renderFPSVarianceChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
   
-  if (fpsComparisonMode.value) {
+  if (comparisonMode.value === 'percentage') {
     // Percentage mode - show percentage difference from baseline
     const varianceValues = stats.map(s => s.variance)
     
@@ -1301,24 +1473,102 @@ function renderFPSVarianceChart() {
       legend: { enabled: false },
       series: [{ name: 'Variance Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
-  } else {
-    // Numbers mode - show raw variance values
-    const categories = stats.map(s => s.label)
-    const variances = stats.map(s => s.variance)
+  } else if (comparisonMode.value === 'numbers-diff') {
+
+    // Numbers diff mode - show absolute differences from baseline
+    const varianceValues = stats.map(s => s.variance)
+    
+    // Determine baseline variance
+    let baselineVariance
+    const fpsAverages = stats.map(s => s.avg)
+    if (fpsBaselineIndex.value !== null && fpsBaselineIndex.value >= 0 && fpsBaselineIndex.value < varianceValues.length) {
+      baselineVariance = varianceValues[fpsBaselineIndex.value]
+    } else {
+      // Auto mode: use variance of slowest (min FPS)
+      const minFPSIndex = fpsAverages.indexOf(Math.min(...fpsAverages))
+      baselineVariance = varianceValues[minFPSIndex]
+    }
+    
+    // Calculate absolute differences from baseline
+    const differenceData = varianceValues.map(val => val - baselineVariance)
+    
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedDifferences = sortedData.map(item => item.difference)
+    
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
 
     Highcharts.chart(fpsVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Variance' },
       subtitle: { ...chartOpts.subtitle, text: 'Measures FPS spread. Less is better.' },
-      xAxis: { ...chartOpts.xAxis, categories: categories },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
+      yAxis: { 
+        ...chartOpts.yAxis, 
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
+      },
+      tooltip: { 
+        ...chartOpts.tooltip, 
+        formatter: function() { 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)}` 
+        } 
+      },
+      plotOptions: { 
+        bar: { 
+          borderColor: colors.barBorderColor, 
+          borderWidth: 1, 
+          dataLabels: { 
+            enabled: true, 
+            style: { color: colors.textColor }, 
+            formatter: function() { 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) 
+            } 
+          } 
+        } 
+      },
+      legend: { enabled: false },
+      series: [{ name: 'Variance Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
+    })  } else {
+    // Numbers mode - show absolute variance values
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      value: stats[index].variance
+    })).sort((a, b) => a.value - b.value)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedValues = sortedData.map(item => item.value)
+
+    Highcharts.chart(fpsVarianceChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'FPS Variance' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures FPS spread. Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Variance', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)}` } },
       plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
       legend: { enabled: false },
-      series: [
-        { name: 'Variance', data: variances, color: '#33FF57' }
-      ]
+      series: [{ name: 'Variance', data: sortedValues, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
   }
 }
@@ -1397,7 +1647,7 @@ function renderFrametimeStddevChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
   
-  if (frametimeComparisonMode.value) {
+  if (comparisonMode.value === 'percentage') {
     // Percentage mode - show percentage difference from baseline
     const stddevValues = stats.map(s => s.stddev)
     
@@ -1472,24 +1722,102 @@ function renderFrametimeStddevChart() {
       legend: { enabled: false },
       series: [{ name: 'Std. Dev. Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
-  } else {
-    // Numbers mode - show raw stddev values
-    const categories = stats.map(s => s.label)
-    const standardDeviations = stats.map(s => s.stddev)
+  } else if (comparisonMode.value === 'numbers-diff') {
+
+    // Numbers diff mode - show absolute differences from baseline
+    const stddevValues = stats.map(s => s.stddev)
+    
+    // Determine baseline stddev
+    let baselineStddev
+    const frametimeAverages = stats.map(s => s.avg)
+    if (frametimeBaselineIndex.value !== null && frametimeBaselineIndex.value >= 0 && frametimeBaselineIndex.value < stddevValues.length) {
+      baselineStddev = stddevValues[frametimeBaselineIndex.value]
+    } else {
+      // Auto mode: use stddev of fastest (min frametime)
+      const minFrametimeIndex = frametimeAverages.indexOf(Math.min(...frametimeAverages))
+      baselineStddev = stddevValues[minFrametimeIndex]
+    }
+    
+    // Calculate absolute differences from baseline
+    const differenceData = stddevValues.map(val => val - baselineStddev)
+    
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedDifferences = sortedData.map(item => item.difference)
+    
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
 
     Highcharts.chart(frametimeStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Standard Deviation' },
       subtitle: { ...chartOpts.subtitle, text: 'Measures Frametime consistency. Less is better.' },
-      xAxis: { ...chartOpts.xAxis, categories: categories },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
+      yAxis: { 
+        ...chartOpts.yAxis, 
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference (ms)', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
+      },
+      tooltip: { 
+        ...chartOpts.tooltip, 
+        formatter: function() { 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)} ms` 
+        } 
+      },
+      plotOptions: { 
+        bar: { 
+          borderColor: colors.barBorderColor, 
+          borderWidth: 1, 
+          dataLabels: { 
+            enabled: true, 
+            style: { color: colors.textColor }, 
+            formatter: function() { 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) + ' ms' 
+            } 
+          } 
+        } 
+      },
+      legend: { enabled: false },
+      series: [{ name: 'Std. Dev. Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
+    })  } else {
+    // Numbers mode - show absolute stddev values
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      value: stats[index].stddev
+    })).sort((a, b) => a.value - b.value)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedValues = sortedData.map(item => item.value)
+
+    Highcharts.chart(frametimeStddevChart.value, {
+      ...chartOpts,
+      chart: { ...chartOpts.chart, type: 'bar' },
+      title: { ...chartOpts.title, text: 'Frametime Standard Deviation' },
+      subtitle: { ...chartOpts.subtitle, text: 'Measures Frametime consistency. Less is better.' },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
       yAxis: { ...chartOpts.yAxis, title: { text: 'Std. Dev. (ms)', align: 'high', style: { color: colors.textColor } } },
       tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ms` } },
-      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) + ' ms' } } } },
       legend: { enabled: false },
-      series: [
-        { name: 'Std. Dev.', data: standardDeviations, color: '#FF5733' }
-      ]
+      series: [{ name: 'Std. Dev.', data: sortedValues, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
   }
 }
@@ -1504,7 +1832,7 @@ function renderFrametimeVarianceChart() {
   const colors = getThemeColors.value
   const chartOpts = commonChartOptions.value
   
-  if (frametimeComparisonMode.value) {
+  if (comparisonMode.value === 'percentage') {
     // Percentage mode - show percentage difference from baseline
     const varianceValues = stats.map(s => s.variance)
     
@@ -1579,24 +1907,81 @@ function renderFrametimeVarianceChart() {
       legend: { enabled: false },
       series: [{ name: 'Variance Difference', data: sortedPercentages, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
-  } else {
-    // Numbers mode - show raw variance values
-    const categories = stats.map(s => s.label)
-    const variances = stats.map(s => s.variance)
+  } else if (comparisonMode.value === 'numbers-diff') {
+
+    // Numbers diff mode - show absolute differences from baseline
+    const varianceValues = stats.map(s => s.variance)
+    
+    // Determine baseline variance
+    let baselineVariance
+    const frametimeAverages = stats.map(s => s.avg)
+    if (frametimeBaselineIndex.value !== null && frametimeBaselineIndex.value >= 0 && frametimeBaselineIndex.value < varianceValues.length) {
+      baselineVariance = varianceValues[frametimeBaselineIndex.value]
+    } else {
+      // Auto mode: use variance of fastest (min frametime)
+      const minFrametimeIndex = frametimeAverages.indexOf(Math.min(...frametimeAverages))
+      baselineVariance = varianceValues[minFrametimeIndex]
+    }
+    
+    // Calculate absolute differences from baseline
+    const differenceData = varianceValues.map(val => val - baselineVariance)
+    
+    const sortedData = stats.map((s, index) => ({
+      label: s.label,
+      difference: differenceData[index]
+    })).sort((a, b) => a.difference - b.difference)
+    
+    const sortedCategories = sortedData.map(item => item.label)
+    const sortedDifferences = sortedData.map(item => item.difference)
+    
+    // Determine min/max for y-axis with some padding
+    const minDiff = Math.min(...sortedDifferences)
+    const maxDiff = Math.max(...sortedDifferences)
+    const padding = Math.max(Math.abs(minDiff), Math.abs(maxDiff)) * 0.1
+    const yAxisMin = minDiff - padding
+    const yAxisMax = maxDiff + padding
 
     Highcharts.chart(frametimeVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Variance' },
       subtitle: { ...chartOpts.subtitle, text: 'Measures Frametime spread. Less is better.' },
-      xAxis: { ...chartOpts.xAxis, categories: categories },
-      yAxis: { ...chartOpts.yAxis, title: { text: 'Variance (ms²)', align: 'high', style: { color: colors.textColor } } },
-      tooltip: { ...chartOpts.tooltip, formatter: function() { return `<b>${this.point.category}</b>: ${this.y.toFixed(2)} ms²` } },
-      plotOptions: { bar: { borderColor: colors.barBorderColor, borderWidth: 1, dataLabels: { enabled: true, style: { color: colors.textColor }, formatter: function() { return this.y.toFixed(2) } } } },
+      xAxis: { ...chartOpts.xAxis, categories: sortedCategories },
+      yAxis: { 
+        ...chartOpts.yAxis, 
+        min: yAxisMin,
+        max: yAxisMax,
+        title: { text: 'Difference (ms²)', align: 'high', style: { color: colors.textColor } },
+        plotLines: [{
+          value: 0,
+          color: colors.lineColor,
+          width: 2,
+          zIndex: 4
+        }]
+      },
+      tooltip: { 
+        ...chartOpts.tooltip, 
+        formatter: function() { 
+          const sign = this.y >= 0 ? '+' : ''
+          return `<b>${this.point.category}</b>: ${sign}${this.y.toFixed(2)} ms²` 
+        } 
+      },
+      plotOptions: { 
+        bar: { 
+          borderColor: colors.barBorderColor, 
+          borderWidth: 1, 
+          dataLabels: { 
+            enabled: true, 
+            style: { color: colors.textColor }, 
+            formatter: function() { 
+              const sign = this.y >= 0 ? '+' : ''
+              return sign + this.y.toFixed(2) + ' ms²' 
+            } 
+          } 
+        } 
+      },
       legend: { enabled: false },
-      series: [
-        { name: 'Variance', data: variances, color: '#33FF57' }
-      ]
+      series: [{ name: 'Variance Difference', data: sortedDifferences, colorByPoint: true, colors: Highcharts.getOptions().colors }]
     })
   }
 }

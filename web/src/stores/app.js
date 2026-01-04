@@ -24,7 +24,7 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('calculationMethod', 'linear-interpolation')
   }
 
-  // Comparison mode: 'percentage' or 'numbers'
+  // Comparison mode: 'percentage', 'numbers', or 'numbers-diff'
   const storedComparisonMode = localStorage.getItem('comparisonMode')
   const comparisonMode = ref(storedComparisonMode || 'percentage')
   
