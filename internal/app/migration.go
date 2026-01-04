@@ -21,8 +21,9 @@ const (
 	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
 	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
 	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format) + regenerate metadata with JSON size
+	// - 4: Added quality indicator fields (IsSingleRun, HasLowQualityRunNames, HasLowQualityDescription, HasLowQualityTitle)
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 3
+	currentSchemaVersion = 4
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )
@@ -561,5 +562,69 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 	}
 	
 	log.Println("Migration from v1 to v2 completed successfully!")
+	return nil
+}
+
+// migrateFromV3ToV4 migrates from schema version 3 to version 4
+// This migration populates quality indicator fields for all existing benchmarks
+func migrateFromV3ToV4(db *gorm.DB) error {
+	log.Println("Populating quality indicators for existing benchmarks...")
+	
+	// Get all benchmarks
+	var benchmarks []Benchmark
+	if err := db.Find(&benchmarks).Error; err != nil {
+		return fmt.Errorf("failed to fetch benchmarks: %w", err)
+	}
+	log.Printf("Found %d benchmarks to update", len(benchmarks))
+	
+	successCount := 0
+	errorCount := 0
+	
+	for i := range benchmarks {
+		benchmark := &benchmarks[i]
+		log.Printf("  [%d/%d] Updating benchmark: %s (ID: %d)", i+1, len(benchmarks), benchmark.Title, benchmark.ID)
+		
+		// Get run count and labels from metadata
+		_, runLabels, err := GetBenchmarkRunCount(benchmark.ID)
+		if err != nil {
+			log.Printf("    WARNING: Failed to read benchmark metadata: %v", err)
+			errorCount++
+			continue
+		}
+		
+		// Calculate quality indicators
+		isSingleRun, hasLowQualityRunNames, hasLowQualityDescription, hasLowQualityTitle := 
+			CalculateQualityIndicators(benchmark.Title, benchmark.Description, runLabels)
+		
+		// Update benchmark record using UpdateColumns to preserve UpdatedAt timestamp
+		if err := db.Model(benchmark).UpdateColumns(map[string]interface{}{
+			"is_single_run":               isSingleRun,
+			"has_low_quality_run_names":   hasLowQualityRunNames,
+			"has_low_quality_description": hasLowQualityDescription,
+			"has_low_quality_title":       hasLowQualityTitle,
+		}).Error; err != nil {
+			log.Printf("    ERROR: Failed to update benchmark: %v", err)
+			errorCount++
+			continue
+		}
+		
+		qualityStatus := "high quality"
+		if isSingleRun || hasLowQualityRunNames || hasLowQualityDescription || hasLowQualityTitle {
+			qualityStatus = "low quality"
+		}
+		log.Printf("    Successfully updated (%s, %d runs)", qualityStatus, len(runLabels))
+		successCount++
+	}
+	
+	log.Println("\n=== Migration Summary (v3 → v4) ===")
+	log.Printf("Benchmarks updated: %d", successCount)
+	log.Printf("Benchmarks failed: %d", errorCount)
+	log.Println("=====================================")
+	
+	if errorCount > 0 {
+		log.Printf("WARNING: %d benchmarks failed to update, but migration will continue", errorCount)
+	}
+	
+	log.Println("Migration from v3 to v4 completed successfully!")
 	return nil
 }

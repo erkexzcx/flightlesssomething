@@ -30,6 +30,27 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		if userID := c.Query("user_id"); userID != "" {
 			query = query.Where("user_id = ?", userID)
 		}
+		
+		// Quality filters - hide benchmarks that match the selected quality criteria
+		if c.Query("hide_single_run") == "true" {
+			query = query.Where("is_single_run = ?", false)
+		}
+		if c.Query("hide_low_quality_run_names") == "true" {
+			query = query.Where("has_low_quality_run_names = ?", false)
+		}
+		if c.Query("hide_low_quality_description") == "true" {
+			query = query.Where("has_low_quality_description = ?", false)
+		}
+		if c.Query("hide_low_quality_title") == "true" {
+			query = query.Where("has_low_quality_title = ?", false)
+		}
+		if c.Query("hide_duplicate_runs") == "true" {
+			query = query.Where("has_duplicate_runs = ?", false)
+		}
+		if c.Query("hide_insufficient_data") == "true" {
+			query = query.Where("has_insufficient_data = ?", false)
+		}
+		
 		if search := c.Query("search"); search != "" {
 			// Get search fields from query parameter (comma-separated)
 			// Default to title,description to match frontend defaults
@@ -327,6 +348,16 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Calculate quality indicators with data
+		qi := CalculateQualityIndicatorsWithData(benchmark.Title, benchmark.Description, benchmarkData)
+		benchmark.IsSingleRun = qi.IsSingleRun
+		benchmark.HasLowQualityRunNames = qi.HasLowQualityRunNames
+		benchmark.HasLowQualityDescription = qi.HasLowQualityDescription
+		benchmark.HasLowQualityTitle = qi.HasLowQualityTitle
+		benchmark.HasDuplicateRuns = qi.HasDuplicateRuns
+		benchmark.HasInsufficientData = qi.HasInsufficientData
+		
 		if err := db.DB.Save(&benchmark).Error; err != nil {
 			// Log error but don't fail - this is just for search optimization
 			fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, err)
@@ -409,6 +440,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Update labels if provided
+		var needsQualityRecalc bool
 		if len(req.Labels) > 0 {
 			benchmarkID, err := strconv.ParseUint(id, 10, 32)
 			if err != nil {
@@ -441,6 +473,22 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			
 			// Trigger GC to reclaim memory from loaded benchmark data
 			runtime.GC()
+			needsQualityRecalc = true
+		}
+		
+		// Recalculate quality indicators if title, description, or labels changed
+		if req.Title != "" || req.Description != "" || needsQualityRecalc {
+			// Load benchmark data to calculate all quality indicators
+			benchmarkData, err := RetrieveBenchmarkData(benchmark.ID)
+			if err == nil {
+				qi := CalculateQualityIndicatorsWithData(benchmark.Title, benchmark.Description, benchmarkData)
+				benchmark.IsSingleRun = qi.IsSingleRun
+				benchmark.HasLowQualityRunNames = qi.HasLowQualityRunNames
+				benchmark.HasLowQualityDescription = qi.HasLowQualityDescription
+				benchmark.HasLowQualityTitle = qi.HasLowQualityTitle
+				benchmark.HasDuplicateRuns = qi.HasDuplicateRuns
+				benchmark.HasInsufficientData = qi.HasInsufficientData
+			}
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -651,6 +699,15 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Recalculate quality indicators after deleting run
+		qi := CalculateQualityIndicatorsWithData(benchmark.Title, benchmark.Description, benchmarkData)
+		benchmark.IsSingleRun = qi.IsSingleRun
+		benchmark.HasLowQualityRunNames = qi.HasLowQualityRunNames
+		benchmark.HasLowQualityDescription = qi.HasLowQualityDescription
+		benchmark.HasLowQualityTitle = qi.HasLowQualityTitle
+		benchmark.HasDuplicateRuns = qi.HasDuplicateRuns
+		benchmark.HasInsufficientData = qi.HasInsufficientData
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -776,6 +833,15 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		runNames, specifications := ExtractSearchableMetadata(existingData)
 		benchmark.RunNames = runNames
 		benchmark.Specifications = specifications
+		
+		// Recalculate quality indicators after adding runs
+		qi := CalculateQualityIndicatorsWithData(benchmark.Title, benchmark.Description, existingData)
+		benchmark.IsSingleRun = qi.IsSingleRun
+		benchmark.HasLowQualityRunNames = qi.HasLowQualityRunNames
+		benchmark.HasLowQualityDescription = qi.HasLowQualityDescription
+		benchmark.HasLowQualityTitle = qi.HasLowQualityTitle
+		benchmark.HasDuplicateRuns = qi.HasDuplicateRuns
+		benchmark.HasInsufficientData = qi.HasInsufficientData
 
 		// Update the benchmark's UpdatedAt timestamp
 		if err := db.DB.Save(&benchmark).Error; err != nil {

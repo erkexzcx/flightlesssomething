@@ -45,6 +45,14 @@ type Benchmark struct {
 	RunNames       string `gorm:"type:text"` // Comma-separated list of run labels for search
 	Specifications string `gorm:"type:text"` // Concatenated specifications (OS, CPU, GPU, etc.) for search
 
+	// Quality indicators for filtering low-quality benchmarks
+	IsSingleRun              bool `gorm:"default:false"` // True if benchmark has only one run
+	HasLowQualityRunNames    bool `gorm:"default:false"` // True if run names contain datetime patterns or are too long
+	HasLowQualityDescription bool `gorm:"default:false"` // True if description is too short or empty
+	HasLowQualityTitle       bool `gorm:"default:false"` // True if title is too short
+	HasDuplicateRuns         bool `gorm:"default:false"` // True if benchmark has duplicate run names or identical data
+	HasInsufficientData      bool `gorm:"default:false"` // True if any run has less than 100 data lines
+
 	CreatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of CreatedAt
 	UpdatedAtHumanized string   `gorm:"-"`                             // Human readable "X h/m/s ago" version of UpdatedAt
 	RunCount           int      `gorm:"-" json:"run_count,omitempty"`  // Number of runs in benchmark

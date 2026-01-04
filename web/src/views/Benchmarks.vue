@@ -86,6 +86,121 @@
         </div>
       </div>
     </form>
+    
+    <!-- Quality filter panel -->
+    <div class="card mb-3 quality-filters-card" v-if="!isMyBenchmarksPage">
+      <div class="card-header" @click="toggleQualityFilters" style="cursor: pointer;">
+        <h6 class="mb-0 d-flex justify-content-between align-items-center">
+          <span>
+            <i class="fa-solid" :class="qualityFiltersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+            Hide low quality benchmarks
+          </span>
+          <small v-if="hasActiveQualityFilters" class="badge bg-primary">
+            {{ activeQualityFiltersCount }} active
+          </small>
+        </h6>
+      </div>
+      <div v-show="qualityFiltersExpanded" class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Quick filters">
+            <button 
+              type="button" 
+              class="btn btn-outline-secondary"
+              @click.stop="setAllQualityFilters(true)"
+            >
+              Hide
+            </button>
+            <button 
+              type="button" 
+              class="btn btn-outline-secondary"
+              @click.stop="setAllQualityFilters(false)"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-3">
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideSingleRun" 
+              id="hideSingleRun"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideSingleRun" title="Hide benchmarks with only one run">
+              Single run
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityRunNames" 
+              id="hideLowQualityRunNames"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityRunNames" title="Hide benchmarks with auto-generated run names (date/time patterns) or overly long run names (>25 characters)">
+              Low quality run names
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityDescription" 
+              id="hideLowQualityDescription"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityDescription" title="Hide benchmarks with short or missing descriptions (<15 characters)">
+              Low quality description
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideLowQualityTitle" 
+              id="hideLowQualityTitle"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideLowQualityTitle" title="Hide benchmarks with short titles (<10 characters)">
+              Low quality title
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideDuplicateRuns" 
+              id="hideDuplicateRuns"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideDuplicateRuns" title="Hide benchmarks with duplicate run names or identical data">
+              Duplicate runs
+            </label>
+          </div>
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="qualityFilters.hideInsufficientData" 
+              id="hideInsufficientData"
+              @change="handleQualityFiltersChange"
+            >
+            <label class="form-check-label" for="hideInsufficientData" title="Hide benchmarks with runs that have insufficient data (<100 data lines)">
+              Insufficient data
+            </label>
+          </div>
+        </div>
+        <div class="mt-2">
+          <small class="text-muted">
+            <i class="fa-solid fa-info-circle"></i>
+            These filters help hide low-quality benchmarks (auto-generated names, short descriptions, duplicate runs, insufficient data, etc.)
+          </small>
+        </div>
+      </div>
+    </div>
 
     <!-- Filter indicator -->
     <div v-if="(route.query.user_id || filterUserId) && !isMyBenchmarksPage" class="alert alert-info d-flex justify-content-between align-items-center mb-3" role="alert">
@@ -180,6 +295,13 @@
             <small>{{ benchmark.Description || 'No description' }}</small>
           </p>
           <div class="benchmark-meta-group">
+            <small 
+              v-if="isLowQualityBenchmark(benchmark)" 
+              class="benchmark-metadata text-nowrap low-quality-icon" 
+              title="Low quality benchmark"
+            >
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </small>
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
@@ -350,6 +472,15 @@ const searchFields = ref({
   runName: false,
   specifications: false
 })
+const qualityFilters = ref({
+  hideSingleRun: true,
+  hideLowQualityRunNames: true,
+  hideLowQualityDescription: true,
+  hideLowQualityTitle: true,
+  hideDuplicateRuns: true,
+  hideInsufficientData: true
+})
+const qualityFiltersExpanded = ref(false)
 let searchDebounceTimer = null
 
 // Computed property to check if we're on "My Benchmarks" page
@@ -365,6 +496,88 @@ const hasAnySearchFieldSelected = computed(() => {
          searchFields.value.runName || 
          searchFields.value.specifications
 })
+
+// Computed property to check if any quality filters are active
+const hasActiveQualityFilters = computed(() => {
+  return qualityFilters.value.hideSingleRun ||
+         qualityFilters.value.hideLowQualityRunNames ||
+         qualityFilters.value.hideLowQualityDescription ||
+         qualityFilters.value.hideLowQualityTitle ||
+         qualityFilters.value.hideDuplicateRuns ||
+         qualityFilters.value.hideInsufficientData
+})
+
+// Computed property to count active quality filters
+const activeQualityFiltersCount = computed(() => {
+  let count = 0
+  if (qualityFilters.value.hideSingleRun) count++
+  if (qualityFilters.value.hideLowQualityRunNames) count++
+  if (qualityFilters.value.hideLowQualityDescription) count++
+  if (qualityFilters.value.hideLowQualityTitle) count++
+  if (qualityFilters.value.hideDuplicateRuns) count++
+  if (qualityFilters.value.hideInsufficientData) count++
+  return count
+})
+
+// Load quality filters from localStorage
+function loadQualityFiltersFromStorage() {
+  const stored = localStorage.getItem('qualityFilters')
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored)
+      qualityFilters.value = { ...qualityFilters.value, ...parsed }
+    } catch (e) {
+      console.error('Failed to parse quality filters from localStorage', e)
+    }
+  } else {
+    // First time user - save the defaults to localStorage
+    saveQualityFiltersToStorage()
+  }
+}
+
+// Save quality filters to localStorage
+function saveQualityFiltersToStorage() {
+  localStorage.setItem('qualityFilters', JSON.stringify(qualityFilters.value))
+}
+
+// Set all quality filters (for Hide/Show buttons)
+function setAllQualityFilters(value) {
+  qualityFilters.value.hideSingleRun = value
+  qualityFilters.value.hideLowQualityRunNames = value
+  qualityFilters.value.hideLowQualityDescription = value
+  qualityFilters.value.hideLowQualityTitle = value
+  qualityFilters.value.hideDuplicateRuns = value
+  qualityFilters.value.hideInsufficientData = value
+  
+  saveQualityFiltersToStorage()
+  currentPage.value = 1
+  loadBenchmarks()
+}
+
+// Check if a benchmark is low quality
+function isLowQualityBenchmark(benchmark) {
+  return benchmark.IsSingleRun ||
+         benchmark.HasLowQualityRunNames ||
+         benchmark.HasLowQualityDescription ||
+         benchmark.HasLowQualityTitle ||
+         benchmark.HasDuplicateRuns ||
+         benchmark.HasInsufficientData
+}
+
+// Toggle quality filters panel
+function toggleQualityFilters() {
+  qualityFiltersExpanded.value = !qualityFiltersExpanded.value
+}
+
+// Handle quality filters change
+function handleQualityFiltersChange() {
+  // Save to localStorage
+  saveQualityFiltersToStorage()
+  
+  // Reload benchmarks with new filters
+  currentPage.value = 1
+  loadBenchmarks()
+}
 
 // Initialize state from URL query parameters
 function initializeFromURL() {
@@ -551,7 +764,8 @@ async function loadBenchmarks() {
         currentPage.value,
         perPage.value,
         sortByParam,
-        sortOrderParam
+        sortOrderParam,
+        qualityFilters.value
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
       if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
@@ -567,7 +781,8 @@ async function loadBenchmarks() {
         searchQueryParam,
         sortByParam,
         sortOrderParam,
-        enabledFields
+        enabledFields,
+        qualityFilters.value
       )
     }
 
@@ -732,6 +947,8 @@ watch(searchQuery, (newValue) => {
 })
 
 onMounted(() => {
+  // Load quality filters from localStorage
+  loadQualityFiltersFromStorage()
   // Initialize state from URL parameters
   initializeFromURL()
   // Load benchmarks with initialized state
@@ -882,6 +1099,33 @@ watch(() => route.path, (newPath, oldPath) => {
   user-select: none;
 }
 
+/* Quality filters card */
+.quality-filters-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quality-filters-card .card-header {
+  background-color: rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+.quality-filters-card .card-header:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.quality-filters-card .form-check {
+  margin-bottom: 0;
+}
+
+.quality-filters-card .form-check-input {
+  cursor: pointer;
+}
+
+.quality-filters-card .form-check-label {
+  cursor: pointer;
+  user-select: none;
+}
+
 /* Sort buttons */
 .sort-btn {
   transition: all 0.2s ease;
@@ -995,6 +1239,10 @@ watch(() => route.path, (newPath, oldPath) => {
 .benchmark-metadata {
   font-size: 0.8125rem;
   color: var(--bs-secondary-color);
+}
+
+.low-quality-icon {
+  color: #cc8800;
 }
 
 .benchmark-description {
