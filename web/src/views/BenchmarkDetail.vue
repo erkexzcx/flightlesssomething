@@ -74,6 +74,21 @@
         </div>
       </div>
 
+      <!-- Quality warning banner -->
+      <div v-if="isLowQuality" class="alert alert-warning mb-3" role="alert">
+        <h6 class="alert-heading">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          <strong>Low Quality Benchmark</strong>
+        </h6>
+        <p class="mb-2">This benchmark has been flagged as low quality due to the following reasons:</p>
+        <ul class="mb-0">
+          <li v-if="benchmark.IsSingleRun">Single run benchmark (consider adding more runs for comparison)</li>
+          <li v-if="benchmark.HasLowQualityTitle">Title is too short (less than 10 characters)</li>
+          <li v-if="benchmark.HasLowQualityDescription">Description is too short or missing (less than 15 characters)</li>
+          <li v-if="benchmark.HasLowQualityRunNames">Run names contain date/time patterns or are too long (over 25 characters)</li>
+        </ul>
+      </div>
+
       <!-- Edit form -->
       <div v-if="editMode" class="card mb-3">
         <div class="card-body">
@@ -401,6 +416,14 @@ const shouldShowCollapseButton = ref(false)
 const isOwner = computed(() => {
   if (!authStore.isAuthenticated || !benchmark.value) return false
   return benchmark.value.UserID === authStore.user?.user_id || authStore.isAdmin
+})
+
+const isLowQuality = computed(() => {
+  if (!benchmark.value) return false
+  return benchmark.value.IsSingleRun || 
+         benchmark.value.HasLowQualityRunNames || 
+         benchmark.value.HasLowQualityDescription || 
+         benchmark.value.HasLowQualityTitle
 })
 
 const renderedDescription = computed(() => {

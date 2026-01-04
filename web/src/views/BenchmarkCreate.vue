@@ -127,6 +127,25 @@
             <div class="form-text">{{ description.length }}/5000 characters • Markdown supported</div>
           </div>
 
+          <!-- Quality warnings -->
+          <div v-if="qualityIssues.length > 0" class="alert alert-warning" role="alert">
+            <h6 class="alert-heading">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              <strong>Quality Warning</strong>
+            </h6>
+            <p class="mb-2">This benchmark has the following quality issues:</p>
+            <ul class="mb-0">
+              <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
+            </ul>
+            <hr>
+            <p class="mb-0">
+              <small>
+                <i class="fa-solid fa-info-circle"></i>
+                Low-quality benchmarks may be hidden by default for other users. Consider improving the title, description, or run names before uploading.
+              </small>
+            </p>
+          </div>
+
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary" :disabled="uploading">
               <span v-if="uploading">
@@ -144,11 +163,44 @@
         </form>
       </div>
     </div>
+    
+    <!-- Confirmation Modal for Low Quality Uploads -->
+    <div v-if="showConfirmModal" class="modal fade show d-block" tabindex="-1" role="dialog" style="background-color: rgba(0,0,0,0.5);">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-exclamation-triangle text-warning"></i>
+              Confirm Low-Quality Upload
+            </h5>
+            <button type="button" class="btn-close" @click="showConfirmModal = false" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>You are about to upload a benchmark that has been flagged as low quality:</p>
+            <ul>
+              <li v-for="(issue, index) in qualityIssues" :key="index">{{ issue }}</li>
+            </ul>
+            <p class="mb-0">
+              <strong>Low-quality benchmarks will be hidden by default for other users.</strong>
+              Are you sure you want to proceed with this upload?
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="showConfirmModal = false">
+              <i class="fa-solid fa-times"></i> Cancel
+            </button>
+            <button type="button" class="btn btn-warning" @click="confirmUpload">
+              <i class="fa-solid fa-upload"></i> Upload Anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { hasAnyDateTimePattern, getDateTimeWarningMessage } from '../utils/filenameValidator'
@@ -161,6 +213,8 @@ const title = ref('')
 const description = ref('')
 const uploading = ref(false)
 const error = ref(null)
+const qualityValidation = ref(null)
+const showConfirmModal = ref(false)
 
 // Computed property to check if any filenames have date/time patterns
 const hasDateTimeWarning = computed(() => {
@@ -168,7 +222,44 @@ const hasDateTimeWarning = computed(() => {
   return hasAnyDateTimePattern(labels)
 })
 
+// Computed property for quality issues
+const qualityIssues = computed(() => {
+  if (!qualityValidation.value) return []
+  return qualityValidation.value.issues || []
+})
+
+// Computed property to check if benchmark is low quality
+const isLowQuality = computed(() => {
+  return qualityValidation.value?.is_low_quality || false
+})
+
 const dateTimeWarningMessage = getDateTimeWarningMessage()
+
+// Watch for changes to title, description, or file labels to re-validate
+watch([title, description, selectedFiles], () => {
+  validateQuality()
+}, { deep: true })
+
+async function validateQuality() {
+  if (!title.value || selectedFiles.value.length === 0) {
+    qualityValidation.value = null
+    return
+  }
+  
+  try {
+    const runLabels = selectedFiles.value.map(f => f.label)
+    const result = await api.benchmarks.validateQuality(
+      title.value,
+      description.value,
+      runLabels
+    )
+    qualityValidation.value = result
+  } catch (err) {
+    // Silently fail - validation is not critical
+    console.error('Quality validation failed:', err)
+    qualityValidation.value = null
+  }
+}
 
 function handleFileSelect(event) {
   const files = Array.from(event.target.files)
@@ -222,6 +313,22 @@ async function handleSubmit() {
     return
   }
 
+  // Check if benchmark is low quality and show confirmation modal
+  if (isLowQuality.value && !showConfirmModal.value) {
+    showConfirmModal.value = true
+    return
+  }
+
+  // Proceed with upload
+  await performUpload()
+}
+
+async function confirmUpload() {
+  showConfirmModal.value = false
+  await performUpload()
+}
+
+async function performUpload() {
   try {
     uploading.value = true
     error.value = null
@@ -243,7 +350,7 @@ async function handleSubmit() {
       const renamedFile = new File([fileObj.file], fileObj.label + ext, { type: fileObj.file.type })
       formData.append('files', renamedFile)
     })
-
+    
     // Upload
     const result = await api.benchmarks.create(formData)
     
