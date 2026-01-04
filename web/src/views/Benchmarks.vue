@@ -682,7 +682,8 @@ async function loadBenchmarks() {
         currentPage.value,
         perPage.value,
         sortByParam,
-        sortOrderParam
+        sortOrderParam,
+        qualityFilters.value
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
       if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {

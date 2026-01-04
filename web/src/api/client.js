@@ -94,7 +94,7 @@ export const api = {
       return fetchJSON(`/api/benchmarks?${params}`)
     },
 
-    async listByUser(userId, page = 1, perPage = 10, sortBy = '', sortOrder = '') {
+    async listByUser(userId, page = 1, perPage = 10, sortBy = '', sortOrder = '', qualityFilters = {}) {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -105,6 +105,19 @@ export const api = {
       }
       if (sortOrder) {
         params.append('sort_order', sortOrder)
+      }
+      // Add quality filters (same as list method)
+      if (qualityFilters.hideSingleRun) {
+        params.append('hide_single_run', 'true')
+      }
+      if (qualityFilters.hideLowQualityRunNames) {
+        params.append('hide_low_quality_run_names', 'true')
+      }
+      if (qualityFilters.hideLowQualityDescription) {
+        params.append('hide_low_quality_description', 'true')
+      }
+      if (qualityFilters.hideLowQualityTitle) {
+        params.append('hide_low_quality_title', 'true')
       }
       return fetchJSON(`/api/benchmarks?${params}`)
     },

@@ -93,14 +93,14 @@ func GetQualityIssues(isSingleRun, hasLowQualityRunNames, hasLowQualityDescripti
 	}
 	
 	if hasLowQualityRunNames {
-		// Provide specific details about run name issues
+		// Only provide specific details about run name issues if requested
+		// Re-check each label to provide specific feedback (this is for UI display only)
 		for _, label := range runLabels {
 			trimmedLabel := strings.TrimSpace(label)
+			// Check length first as it's cheaper
 			if len(trimmedLabel) > maxRunNameLength {
 				issues = append(issues, "Run name too long: \""+trimmedLabel+"\" (over 25 characters)")
-				continue
-			}
-			if containsDateTimePattern(trimmedLabel) {
+			} else if containsDateTimePattern(trimmedLabel) {
 				issues = append(issues, "Run name contains date/time pattern: \""+trimmedLabel+"\"")
 			}
 		}
