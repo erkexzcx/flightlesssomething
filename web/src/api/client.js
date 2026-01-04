@@ -61,7 +61,7 @@ export const api = {
 
   // Benchmark endpoints
   benchmarks: {
-    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '', searchFields = [], qualityFilters = {}) {
+    async list(page = 1, perPage = 10, search = '', sortBy = '', sortOrder = '', searchFields = [], qualityFilters = {}, qualityFiltersMode = 'hide') {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -77,6 +77,10 @@ export const api = {
       }
       if (searchFields.length > 0) {
         params.append('search_fields', searchFields.join(','))
+      }
+      // Add quality filters mode
+      if (qualityFiltersMode) {
+        params.append('quality_filters_mode', qualityFiltersMode)
       }
       // Add quality filters
       if (qualityFilters.hideSingleRun) {
@@ -100,7 +104,7 @@ export const api = {
       return fetchJSON(`/api/benchmarks?${params}`)
     },
 
-    async listByUser(userId, page = 1, perPage = 10, sortBy = '', sortOrder = '', qualityFilters = {}) {
+    async listByUser(userId, page = 1, perPage = 10, sortBy = '', sortOrder = '', qualityFilters = {}, qualityFiltersMode = 'hide') {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -111,6 +115,10 @@ export const api = {
       }
       if (sortOrder) {
         params.append('sort_order', sortOrder)
+      }
+      // Add quality filters mode
+      if (qualityFiltersMode) {
+        params.append('quality_filters_mode', qualityFiltersMode)
       }
       // Add quality filters (same as list method)
       if (qualityFilters.hideSingleRun) {
