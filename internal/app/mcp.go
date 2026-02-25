@@ -716,7 +716,8 @@ func (s *mcpServer) getToolAccessLevel(name string) string {
 			return tool.accessLevel
 		}
 	}
-	return toolAccessPublic
+	// Unknown tools default to admin level to fail safely
+	return toolAccessAdmin
 }
 
 // --- Tool implementations ---
