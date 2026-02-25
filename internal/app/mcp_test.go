@@ -15,6 +15,7 @@ import (
 
 func setupMCPTestRouter(db *DBInstance) *gin.Engine {
 	gin.SetMode(gin.TestMode)
+	InitRateLimiters()
 	r := gin.New()
 	store := cookie.NewStore([]byte("test-secret"))
 	r.Use(sessions.Sessions("test_session", store))
@@ -129,7 +130,9 @@ func TestMCPToolsList(t *testing.T) {
 		"get_benchmark_run", "update_benchmark", "delete_benchmark",
 		"delete_benchmark_run", "get_current_user", "list_api_tokens",
 		"create_api_token", "delete_api_token", "list_users",
-		"list_audit_logs",
+		"list_audit_logs", "create_benchmark", "add_benchmark_runs",
+		"download_benchmark", "delete_user", "delete_user_benchmarks",
+		"ban_user", "toggle_user_admin",
 	}
 	if len(result.Tools) != len(expectedTools) {
 		t.Errorf("Expected %d tools, got %d", len(expectedTools), len(result.Tools))
@@ -790,4 +793,396 @@ func TestMCPListAuditLogsAsAdmin(t *testing.T) {
 	if !strings.Contains(result.Content[0].Text, "Benchmark Created") {
 		t.Error("Expected audit log entry in result")
 	}
+}
+
+const testMangoHudCSV = `os,cpu,gpu,ram,kernel,driver,cpuscheduler
+TestOS,TestCPU,TestGPU,16384,5.0.0,,none
+fps,frametime,cpu_load,gpu_load,cpu_temp,gpu_temp,gpu_core_clock,gpu_mem_clock,gpu_vram_used,gpu_power,ram_used,swap_used
+60,16.67,50,80,65,70,1500,900,4096,200,8192,0
+120,8.33,55,85,67,72,1600,950,4100,210,8200,0
+90,11.11,52,82,66,71,1550,920,4080,205,8150,0`
+
+func TestMCPCreateBenchmark(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpcreatedbench", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "createbench-token-abcdef123456", Name: "Create Bench Token"}
+	db.DB.Create(apiToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"MCP Created Bench","description":"Created via MCP","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "MCP Created Bench") {
+		t.Error("Expected benchmark title in result")
+	}
+
+	// Verify in DB
+	var count int64
+	db.DB.Model(&Benchmark{}).Where("user_id = ?", user.ID).Count(&count)
+	if count != 1 {
+		t.Errorf("Expected 1 benchmark, got %d", count)
+	}
+}
+
+func TestMCPCreateBenchmarkRequiresAuth(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"No Auth","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, body, "")
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for unauthenticated create_benchmark")
+	}
+	if !strings.Contains(result.Content[0].Text, "authentication required") {
+		t.Error("Expected authentication error message")
+	}
+}
+
+func TestMCPAddBenchmarkRuns(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpaddruns", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "addruns-token-abcdef1234567890", Name: "Add Runs Token"}
+	db.DB.Create(apiToken)
+
+	// First create a benchmark
+	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Add Runs Test","files":[{"name":"Initial Run","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, createBody, apiToken.Token)
+	_, createResult := parseMCPToolResult(t, w)
+	if createResult.IsError {
+		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
+	}
+
+	// Extract benchmark ID from result
+	var benchData map[string]interface{}
+	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
+		t.Fatalf("Failed to parse create result: %v", err)
+	}
+	idVal, ok := benchData["ID"].(float64)
+	if !ok {
+		t.Fatal("Failed to extract benchmark ID from result")
+	}
+	benchID := int(idVal)
+
+	// Add runs
+	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"New Run","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
+	w = mcpRequest(t, router, addBody, apiToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "runs added successfully") {
+		t.Error("Expected success message")
+	}
+	if !strings.Contains(result.Content[0].Text, `"total_run_count":2`) {
+		t.Error("Expected total_run_count of 2")
+	}
+}
+
+func TestMCPDownloadBenchmark(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpdownload", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "download-token-abcdef123456789", Name: "Download Token"}
+	db.DB.Create(apiToken)
+
+	// Create benchmark first
+	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Download Test","files":[{"name":"DL Run","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, createBody, apiToken.Token)
+	_, createResult := parseMCPToolResult(t, w)
+	if createResult.IsError {
+		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
+	}
+
+	var benchData map[string]interface{}
+	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
+		t.Fatalf("Failed to parse create result: %v", err)
+	}
+	idVal, ok := benchData["ID"].(float64)
+	if !ok {
+		t.Fatal("Failed to extract benchmark ID from result")
+	}
+	benchID := int(idVal)
+
+	// Download
+	dlBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"download_benchmark","arguments":{"id":%d}}}`, benchID)
+	w = mcpRequest(t, router, dlBody, "")
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "DL Run") {
+		t.Error("Expected run label in download result")
+	}
+	if !strings.Contains(result.Content[0].Text, "fps,frametime") {
+		t.Error("Expected CSV headers in download result")
+	}
+}
+
+func TestMCPDeleteUser(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpdeleteadmin", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "deleteuser-admin-token-abcdef1", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	target := createTestUser(db, "mcpdeletetarget", false)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":26,"method":"tools/call","params":{"name":"delete_user","arguments":{"user_id":%d}}}`, target.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "user deleted") {
+		t.Error("Expected deletion confirmation")
+	}
+
+	// Verify user is deleted
+	var count int64
+	db.DB.Model(&User{}).Where("id = ?", target.ID).Count(&count)
+	if count != 0 {
+		t.Error("Expected user to be deleted")
+	}
+}
+
+func TestMCPDeleteUserSelfProtection(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpselfdelete", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "selfdelete-admin-token-abcdef", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"delete_user","arguments":{"user_id":%d}}}`, admin.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for self-deletion")
+	}
+	if !strings.Contains(result.Content[0].Text, "cannot delete your own account") {
+		t.Error("Expected self-deletion error message")
+	}
+}
+
+func TestMCPDeleteUserBenchmarks(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpdelbenAdmin", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "delbench-admin-token-abcdef12", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	target := createTestUser(db, "mcpdelbenTarget", false)
+	db.DB.Create(&Benchmark{Title: "Target Bench", UserID: target.ID})
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":28,"method":"tools/call","params":{"name":"delete_user_benchmarks","arguments":{"user_id":%d}}}`, target.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "all user benchmarks deleted") {
+		t.Error("Expected deletion confirmation")
+	}
+
+	// Verify benchmarks are deleted
+	var count int64
+	db.DB.Model(&Benchmark{}).Where("user_id = ?", target.ID).Count(&count)
+	if count != 0 {
+		t.Error("Expected benchmarks to be deleted")
+	}
+}
+
+func TestMCPBanUser(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpbanadmin", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "banuser-admin-token-abcdef123", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	target := createTestUser(db, "mcpbantarget", false)
+
+	// Ban user
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":29,"method":"tools/call","params":{"name":"ban_user","arguments":{"user_id":%d,"banned":true}}}`, target.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+
+	// Verify user is banned
+	var user User
+	db.DB.First(&user, target.ID)
+	if !user.IsBanned {
+		t.Error("Expected user to be banned")
+	}
+
+	// Unban user
+	body = fmt.Sprintf(`{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"ban_user","arguments":{"user_id":%d,"banned":false}}}`, target.ID)
+	w = mcpRequest(t, router, body, adminToken.Token)
+
+	_, result = parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+
+	db.DB.First(&user, target.ID)
+	if user.IsBanned {
+		t.Error("Expected user to be unbanned")
+	}
+}
+
+func TestMCPBanUserSelfProtection(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpselfban", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "selfban-admin-token-abcdef123", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"ban_user","arguments":{"user_id":%d,"banned":true}}}`, admin.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for self-ban")
+	}
+	if !strings.Contains(result.Content[0].Text, "cannot ban your own account") {
+		t.Error("Expected self-ban error message")
+	}
+}
+
+func TestMCPToggleUserAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcptoggleadmin", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "toggle-admin-token-abcdef1234", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	target := createTestUser(db, "mcptoggletarget", false)
+
+	// Grant admin
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"toggle_user_admin","arguments":{"user_id":%d,"is_admin":true}}}`, target.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+
+	var user User
+	db.DB.First(&user, target.ID)
+	if !user.IsAdmin {
+		t.Error("Expected user to be admin")
+	}
+
+	// Revoke admin
+	body = fmt.Sprintf(`{"jsonrpc":"2.0","id":33,"method":"tools/call","params":{"name":"toggle_user_admin","arguments":{"user_id":%d,"is_admin":false}}}`, target.ID)
+	w = mcpRequest(t, router, body, adminToken.Token)
+
+	_, result = parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+
+	db.DB.First(&user, target.ID)
+	if user.IsAdmin {
+		t.Error("Expected user to not be admin")
+	}
+}
+
+func TestMCPToggleUserAdminSelfProtection(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpselftoggle", true)
+	adminToken := &APIToken{UserID: admin.ID, Token: "selftoggle-admin-token-abcdef", Name: "Admin Token"}
+	db.DB.Create(adminToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":34,"method":"tools/call","params":{"name":"toggle_user_admin","arguments":{"user_id":%d,"is_admin":false}}}`, admin.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for self-demotion")
+	}
+	if !strings.Contains(result.Content[0].Text, "cannot revoke your own admin privileges") {
+		t.Error("Expected self-demotion error message")
+	}
+}
+
+func TestMCPAdminToolsRequireAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpnonadmin3", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin3-token-abcdef1234567", Name: "Non-Admin Token"}
+	db.DB.Create(apiToken)
+
+	adminTools := []string{"delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
+	for _, tool := range adminTools {
+		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":35,"method":"tools/call","params":{"name":"%s","arguments":{"user_id":1}}}`, tool)
+		w := mcpRequest(t, router, body, apiToken.Token)
+
+		_, result := parseMCPToolResult(t, w)
+		if !result.IsError {
+			t.Errorf("Expected error for non-admin %s", tool)
+		}
+		if !strings.Contains(result.Content[0].Text, "admin privileges required") {
+			t.Errorf("Expected admin privileges error for %s", tool)
+		}
+	}
+}
+
+// jsonEscape returns a JSON-escaped string literal (with quotes) suitable for embedding in JSON
+func jsonEscape(s string) string { //nolint:unparam // test helper used with constant test data
+	b, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
 }
