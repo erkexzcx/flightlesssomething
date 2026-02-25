@@ -5,8 +5,10 @@ package app
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -52,6 +54,13 @@ func Start(config *Config, version string) error {
 
 	// Setup sessions
 	store := cookie.NewStore([]byte(config.SessionSecret))
+	secureCookie := strings.HasPrefix(config.DiscordRedirectURL, "https://")
+	store.Options(sessions.Options{
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secureCookie,
+		SameSite: http.SameSiteLaxMode,
+	})
 	r.Use(sessions.Sessions("flightlesssomething_session", store))
 
 	// Public routes
@@ -63,7 +72,7 @@ func Start(config *Config, version string) error {
 	r.GET("/auth/login", HandleLogin)
 	r.GET("/auth/login/callback", HandleLoginCallback(db))
 	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
-	r.POST("/auth/logout", HandleLogout)
+	r.POST("/auth/logout", HandleLogout(secureCookie))
 	r.GET("/api/auth/me", HandleGetCurrentUser)
 
 	// Public benchmark routes

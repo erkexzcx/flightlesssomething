@@ -235,20 +235,25 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 }
 
 // HandleLogout logs out the current user
-func HandleLogout(c *gin.Context) {
-	session := sessions.Default(c)
-	session.Clear()
-	// Set MaxAge to -1 to delete the cookie
-	session.Options(sessions.Options{
-		Path:   "/",
-		MaxAge: -1,
-	})
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
-		return
-	}
+func HandleLogout(secureCookie bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Clear()
+		// Set MaxAge to -1 to delete the cookie
+		session.Options(sessions.Options{
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   secureCookie,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		if err := session.Save(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
+			return
+		}
 
-	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+		c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
+	}
 }
 
 // HandleGetCurrentUser returns the current user's session information
