@@ -1,0 +1,1041 @@
+package app
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"net/http"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+// JSON-RPC 2.0 types
+type jsonrpcRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type jsonrpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Result  interface{}     `json:"result,omitempty"`
+	Error   *jsonrpcError   `json:"error,omitempty"`
+}
+
+type jsonrpcError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// JSON-RPC error codes
+const (
+	jsonrpcParseError     = -32700
+	jsonrpcInvalidRequest = -32600
+	jsonrpcMethodNotFound = -32601
+	jsonrpcInvalidParams  = -32602
+	jsonrpcInternalError  = -32603
+)
+
+// MCP protocol types
+type mcpInitializeResult struct {
+	ProtocolVersion string          `json:"protocolVersion"`
+	Capabilities    mcpCapabilities `json:"capabilities"`
+	ServerInfo      mcpServerInfo   `json:"serverInfo"`
+}
+
+type mcpCapabilities struct {
+	Tools *struct{} `json:"tools,omitempty"`
+}
+
+type mcpServerInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type mcpTool struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema interface{} `json:"inputSchema"`
+}
+
+type mcpToolsListResult struct {
+	Tools []mcpTool `json:"tools"`
+}
+
+type mcpToolCallParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
+type mcpToolResult struct {
+	Content []mcpContent `json:"content"`
+	IsError bool         `json:"isError,omitempty"`
+}
+
+type mcpContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// Data downsampling types
+const (
+	defaultMaxPoints = 500
+	maxMaxPoints     = 5000
+)
+
+// MetricSummary holds summary statistics and downsampled data for a metric
+type MetricSummary struct {
+	Min    float64   `json:"min"`
+	Max    float64   `json:"max"`
+	Avg    float64   `json:"avg"`
+	Median float64   `json:"median"`
+	P1     float64   `json:"p1"`
+	P99    float64   `json:"p99"`
+	StdDev float64   `json:"std_dev"`
+	Count  int       `json:"count"`
+	Data   []float64 `json:"data"`
+}
+
+// BenchmarkDataSummary is a downsampled version of BenchmarkData for MCP responses
+type BenchmarkDataSummary struct {
+	Label              string                    `json:"label"`
+	SpecOS             string                    `json:"spec_os"`
+	SpecCPU            string                    `json:"spec_cpu"`
+	SpecGPU            string                    `json:"spec_gpu"`
+	SpecRAM            string                    `json:"spec_ram"`
+	SpecLinuxKernel    string                    `json:"spec_linux_kernel,omitempty"`
+	SpecLinuxScheduler string                    `json:"spec_linux_scheduler,omitempty"`
+	TotalDataPoints    int                       `json:"total_data_points"`
+	DownsampledTo      int                       `json:"downsampled_to"`
+	Metrics            map[string]*MetricSummary `json:"metrics"`
+}
+
+// mcpServer holds the MCP server state
+type mcpServer struct {
+	db      *DBInstance
+	version string
+	tools   []mcpTool
+}
+
+func newMCPServer(db *DBInstance, version string) *mcpServer {
+	s := &mcpServer{db: db, version: version}
+	s.tools = s.defineTools()
+	return s
+}
+
+func (s *mcpServer) defineTools() []mcpTool {
+	return []mcpTool{
+		{
+			Name:        "list_benchmarks",
+			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description, user, run count, and timestamps.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":      map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page":  map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
+					"search":    map[string]interface{}{"type": "string", "description": "Search keywords (space-separated, AND logic). Searches title, description, username, run names, and specifications."},
+					"user_id":   map[string]interface{}{"type": "integer", "description": "Filter by user ID"},
+					"sort_by":   map[string]interface{}{"type": "string", "enum": []string{"title", "created_at", "updated_at"}, "description": "Sort field (default: created_at)"},
+					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
+				},
+			},
+		},
+		{
+			Name:        "get_benchmark",
+			Description: "Get detailed information about a specific benchmark including title, description, user, run count, run labels, and timestamps.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+				},
+			},
+		},
+		{
+			Name:        "get_benchmark_data",
+			Description: "Get benchmark performance data with automatic downsampling for large datasets. Returns summary statistics (min, max, avg, median, p1, p99, std_dev) and downsampled time series for each metric (FPS, frame time, CPU/GPU load, temperatures, power, clocks, memory).",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"max_points": map[string]interface{}{"type": "integer", "description": "Maximum data points per metric after downsampling, 1-5000 (default: 500). Set to 0 for summary statistics only."},
+				},
+			},
+		},
+		{
+			Name:        "get_benchmark_run",
+			Description: "Get performance data for a specific run within a benchmark. Returns the same downsampled format as get_benchmark_data but for a single run.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id", "run_index"},
+				"properties": map[string]interface{}{
+					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"run_index":  map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
+					"max_points": map[string]interface{}{"type": "integer", "description": "Maximum data points per metric after downsampling, 1-5000 (default: 500). Set to 0 for summary statistics only."},
+				},
+			},
+		},
+		{
+			Name:        "update_benchmark",
+			Description: "Update benchmark metadata (title, description) and/or run labels. Requires authentication via API token. Only the benchmark owner or an admin can update.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id":          map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"title":       map[string]interface{}{"type": "string", "description": "New title (max 100 chars)"},
+					"description": map[string]interface{}{"type": "string", "description": "New description (max 5000 chars)"},
+					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
+				},
+			},
+		},
+		{
+			Name:        "delete_benchmark",
+			Description: "Delete a benchmark and all its data. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+				},
+			},
+		},
+		{
+			Name:        "delete_benchmark_run",
+			Description: "Delete a specific run from a benchmark. Cannot delete the last remaining run. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id", "run_index"},
+				"properties": map[string]interface{}{
+					"id":        map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"run_index": map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
+				},
+			},
+		},
+	}
+}
+
+// HandleMCP handles MCP JSON-RPC requests via POST
+func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
+	server := newMCPServer(db, version)
+	return func(c *gin.Context) {
+		// Validate Content-Type
+		contentType := c.GetHeader("Content-Type")
+		if !strings.HasPrefix(contentType, "application/json") {
+			c.JSON(http.StatusBadRequest, jsonrpcResponse{
+				JSONRPC: "2.0",
+				Error:   &jsonrpcError{Code: jsonrpcParseError, Message: "Content-Type must be application/json"},
+			})
+			return
+		}
+
+		// Parse JSON-RPC request
+		var req jsonrpcRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusOK, jsonrpcResponse{
+				JSONRPC: "2.0",
+				Error:   &jsonrpcError{Code: jsonrpcParseError, Message: "failed to parse request"},
+			})
+			return
+		}
+
+		if req.JSONRPC != "2.0" {
+			c.JSON(http.StatusOK, jsonrpcResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &jsonrpcError{Code: jsonrpcInvalidRequest, Message: "jsonrpc must be \"2.0\""},
+			})
+			return
+		}
+
+		// Handle notifications (no ID) - respond with 202 Accepted
+		if req.ID == nil || string(req.ID) == "null" {
+			if req.Method == "notifications/initialized" {
+				c.Status(http.StatusAccepted)
+				return
+			}
+			c.Status(http.StatusAccepted)
+			return
+		}
+
+		// Handle methods
+		var resp jsonrpcResponse
+		switch req.Method {
+		case "initialize":
+			resp = server.handleInitialize(&req)
+		case "tools/list":
+			resp = server.handleToolsList(&req)
+		case "tools/call":
+			resp = server.handleToolsCall(c, &req)
+		case "ping":
+			resp = jsonrpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{}}
+		default:
+			resp = jsonrpcResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &jsonrpcError{Code: jsonrpcMethodNotFound, Message: fmt.Sprintf("method not found: %s", req.Method)},
+			}
+		}
+
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// HandleMCPGet handles GET requests for server-sent events (SSE stream)
+func HandleMCPGet(c *gin.Context) {
+	// For stateless implementation, GET is not used for SSE
+	c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "SSE not supported, use POST for JSON-RPC requests"})
+}
+
+// HandleMCPDelete handles session termination
+func HandleMCPDelete(c *gin.Context) {
+	// Stateless server - no sessions to terminate
+	c.JSON(http.StatusOK, gin.H{"message": "session terminated"})
+}
+
+func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
+	return jsonrpcResponse{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Result: mcpInitializeResult{
+			ProtocolVersion: "2025-03-26",
+			Capabilities: mcpCapabilities{
+				Tools: &struct{}{},
+			},
+			ServerInfo: mcpServerInfo{
+				Name:    "FlightlessSomething",
+				Version: s.version,
+			},
+		},
+	}
+}
+
+func (s *mcpServer) handleToolsList(req *jsonrpcRequest) jsonrpcResponse {
+	return jsonrpcResponse{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Result:  mcpToolsListResult{Tools: s.tools},
+	}
+}
+
+func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
+	var params mcpToolCallParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return jsonrpcResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &jsonrpcError{Code: jsonrpcInvalidParams, Message: "invalid tool call params"},
+		}
+	}
+
+	// Determine authentication state
+	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
+
+	// Check if tool requires authentication
+	writeTools := map[string]bool{
+		"update_benchmark":     true,
+		"delete_benchmark":     true,
+		"delete_benchmark_run": true,
+	}
+
+	if writeTools[params.Name] && !authenticated {
+		return s.toolError(req.ID, "authentication required: provide API token via Authorization: Bearer <token> header")
+	}
+
+	// Execute tool
+	var result string
+	var toolErr error
+
+	switch params.Name {
+	case "list_benchmarks":
+		result, toolErr = s.toolListBenchmarks(params.Arguments)
+	case "get_benchmark":
+		result, toolErr = s.toolGetBenchmark(params.Arguments)
+	case "get_benchmark_data":
+		result, toolErr = s.toolGetBenchmarkData(params.Arguments)
+	case "get_benchmark_run":
+		result, toolErr = s.toolGetBenchmarkRun(params.Arguments)
+	case "update_benchmark":
+		result, toolErr = s.toolUpdateBenchmark(params.Arguments, userID, isAdmin)
+	case "delete_benchmark":
+		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, isAdmin)
+	case "delete_benchmark_run":
+		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, isAdmin)
+	default:
+		return jsonrpcResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &jsonrpcError{Code: jsonrpcMethodNotFound, Message: fmt.Sprintf("unknown tool: %s", params.Name)},
+		}
+	}
+
+	if toolErr != nil {
+		return s.toolError(req.ID, toolErr.Error())
+	}
+
+	return jsonrpcResponse{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Result: mcpToolResult{
+			Content: []mcpContent{{Type: "text", Text: result}},
+		},
+	}
+}
+
+// authenticateFromHeader checks the Authorization header for an API token
+// Returns (userID, isAdmin, authenticated)
+func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, bool, bool) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return 0, false, false
+	}
+
+	const prefix = "Bearer "
+	if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
+		return 0, false, false
+	}
+
+	token := authHeader[len(prefix):]
+
+	var apiToken APIToken
+	if err := s.db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
+		return 0, false, false
+	}
+
+	// Check if user is banned
+	if apiToken.User.IsBanned {
+		return 0, false, false
+	}
+
+	// Update last used timestamp
+	now := time.Now()
+	apiToken.LastUsedAt = &now
+	s.db.DB.Save(&apiToken)
+	s.db.DB.Model(&User{}).Where("id = ?", apiToken.UserID).Update("last_api_activity_at", now)
+
+	return apiToken.UserID, apiToken.User.IsAdmin, true
+}
+
+func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
+	return jsonrpcResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: mcpToolResult{
+			Content: []mcpContent{{Type: "text", Text: msg}},
+			IsError: true,
+		},
+	}
+}
+
+// --- Tool implementations ---
+
+func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
+	var params struct {
+		Page      int    `json:"page"`
+		PerPage   int    `json:"per_page"`
+		Search    string `json:"search"`
+		UserID    int    `json:"user_id"`
+		SortBy    string `json:"sort_by"`
+		SortOrder string `json:"sort_order"`
+	}
+	if args != nil {
+		if err := json.Unmarshal(args, &params); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 10
+	}
+
+	query := s.db.DB.Preload("User")
+
+	if params.UserID > 0 {
+		query = query.Where("user_id = ?", params.UserID)
+	}
+
+	if params.Search != "" {
+		keywords := strings.Fields(params.Search)
+		for _, keyword := range keywords {
+			keyword = strings.TrimSpace(keyword)
+			if keyword != "" {
+				orClause := "benchmarks.title LIKE ? OR benchmarks.description LIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?) OR benchmarks.run_names LIKE ? OR benchmarks.specifications LIKE ?"
+				query = query.Where(orClause, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+			}
+		}
+	}
+
+	// Sorting
+	var orderClause string
+	switch params.SortBy {
+	case "title":
+		orderClause = "title"
+	case "updated_at":
+		orderClause = "updated_at"
+	default:
+		orderClause = "created_at"
+	}
+	if params.SortOrder == "asc" {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+	query = query.Order(orderClause)
+
+	var total int64
+	if err := query.Model(&Benchmark{}).Count(&total).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	var benchmarks []Benchmark
+	offset := (params.Page - 1) * params.PerPage
+	if err := query.Offset(offset).Limit(params.PerPage).Find(&benchmarks).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	// Populate run count and labels
+	var wg sync.WaitGroup
+	for i := range benchmarks {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			count, labels, err := GetBenchmarkRunCount(benchmarks[idx].ID)
+			if err == nil {
+				benchmarks[idx].RunCount = count
+				benchmarks[idx].RunLabels = labels
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
+
+	result := map[string]interface{}{
+		"benchmarks":  benchmarks,
+		"page":        params.Page,
+		"per_page":    params.PerPage,
+		"total":       total,
+		"total_pages": totalPages,
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolGetBenchmark(args json.RawMessage) (string, error) {
+	var params struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	var benchmark Benchmark
+	if err := s.db.DB.Preload("User").First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	count, labels, err := GetBenchmarkRunCount(benchmark.ID)
+	if err == nil {
+		benchmark.RunCount = count
+		benchmark.RunLabels = labels
+	}
+
+	data, err := json.Marshal(benchmark)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
+	var params struct {
+		ID        int `json:"id"`
+		MaxPoints int `json:"max_points"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	maxPoints := params.MaxPoints
+	switch {
+	case maxPoints == 0:
+		maxPoints = defaultMaxPoints
+	case maxPoints < 0:
+		maxPoints = 0 // summary stats only
+	case maxPoints > maxMaxPoints:
+		maxPoints = maxMaxPoints
+	}
+
+	// Verify benchmark exists
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
+	}
+
+	summaries := make([]*BenchmarkDataSummary, len(benchmarkData))
+	for i, run := range benchmarkData {
+		summaries[i] = downsampleBenchmarkData(run, maxPoints)
+	}
+
+	// Trigger GC to reclaim memory from loaded benchmark data
+	runtime.GC()
+
+	data, err := json.Marshal(summaries)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
+	var params struct {
+		ID        int `json:"id"`
+		RunIndex  int `json:"run_index"`
+		MaxPoints int `json:"max_points"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	maxPoints := params.MaxPoints
+	switch {
+	case maxPoints == 0:
+		maxPoints = defaultMaxPoints
+	case maxPoints < 0:
+		maxPoints = 0
+	case maxPoints > maxMaxPoints:
+		maxPoints = maxMaxPoints
+	}
+
+	// Verify benchmark exists
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	run, err := RetrieveBenchmarkRun(uint(params.ID), params.RunIndex)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve run: %w", err)
+	}
+
+	summary := downsampleBenchmarkData(run, maxPoints)
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+	var params struct {
+		ID          int               `json:"id"`
+		Title       string            `json:"title"`
+		Description string            `json:"description"`
+		Labels      map[string]string `json:"labels"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	// Check if user is banned (admins can still update)
+	if !isAdmin {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err != nil {
+			return "", fmt.Errorf("user not found")
+		}
+		if user.IsBanned {
+			return "", fmt.Errorf("your account has been banned")
+		}
+	}
+
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	// Check ownership or admin
+	if benchmark.UserID != userID && !isAdmin {
+		return "", fmt.Errorf("not authorized")
+	}
+
+	// Validate title length
+	if params.Title != "" {
+		if len(params.Title) > 100 {
+			return "", fmt.Errorf("title must be at most 100 characters")
+		}
+		benchmark.Title = params.Title
+	}
+	if params.Description != "" {
+		if len(params.Description) > 5000 {
+			return "", fmt.Errorf("description must be at most 5000 characters")
+		}
+		benchmark.Description = params.Description
+	}
+
+	// Update labels if provided
+	if len(params.Labels) > 0 {
+		benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
+		if err != nil {
+			return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
+		}
+
+		for idxStr, newLabel := range params.Labels {
+			idx, err := strconv.Atoi(idxStr)
+			if err != nil {
+				continue
+			}
+			if idx >= 0 && idx < len(benchmarkData) {
+				benchmarkData[idx].Label = newLabel
+			}
+		}
+
+		if err := StoreBenchmarkData(benchmarkData, uint(params.ID)); err != nil {
+			return "", fmt.Errorf("failed to update labels: %w", err)
+		}
+
+		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+		benchmark.RunNames = runNames
+		benchmark.Specifications = specifications
+
+		runtime.GC()
+	}
+
+	if err := s.db.DB.Save(&benchmark).Error; err != nil {
+		return "", fmt.Errorf("failed to update benchmark: %w", err)
+	}
+
+	// Reload with user data
+	if err := s.db.DB.Preload("User").First(&benchmark, benchmark.ID).Error; err != nil {
+		return "", fmt.Errorf("failed to load benchmark: %w", err)
+	}
+
+	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
+
+	data, err := json.Marshal(benchmark)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+	var params struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	// Check if user is banned (admins can still delete)
+	if !isAdmin {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err != nil {
+			return "", fmt.Errorf("user not found")
+		}
+		if user.IsBanned {
+			return "", fmt.Errorf("your account has been banned")
+		}
+	}
+
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	// Check ownership or admin
+	if benchmark.UserID != userID && !isAdmin {
+		return "", fmt.Errorf("not authorized")
+	}
+
+	title := benchmark.Title
+
+	if err := DeleteBenchmarkData(benchmark.ID); err != nil {
+		fmt.Printf("Warning: failed to delete benchmark data file: %v\n", err)
+	}
+
+	if err := s.db.DB.Delete(&benchmark).Error; err != nil {
+		return "", fmt.Errorf("failed to delete benchmark: %w", err)
+	}
+
+	LogBenchmarkDeleted(s.db, userID, benchmark.ID, title)
+
+	result := map[string]interface{}{
+		"message": "benchmark deleted",
+		"id":      params.ID,
+		"title":   title,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+	var params struct {
+		ID       int `json:"id"`
+		RunIndex int `json:"run_index"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	// Check if user is banned (admins can still delete)
+	if !isAdmin {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err != nil {
+			return "", fmt.Errorf("user not found")
+		}
+		if user.IsBanned {
+			return "", fmt.Errorf("your account has been banned")
+		}
+	}
+
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	// Check ownership or admin
+	if benchmark.UserID != userID && !isAdmin {
+		return "", fmt.Errorf("not authorized")
+	}
+
+	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
+	}
+
+	if params.RunIndex < 0 || params.RunIndex >= len(benchmarkData) {
+		return "", fmt.Errorf("run index out of range")
+	}
+
+	if len(benchmarkData) == 1 {
+		return "", fmt.Errorf("cannot delete the last run - delete the entire benchmark instead")
+	}
+
+	benchmarkData = append(benchmarkData[:params.RunIndex], benchmarkData[params.RunIndex+1:]...)
+
+	if err := StoreBenchmarkData(benchmarkData, uint(params.ID)); err != nil {
+		return "", fmt.Errorf("failed to update benchmark data: %w", err)
+	}
+
+	runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+	benchmark.RunNames = runNames
+	benchmark.Specifications = specifications
+
+	if err := s.db.DB.Save(&benchmark).Error; err != nil {
+		return "", fmt.Errorf("failed to update benchmark: %w", err)
+	}
+
+	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
+
+	runtime.GC()
+
+	return `{"message":"run deleted successfully"}`, nil
+}
+
+// --- Data downsampling ---
+
+func downsampleBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSummary {
+	// Determine total data points from FPS array (representative)
+	totalPoints := len(run.DataFPS)
+	if totalPoints == 0 {
+		totalPoints = len(run.DataFrameTime)
+	}
+
+	actualMax := maxPoints
+	if maxPoints > 0 && totalPoints <= maxPoints {
+		actualMax = totalPoints
+	}
+	if maxPoints <= 0 {
+		actualMax = 0
+	}
+
+	summary := &BenchmarkDataSummary{
+		Label:              run.Label,
+		SpecOS:             run.SpecOS,
+		SpecCPU:            run.SpecCPU,
+		SpecGPU:            run.SpecGPU,
+		SpecRAM:            run.SpecRAM,
+		SpecLinuxKernel:    run.SpecLinuxKernel,
+		SpecLinuxScheduler: run.SpecLinuxScheduler,
+		TotalDataPoints:    totalPoints,
+		DownsampledTo:      actualMax,
+		Metrics:            make(map[string]*MetricSummary),
+	}
+
+	// Process each metric
+	addMetric := func(name string, data []float64) {
+		if len(data) == 0 {
+			return
+		}
+		summary.Metrics[name] = computeMetricSummary(data, actualMax)
+	}
+
+	addMetric("fps", run.DataFPS)
+	addMetric("frame_time", run.DataFrameTime)
+	addMetric("cpu_load", run.DataCPULoad)
+	addMetric("gpu_load", run.DataGPULoad)
+	addMetric("cpu_temp", run.DataCPUTemp)
+	addMetric("cpu_power", run.DataCPUPower)
+	addMetric("gpu_temp", run.DataGPUTemp)
+	addMetric("gpu_core_clock", run.DataGPUCoreClock)
+	addMetric("gpu_mem_clock", run.DataGPUMemClock)
+	addMetric("gpu_vram_used", run.DataGPUVRAMUsed)
+	addMetric("gpu_power", run.DataGPUPower)
+	addMetric("ram_used", run.DataRAMUsed)
+	addMetric("swap_used", run.DataSwapUsed)
+
+	return summary
+}
+
+func computeMetricSummary(data []float64, maxPoints int) *MetricSummary {
+	n := len(data)
+	if n == 0 {
+		return nil
+	}
+
+	// Compute statistics
+	var sum float64
+	minVal := data[0]
+	maxVal := data[0]
+	for _, v := range data {
+		sum += v
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	avg := sum / float64(n)
+
+	// Standard deviation
+	var sumSq float64
+	for _, v := range data {
+		diff := v - avg
+		sumSq += diff * diff
+	}
+	stdDev := math.Sqrt(sumSq / float64(n))
+
+	// Sort a copy for percentile calculations
+	sorted := make([]float64, n)
+	copy(sorted, data)
+	sort.Float64s(sorted)
+
+	median := percentile(sorted, 50)
+	p1 := percentile(sorted, 1)
+	p99 := percentile(sorted, 99)
+
+	summary := &MetricSummary{
+		Min:    math.Round(minVal*100) / 100,
+		Max:    math.Round(maxVal*100) / 100,
+		Avg:    math.Round(avg*100) / 100,
+		Median: math.Round(median*100) / 100,
+		P1:     math.Round(p1*100) / 100,
+		P99:    math.Round(p99*100) / 100,
+		StdDev: math.Round(stdDev*100) / 100,
+		Count:  n,
+	}
+
+	// Downsample data if needed
+	if maxPoints > 0 {
+		if n <= maxPoints {
+			// Return all data points, rounded
+			summary.Data = make([]float64, n)
+			for i, v := range data {
+				summary.Data[i] = math.Round(v*100) / 100
+			}
+		} else {
+			// Evenly-spaced downsampling
+			summary.Data = downsampleSlice(data, maxPoints)
+		}
+	}
+
+	return summary
+}
+
+func downsampleSlice(data []float64, targetPoints int) []float64 {
+	n := len(data)
+	if n <= targetPoints || targetPoints <= 0 {
+		result := make([]float64, n)
+		for i, v := range data {
+			result[i] = math.Round(v*100) / 100
+		}
+		return result
+	}
+
+	result := make([]float64, targetPoints)
+	step := float64(n-1) / float64(targetPoints-1)
+	for i := 0; i < targetPoints; i++ {
+		idx := int(math.Round(step * float64(i)))
+		if idx >= n {
+			idx = n - 1
+		}
+		result[i] = math.Round(data[idx]*100) / 100
+	}
+	return result
+}
+
+func percentile(sorted []float64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if len(sorted) == 1 {
+		return sorted[0]
+	}
+
+	rank := (p / 100) * float64(len(sorted)-1)
+	lower := int(math.Floor(rank))
+	upper := int(math.Ceil(rank))
+
+	if lower == upper || upper >= len(sorted) {
+		return sorted[lower]
+	}
+
+	// Linear interpolation
+	frac := rank - float64(lower)
+	return sorted[lower]*(1-frac) + sorted[upper]*frac
+}
