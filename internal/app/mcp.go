@@ -53,7 +53,11 @@ type mcpInitializeResult struct {
 }
 
 type mcpCapabilities struct {
-	Tools *struct{} `json:"tools,omitempty"`
+	Tools *mcpToolsCapability `json:"tools,omitempty"`
+}
+
+type mcpToolsCapability struct {
+	ListChanged bool `json:"listChanged"`
 }
 
 type mcpServerInfo struct {
@@ -69,9 +73,11 @@ const (
 )
 
 type mcpToolAnnotations struct {
-	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
-	DestructiveHint *bool `json:"destructiveHint,omitempty"`
-	IdempotentHint  *bool `json:"idempotentHint,omitempty"`
+	Title           string `json:"title,omitempty"`
+	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool  `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool  `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
 }
 
 type mcpTool struct {
@@ -167,7 +173,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
 		},
 		{
@@ -180,7 +186,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
 		},
 		{
@@ -194,7 +200,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
 		},
 		{
@@ -209,7 +215,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
 		},
 		{
@@ -222,7 +228,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
 		},
 		{
@@ -232,7 +238,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -258,7 +264,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -274,7 +280,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -287,7 +293,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -301,7 +307,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"run_index": map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -326,7 +332,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -336,7 +342,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -349,7 +355,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -362,7 +368,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -376,7 +382,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -392,7 +398,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -406,7 +412,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"delete_data": map[string]interface{}{"type": "boolean", "description": "Also delete all benchmark data files (default: false)"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -419,7 +425,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"user_id": map[string]interface{}{"type": "integer", "description": "User ID whose benchmarks to delete"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -433,7 +439,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"banned":  map[string]interface{}{"type": "boolean", "description": "true to ban, false to unban"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -447,7 +453,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"is_admin": map[string]interface{}{"type": "boolean", "description": "true to grant admin, false to revoke"},
 				},
 			},
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 	}
@@ -536,9 +542,9 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 		JSONRPC: "2.0",
 		ID:      req.ID,
 		Result: mcpInitializeResult{
-			ProtocolVersion: "2025-03-26",
+			ProtocolVersion: "2025-11-25",
 			Capabilities: mcpCapabilities{
-				Tools: &struct{}{},
+				Tools: &mcpToolsCapability{ListChanged: false},
 			},
 			ServerInfo: mcpServerInfo{
 				Name:    "FlightlessSomething",

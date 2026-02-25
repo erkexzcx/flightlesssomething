@@ -62,7 +62,7 @@ func TestMCPInitialize(t *testing.T) {
 	defer cleanupTestDB(t, db)
 	router := setupMCPTestRouter(db)
 
-	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	w := mcpRequest(t, router, body, "")
 
 	if w.Code != http.StatusOK {
@@ -85,8 +85,8 @@ func TestMCPInitialize(t *testing.T) {
 	if err := json.Unmarshal(resultBytes, &result); err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
 	}
-	if result.ProtocolVersion != "2025-03-26" {
-		t.Errorf("Expected protocol version 2025-03-26, got %s", result.ProtocolVersion)
+	if result.ProtocolVersion != "2025-11-25" {
+		t.Errorf("Expected protocol version 2025-11-25, got %s", result.ProtocolVersion)
 	}
 	if result.ServerInfo.Name != "FlightlessSomething" {
 		t.Errorf("Expected server name FlightlessSomething, got %s", result.ServerInfo.Name)
