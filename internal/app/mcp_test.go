@@ -432,24 +432,39 @@ func TestComputeMetricSummary(t *testing.T) {
 	if summary.Count != 5 {
 		t.Errorf("Expected count=5, got %d", summary.Count)
 	}
+	if summary.Variance == 0 {
+		t.Error("Expected non-zero variance")
+	}
+	if summary.StdDev == 0 {
+		t.Error("Expected non-zero std_dev")
+	}
+	// Sample variance (n-1): sum((x-30)^2) / 4 = (400+100+0+100+400)/4 = 250
+	if summary.Variance != 250 {
+		t.Errorf("Expected variance=250 (sample), got %f", summary.Variance)
+	}
 
 	statsOnly := computeMetricSummary(data, 0)
 	if statsOnly.Data != nil {
 		t.Error("Expected no data with max_points=0")
 	}
+	if statsOnly.Variance != 250 {
+		t.Error("Stats should still be computed even with max_points=0")
+	}
 }
 
-func TestDownsampleBenchmarkData(t *testing.T) {
+func TestSummarizeBenchmarkData(t *testing.T) {
 	run := &BenchmarkData{
-		Label:   "Test Run",
-		SpecOS:  "Linux",
-		SpecCPU: "AMD Ryzen 7",
-		SpecGPU: "RTX 3080",
-		SpecRAM: "32GB",
-		DataFPS: []float64{60, 120, 90, 144, 30},
+		Label:         "Test Run",
+		SpecOS:        "Linux",
+		SpecCPU:       "AMD Ryzen 7",
+		SpecGPU:       "RTX 3080",
+		SpecRAM:       "32GB",
+		DataFPS:       []float64{60, 120, 90, 144, 30},
+		DataFrameTime: []float64{16.67, 8.33, 11.11, 6.94, 33.33},
 	}
 
-	summary := downsampleBenchmarkData(run, 3)
+	// Default: stats only (maxPoints=0)
+	summary := summarizeBenchmarkData(run, 0)
 	if summary.Label != "Test Run" {
 		t.Errorf("Expected label 'Test Run', got '%s'", summary.Label)
 	}
@@ -461,6 +476,44 @@ func TestDownsampleBenchmarkData(t *testing.T) {
 	}
 	if summary.Metrics["fps"].Count != 5 {
 		t.Errorf("Expected count 5, got %d", summary.Metrics["fps"].Count)
+	}
+	// FPS stats should be derived from frametime
+	if summary.Metrics["fps"].Data != nil {
+		t.Error("Expected no data points with maxPoints=0")
+	}
+	if summary.Metrics["fps"].Variance == 0 {
+		t.Error("Expected non-zero FPS variance")
+	}
+	if summary.Metrics["frame_time"] == nil {
+		t.Fatal("Expected frame_time metric in summary")
+	}
+	if summary.Metrics["frame_time"].Variance == 0 {
+		t.Error("Expected non-zero frametime variance")
+	}
+}
+
+func TestComputeFPSFromFrametime(t *testing.T) {
+	// 10ms frametime = 100 FPS, 20ms = 50 FPS
+	ft := []float64{10, 20, 10, 20, 10}
+	fps := []float64{100, 50, 100, 50, 100}
+
+	summary := computeFPSFromFrametime(ft, fps, 0)
+	if summary == nil {
+		t.Fatal("Expected non-nil summary")
+	}
+	// Min FPS should come from max frametime (20ms → 50 FPS)
+	if summary.Min != 50 {
+		t.Errorf("Expected min FPS=50, got %f", summary.Min)
+	}
+	// Max FPS should come from min frametime (10ms → 100 FPS)
+	if summary.Max != 100 {
+		t.Errorf("Expected max FPS=100, got %f", summary.Max)
+	}
+	if summary.Variance == 0 {
+		t.Error("Expected non-zero variance")
+	}
+	if summary.Data != nil {
+		t.Error("Expected no data with maxPoints=0")
 	}
 }
 

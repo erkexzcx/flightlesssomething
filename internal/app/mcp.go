@@ -88,24 +88,26 @@ type mcpContent struct {
 
 // Data downsampling types
 const (
-	defaultMaxPoints = 500
-	maxMaxPoints     = 5000
+	maxMaxPoints = 5000
 )
 
-// MetricSummary holds summary statistics and downsampled data for a metric
+// MetricSummary holds computed statistics for a metric, matching the web frontend calculations.
+// Stats are always provided. Raw data points are optional (opt-in via max_points > 0).
 type MetricSummary struct {
-	Min    float64   `json:"min"`
-	Max    float64   `json:"max"`
-	Avg    float64   `json:"avg"`
-	Median float64   `json:"median"`
-	P1     float64   `json:"p1"`
-	P99    float64   `json:"p99"`
-	StdDev float64   `json:"std_dev"`
-	Count  int       `json:"count"`
-	Data   []float64 `json:"data"`
+	Min      float64   `json:"min"`
+	Max      float64   `json:"max"`
+	Avg      float64   `json:"avg"`
+	Median   float64   `json:"median"`
+	P01      float64   `json:"p01"`
+	P97      float64   `json:"p97"`
+	StdDev   float64   `json:"std_dev"`
+	Variance float64   `json:"variance"`
+	Count    int       `json:"count"`
+	Data     []float64 `json:"data,omitempty"`
 }
 
-// BenchmarkDataSummary is a downsampled version of BenchmarkData for MCP responses
+// BenchmarkDataSummary holds computed stats per metric for a benchmark run.
+// This is the primary response format — stats are always computed from full data.
 type BenchmarkDataSummary struct {
 	Label              string                    `json:"label"`
 	SpecOS             string                    `json:"spec_os"`
@@ -115,7 +117,7 @@ type BenchmarkDataSummary struct {
 	SpecLinuxKernel    string                    `json:"spec_linux_kernel,omitempty"`
 	SpecLinuxScheduler string                    `json:"spec_linux_scheduler,omitempty"`
 	TotalDataPoints    int                       `json:"total_data_points"`
-	DownsampledTo      int                       `json:"downsampled_to"`
+	DownsampledTo      int                       `json:"downsampled_to,omitempty"`
 	Metrics            map[string]*MetricSummary `json:"metrics"`
 }
 
@@ -162,26 +164,26 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "get_benchmark_data",
-			Description: "Get benchmark performance data with automatic downsampling for large datasets. Returns summary statistics (min, max, avg, median, p1, p99, std_dev) and downsampled time series for each metric (FPS, frame time, CPU/GPU load, temperatures, power, clocks, memory).",
+			Description: "Get computed statistics for all benchmark runs. Returns per-metric stats matching the web UI: min, max, avg, median, p01, p97, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
 				"properties": map[string]interface{}{
 					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-					"max_points": map[string]interface{}{"type": "integer", "description": "Maximum data points per metric after downsampling, 1-5000 (default: 500). Set to 0 for summary statistics only."},
+					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
 		},
 		{
 			Name:        "get_benchmark_run",
-			Description: "Get performance data for a specific run within a benchmark. Returns the same downsampled format as get_benchmark_data but for a single run.",
+			Description: "Get computed statistics for a specific run within a benchmark. Same stats as get_benchmark_data but for a single run. Raw data points omitted by default.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id", "run_index"},
 				"properties": map[string]interface{}{
 					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 					"run_index":  map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
-					"max_points": map[string]interface{}{"type": "integer", "description": "Maximum data points per metric after downsampling, 1-5000 (default: 500). Set to 0 for summary statistics only."},
+					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
 		},
@@ -581,13 +583,12 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 
 	maxPoints := params.MaxPoints
 	switch {
-	case maxPoints == 0:
-		maxPoints = defaultMaxPoints
 	case maxPoints < 0:
-		maxPoints = 0 // summary stats only
+		maxPoints = 0 // stats only
 	case maxPoints > maxMaxPoints:
 		maxPoints = maxMaxPoints
 	}
+	// Default is 0 (stats only) — no switch case needed for == 0
 
 	// Verify benchmark exists
 	var benchmark Benchmark
@@ -602,7 +603,7 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 
 	summaries := make([]*BenchmarkDataSummary, len(benchmarkData))
 	for i, run := range benchmarkData {
-		summaries[i] = downsampleBenchmarkData(run, maxPoints)
+		summaries[i] = summarizeBenchmarkData(run, maxPoints)
 	}
 
 	// Trigger GC to reclaim memory from loaded benchmark data
@@ -630,8 +631,6 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 
 	maxPoints := params.MaxPoints
 	switch {
-	case maxPoints == 0:
-		maxPoints = defaultMaxPoints
 	case maxPoints < 0:
 		maxPoints = 0
 	case maxPoints > maxMaxPoints:
@@ -649,7 +648,7 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 		return "", fmt.Errorf("failed to retrieve run: %w", err)
 	}
 
-	summary := downsampleBenchmarkData(run, maxPoints)
+	summary := summarizeBenchmarkData(run, maxPoints)
 
 	data, err := json.Marshal(summary)
 	if err != nil {
@@ -876,10 +875,12 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 	return `{"message":"run deleted successfully"}`, nil
 }
 
-// --- Data downsampling ---
+// --- Statistics computation (matches web frontend statsCalculations.js) ---
 
-func downsampleBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSummary {
-	// Determine total data points from FPS array (representative)
+// summarizeBenchmarkData computes per-metric statistics for a benchmark run.
+// FPS stats are derived from frametime data (matching the web frontend behavior).
+// If maxPoints > 0, downsampled raw data is also included.
+func summarizeBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSummary {
 	totalPoints := len(run.DataFPS)
 	if totalPoints == 0 {
 		totalPoints = len(run.DataFrameTime)
@@ -902,11 +903,12 @@ func downsampleBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSu
 		SpecLinuxKernel:    run.SpecLinuxKernel,
 		SpecLinuxScheduler: run.SpecLinuxScheduler,
 		TotalDataPoints:    totalPoints,
-		DownsampledTo:      actualMax,
 		Metrics:            make(map[string]*MetricSummary),
 	}
+	if actualMax > 0 {
+		summary.DownsampledTo = actualMax
+	}
 
-	// Process each metric
 	addMetric := func(name string, data []float64) {
 		if len(data) == 0 {
 			return
@@ -914,7 +916,13 @@ func downsampleBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSu
 		summary.Metrics[name] = computeMetricSummary(data, actualMax)
 	}
 
-	addMetric("fps", run.DataFPS)
+	// FPS: compute stats from frametime (matching web frontend calculateFPSStatsFromFrametime)
+	if len(run.DataFrameTime) > 0 {
+		summary.Metrics["fps"] = computeFPSFromFrametime(run.DataFrameTime, run.DataFPS, actualMax)
+	} else if len(run.DataFPS) > 0 {
+		addMetric("fps", run.DataFPS)
+	}
+
 	addMetric("frame_time", run.DataFrameTime)
 	addMetric("cpu_load", run.DataCPULoad)
 	addMetric("gpu_load", run.DataGPULoad)
@@ -931,13 +939,126 @@ func downsampleBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSu
 	return summary
 }
 
+// computeFPSFromFrametime calculates FPS statistics from frametime data,
+// matching the web frontend's calculateFPSStatsFromFrametime function.
+// FPS percentiles are inverted from frametime: low frametime = high FPS.
+func computeFPSFromFrametime(frametimeData, fpsData []float64, maxPoints int) *MetricSummary {
+	n := len(frametimeData)
+	if n == 0 {
+		return nil
+	}
+
+	// Sort frametime for percentile calculations
+	sortedFT := make([]float64, n)
+	copy(sortedFT, frametimeData)
+	sort.Float64s(sortedFT)
+
+	// FPS percentiles from frametime (inverted relationship):
+	// 3rd percentile frametime (fast) → 97th percentile FPS
+	// 99th percentile frametime (slow) → 1st percentile FPS
+	ftP03 := percentile(sortedFT, 3)
+	ftP99 := percentile(sortedFT, 99)
+
+	var fpsP97, fpsP01 float64
+	if ftP03 > 0 {
+		fpsP97 = 1000 / ftP03
+	}
+	if ftP99 > 0 {
+		fpsP01 = 1000 / ftP99
+	}
+
+	// Average FPS from average frametime
+	var ftSum float64
+	for _, v := range frametimeData {
+		ftSum += v
+	}
+	avgFT := ftSum / float64(n)
+	var avgFPS float64
+	if avgFT > 0 {
+		avgFPS = 1000 / avgFT
+	}
+
+	// Min/Max FPS from max/min frametime
+	minFT := sortedFT[0]
+	maxFT := sortedFT[n-1]
+	var maxFPS, minFPS float64
+	if minFT > 0 {
+		maxFPS = 1000 / minFT
+	}
+	if maxFT > 0 {
+		minFPS = 1000 / maxFT
+	}
+
+	// Convert all frametime to FPS for stddev/variance/median
+	fpsValues := make([]float64, n)
+	for i, ft := range frametimeData {
+		if ft > 0 {
+			fpsValues[i] = 1000 / ft
+		}
+	}
+
+	// Sample variance (n-1 divisor, matches Excel/frontend)
+	fpsMean := func() float64 {
+		var s float64
+		for _, v := range fpsValues {
+			s += v
+		}
+		return s / float64(n)
+	}()
+	var sumSq float64
+	for _, v := range fpsValues {
+		diff := v - fpsMean
+		sumSq += diff * diff
+	}
+	var variance float64
+	if n > 1 {
+		variance = sumSq / float64(n-1)
+	}
+	stdDev := math.Sqrt(variance)
+
+	// Median from FPS values
+	sortedFPS := make([]float64, n)
+	copy(sortedFPS, fpsValues)
+	sort.Float64s(sortedFPS)
+	median := percentile(sortedFPS, 50)
+
+	summary := &MetricSummary{
+		Min:      math.Round(minFPS*100) / 100,
+		Max:      math.Round(maxFPS*100) / 100,
+		Avg:      math.Round(avgFPS*100) / 100,
+		Median:   math.Round(median*100) / 100,
+		P01:      math.Round(fpsP01*100) / 100,
+		P97:      math.Round(fpsP97*100) / 100,
+		StdDev:   math.Round(stdDev*100) / 100,
+		Variance: math.Round(variance*100) / 100,
+		Count:    n,
+	}
+
+	// Optionally include downsampled FPS data points
+	if maxPoints > 0 && len(fpsData) > 0 {
+		if len(fpsData) <= maxPoints {
+			summary.Data = make([]float64, len(fpsData))
+			for i, v := range fpsData {
+				summary.Data[i] = math.Round(v*100) / 100
+			}
+		} else {
+			summary.Data = downsampleSlice(fpsData, maxPoints)
+		}
+	}
+
+	return summary
+}
+
+// computeMetricSummary computes statistics for a generic metric.
+// Uses sample variance (n-1 divisor) and linear interpolation for percentiles,
+// matching the web frontend's calculateStats function.
 func computeMetricSummary(data []float64, maxPoints int) *MetricSummary {
 	n := len(data)
 	if n == 0 {
 		return nil
 	}
 
-	// Compute statistics
+	// Min, max, avg
 	var sum float64
 	minVal := data[0]
 	maxVal := data[0]
@@ -952,13 +1073,17 @@ func computeMetricSummary(data []float64, maxPoints int) *MetricSummary {
 	}
 	avg := sum / float64(n)
 
-	// Standard deviation
+	// Sample variance (n-1), matching Excel/LibreOffice/frontend
 	var sumSq float64
 	for _, v := range data {
 		diff := v - avg
 		sumSq += diff * diff
 	}
-	stdDev := math.Sqrt(sumSq / float64(n))
+	var variance float64
+	if n > 1 {
+		variance = sumSq / float64(n-1)
+	}
+	stdDev := math.Sqrt(variance)
 
 	// Sort a copy for percentile calculations
 	sorted := make([]float64, n)
@@ -966,30 +1091,29 @@ func computeMetricSummary(data []float64, maxPoints int) *MetricSummary {
 	sort.Float64s(sorted)
 
 	median := percentile(sorted, 50)
-	p1 := percentile(sorted, 1)
-	p99 := percentile(sorted, 99)
+	p01 := percentile(sorted, 1)
+	p97 := percentile(sorted, 97)
 
 	summary := &MetricSummary{
-		Min:    math.Round(minVal*100) / 100,
-		Max:    math.Round(maxVal*100) / 100,
-		Avg:    math.Round(avg*100) / 100,
-		Median: math.Round(median*100) / 100,
-		P1:     math.Round(p1*100) / 100,
-		P99:    math.Round(p99*100) / 100,
-		StdDev: math.Round(stdDev*100) / 100,
-		Count:  n,
+		Min:      math.Round(minVal*100) / 100,
+		Max:      math.Round(maxVal*100) / 100,
+		Avg:      math.Round(avg*100) / 100,
+		Median:   math.Round(median*100) / 100,
+		P01:      math.Round(p01*100) / 100,
+		P97:      math.Round(p97*100) / 100,
+		StdDev:   math.Round(stdDev*100) / 100,
+		Variance: math.Round(variance*100) / 100,
+		Count:    n,
 	}
 
-	// Downsample data if needed
+	// Optionally include downsampled data points
 	if maxPoints > 0 {
 		if n <= maxPoints {
-			// Return all data points, rounded
 			summary.Data = make([]float64, n)
 			for i, v := range data {
 				summary.Data[i] = math.Round(v*100) / 100
 			}
 		} else {
-			// Evenly-spaced downsampling
 			summary.Data = downsampleSlice(data, maxPoints)
 		}
 	}

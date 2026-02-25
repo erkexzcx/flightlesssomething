@@ -101,22 +101,22 @@ Get detailed information about a specific benchmark.
 
 #### `get_benchmark_data`
 
-Get benchmark performance data with automatic downsampling. Returns summary statistics (min, max, avg, median, p1, p99, std_dev) and downsampled time series for each metric.
+Get computed statistics for all benchmark runs. By default returns **stats only** (no raw data points). Stats match what the web UI displays: min, max, avg, median, p01, p97, std_dev, variance, count. FPS stats are correctly derived from frametime data.
 
 | Parameter    | Type    | Required | Description                                                    |
 |-------------|---------|----------|----------------------------------------------------------------|
 | `id`        | integer | Yes      | Benchmark ID                                                    |
-| `max_points`| integer | No       | Max data points per metric, 1-5000 (default: 500). Use 0 for summary statistics only. |
+| `max_points`| integer | No       | Include downsampled raw data points (default: 0 = stats only). Set 1-5000 to include time series data alongside stats. |
 
 #### `get_benchmark_run`
 
-Get performance data for a specific run within a benchmark.
+Get computed statistics for a specific run within a benchmark. Same format as `get_benchmark_data` but for a single run.
 
 | Parameter    | Type    | Required | Description                     |
 |-------------|---------|----------|---------------------------------|
 | `id`        | integer | Yes      | Benchmark ID                     |
 | `run_index` | integer | Yes      | Run index (0-based)              |
-| `max_points`| integer | No       | Max data points (default: 500)   |
+| `max_points`| integer | No       | Include downsampled raw data (default: 0 = stats only) |
 
 ### Write Tools (authentication required)
 
@@ -148,14 +148,41 @@ Delete a specific run from a benchmark. Cannot delete the last remaining run.
 | `id`        | integer | Yes      | Benchmark ID        |
 | `run_index` | integer | Yes      | Run index (0-based) |
 
-## Data Downsampling
+## Computed Statistics
 
-Benchmark data can contain up to 500,000 data points per run. To make this manageable for AI assistants, the MCP server automatically downsamples the data:
+The MCP server computes the same statistics as the web frontend, for every metric in every run. These stats are **always returned** (no raw data points needed).
 
-- **Summary statistics** are always computed: min, max, avg, median, p1 (1st percentile), p99 (99th percentile), standard deviation, and count
-- **Downsampled time series** uses evenly-spaced point selection to preserve temporal patterns
-- Default: 500 points per metric (configurable via `max_points`, up to 5000)
-- Set `max_points` to `0` to get summary statistics only (no time series data)
+### Per-Metric Statistics
+
+| Field      | Description                                                    |
+|-----------|----------------------------------------------------------------|
+| `min`     | Minimum value                                                   |
+| `max`     | Maximum value                                                   |
+| `avg`     | Average (mean)                                                  |
+| `median`  | 50th percentile (median)                                        |
+| `p01`     | 1st percentile                                                  |
+| `p97`     | 97th percentile                                                 |
+| `std_dev` | Standard deviation (sample, n-1 divisor, matches Excel/LibreOffice) |
+| `variance`| Variance (sample, n-1 divisor, matches Excel/LibreOffice)       |
+| `count`   | Total number of data points                                     |
+
+### FPS Calculation
+
+FPS statistics are derived from frametime data (matching the web frontend), since averaging FPS values directly is statistically incorrect:
+
+- **Average FPS** = 1000 / average frametime
+- **Min FPS** = 1000 / max frametime
+- **Max FPS** = 1000 / min frametime
+- **P01 FPS** = 1000 / 99th percentile frametime
+- **P97 FPS** = 1000 / 3rd percentile frametime
+
+### Raw Data Points (Optional)
+
+By default, only stats are returned. Set `max_points` > 0 to also include downsampled time series data:
+
+- Evenly-spaced point selection preserves temporal patterns
+- Maximum 5000 points per metric
+- Raw data appears in the `data` field of each metric
 
 ### Available Metrics
 
