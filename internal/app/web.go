@@ -34,6 +34,9 @@ func setupSPA(r *gin.Engine) {
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.FileFromFS("favicon.ico", http.FS(distFS))
 	})
+	r.GET("/favicon.svg", func(c *gin.Context) {
+		c.FileFromFS("favicon.svg", http.FS(distFS))
+	})
 
 	// Serve index.html for the root path
 	r.GET("/", func(c *gin.Context) {
