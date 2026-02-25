@@ -5,7 +5,7 @@
 **FlightlessSomething** is a web application for storing and managing gaming benchmark data with Discord OAuth authentication and a modern Vue.js interface. The repository is ~162MB with 26 Go files (~5,800 lines) and a Vue.js frontend.
 
 **Tech Stack:**
-- **Backend:** Go 1.25, Gin web framework, GORM ORM, SQLite database, Discord OAuth2, zstd compression
+- **Backend:** Go 1.26, Gin web framework, GORM ORM, SQLite database, Discord OAuth2, zstd compression
 - **Frontend:** Vue.js 3 (Composition API), Vite build tool, Vue Router, Pinia state management, Bootstrap, Highcharts
 - **Build Tools:** Make, npm, Docker
 - **Target Runtime:** Linux/amd64 (primary), containerized deployment
@@ -13,7 +13,7 @@
 ## Build & Test Commands
 
 ### Prerequisites
-- Go 1.25+ (command: `go version` to verify)
+- Go 1.26+ (command: `go version` to verify)
 - Node.js 20+ (command: `node --version` to verify)
 - golangci-lint for linting (install if needed: `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest`)
 - jq for integration tests (usually pre-installed on CI)
@@ -97,12 +97,12 @@ cd web && npm run lint
 .env.example          # Environment variables template
 .gitignore           # Ignores: data/, *.db, web/node_modules, server, migrate
 .golangci.yml        # Go linting configuration (33 linters)
-Dockerfile           # Multi-stage build (golang:1.25-alpine + alpine)
+Dockerfile           # Multi-stage build (golang:1.26-alpine + alpine)
 Makefile             # Build automation (build, clean, test targets)
 README.md            # Quick start guide
 backend_test.sh      # Integration test script (executable)
 docker-compose.yml   # Local development with Docker
-go.mod, go.sum       # Go dependencies (Go 1.25 required)
+go.mod, go.sum       # Go dependencies (Go 1.26 required)
 test_migration.sh    # Database migration test script
 ```
 
@@ -165,7 +165,7 @@ testdata/            # Test fixtures (benchmark CSV files)
 ### Test Workflow (`.github/workflows/test.yml`)
 **Triggers:** Every push to main, all PRs
 **Jobs (all must pass):**
-1. `lint-go` - golangci-lint with Go 1.25
+1. `lint-go` - golangci-lint with Go 1.26
 2. `lint-frontend` - ESLint in web/ directory
 3. `unit-tests` - Go tests with race detector and coverage
 4. `build` - Full build (web UI + server), uploads server binary as artifact
@@ -173,7 +173,7 @@ testdata/            # Test fixtures (benchmark CSV files)
 6. `e2e-tests` - Playwright tests with server started in background
 
 **Environment Setup in CI:**
-- Go 1.25, Node 20, chromium for Playwright
+- Go 1.26, Node 20, chromium for Playwright
 - jq installed for integration tests
 - Server runs on port 5000 with test credentials
 
