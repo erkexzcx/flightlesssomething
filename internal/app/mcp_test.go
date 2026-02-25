@@ -101,52 +101,129 @@ func TestMCPToolsList(t *testing.T) {
 	defer cleanupTestDB(t, db)
 	router := setupMCPTestRouter(db)
 
-	body := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
-	w := mcpRequest(t, router, body, "")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
-	}
-
-	var resp jsonrpcResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-	if resp.Error != nil {
-		t.Fatalf("Unexpected error: %s", resp.Error.Message)
-	}
-
-	resultBytes, err := json.Marshal(resp.Result)
-	if err != nil {
-		t.Fatalf("Failed to marshal result: %v", err)
-	}
-	var result mcpToolsListResult
-	if err := json.Unmarshal(resultBytes, &result); err != nil {
-		t.Fatalf("Failed to unmarshal result: %v", err)
-	}
-
-	expectedTools := []string{
-		"list_benchmarks", "get_benchmark", "get_benchmark_data",
-		"get_benchmark_run", "update_benchmark", "delete_benchmark",
-		"delete_benchmark_run", "get_current_user", "list_api_tokens",
-		"create_api_token", "delete_api_token", "list_users",
-		"list_audit_logs", "create_benchmark", "add_benchmark_runs",
-		"download_benchmark", "delete_user", "delete_user_benchmarks",
-		"ban_user", "toggle_user_admin",
-	}
-	if len(result.Tools) != len(expectedTools) {
-		t.Errorf("Expected %d tools, got %d", len(expectedTools), len(result.Tools))
-	}
-
-	toolNames := make(map[string]bool)
-	for _, tool := range result.Tools {
-		toolNames[tool.Name] = true
-	}
-	for _, name := range expectedTools {
-		if !toolNames[name] {
-			t.Errorf("Missing tool: %s", name)
+	// Helper to parse tools/list response
+	parseToolsList := func(t *testing.T, w *httptest.ResponseRecorder) []string {
+		t.Helper()
+		var resp jsonrpcResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
+		if resp.Error != nil {
+			t.Fatalf("Unexpected error: %s", resp.Error.Message)
+		}
+		resultBytes, err := json.Marshal(resp.Result)
+		if err != nil {
+			t.Fatalf("Failed to marshal result: %v", err)
+		}
+		var result mcpToolsListResult
+		if err := json.Unmarshal(resultBytes, &result); err != nil {
+			t.Fatalf("Failed to unmarshal result: %v", err)
+		}
+		names := make([]string, len(result.Tools))
+		for i, tool := range result.Tools {
+			names[i] = tool.Name
+		}
+		return names
 	}
+
+	body := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
+
+	// Anonymous: should only see public tools (5)
+	t.Run("anonymous sees only public tools", func(t *testing.T) {
+		w := mcpRequest(t, router, body, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d", w.Code)
+		}
+		names := parseToolsList(t, w)
+		publicTools := []string{
+			"list_benchmarks", "get_benchmark", "get_benchmark_data",
+			"get_benchmark_run", "download_benchmark",
+		}
+		if len(names) != len(publicTools) {
+			t.Errorf("Expected %d public tools, got %d: %v", len(publicTools), len(names), names)
+		}
+		nameSet := make(map[string]bool)
+		for _, n := range names {
+			nameSet[n] = true
+		}
+		for _, n := range publicTools {
+			if !nameSet[n] {
+				t.Errorf("Missing public tool: %s", n)
+			}
+		}
+		// Admin tools must NOT be visible
+		for _, n := range names {
+			if n == "list_users" || n == "delete_user" || n == "ban_user" {
+				t.Errorf("Anonymous should not see admin tool: %s", n)
+			}
+		}
+	})
+
+	// Authenticated regular user: should see public + auth tools (14)
+	t.Run("regular user sees public and auth tools", func(t *testing.T) {
+		user := createTestUser(db, "mcptoolslistuser", false)
+		apiToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef123", Name: "ToolsList Token"}
+		db.DB.Create(apiToken)
+
+		w := mcpRequest(t, router, body, apiToken.Token)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d", w.Code)
+		}
+		names := parseToolsList(t, w)
+		if len(names) != 14 {
+			t.Errorf("Expected 14 tools for regular user, got %d: %v", len(names), names)
+		}
+		// Should include auth tools
+		nameSet := make(map[string]bool)
+		for _, n := range names {
+			nameSet[n] = true
+		}
+		for _, required := range []string{"create_benchmark", "get_current_user", "list_api_tokens"} {
+			if !nameSet[required] {
+				t.Errorf("Missing auth tool: %s", required)
+			}
+		}
+		// Admin tools must NOT be visible
+		for _, n := range names {
+			if n == "list_users" || n == "delete_user" || n == "ban_user" {
+				t.Errorf("Regular user should not see admin tool: %s", n)
+			}
+		}
+	})
+
+	// Admin user: should see all tools (20)
+	t.Run("admin sees all tools", func(t *testing.T) {
+		admin := createTestUser(db, "mcptoolslistadmin", true)
+		adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef12", Name: "ToolsList Admin"}
+		db.DB.Create(adminToken)
+
+		w := mcpRequest(t, router, body, adminToken.Token)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d", w.Code)
+		}
+		names := parseToolsList(t, w)
+		allTools := []string{
+			"list_benchmarks", "get_benchmark", "get_benchmark_data",
+			"get_benchmark_run", "download_benchmark",
+			"get_current_user", "create_benchmark", "update_benchmark",
+			"delete_benchmark", "delete_benchmark_run", "add_benchmark_runs",
+			"list_api_tokens", "create_api_token", "delete_api_token",
+			"list_users", "list_audit_logs", "delete_user",
+			"delete_user_benchmarks", "ban_user", "toggle_user_admin",
+		}
+		if len(names) != len(allTools) {
+			t.Errorf("Expected %d tools for admin, got %d: %v", len(allTools), len(names), names)
+		}
+		nameSet := make(map[string]bool)
+		for _, n := range names {
+			nameSet[n] = true
+		}
+		for _, n := range allTools {
+			if !nameSet[n] {
+				t.Errorf("Admin missing tool: %s", n)
+			}
+		}
+	})
 }
 
 func TestMCPNotification(t *testing.T) {

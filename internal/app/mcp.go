@@ -61,10 +61,25 @@ type mcpServerInfo struct {
 	Version string `json:"version"`
 }
 
+// Tool access levels for filtering tools/list by caller's auth level
+const (
+	toolAccessPublic = "public" // No auth required
+	toolAccessAuth   = "auth"   // Requires authentication
+	toolAccessAdmin  = "admin"  // Requires admin privileges
+)
+
+type mcpToolAnnotations struct {
+	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool `json:"idempotentHint,omitempty"`
+}
+
 type mcpTool struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	InputSchema interface{} `json:"inputSchema"`
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	InputSchema interface{}         `json:"inputSchema"`
+	Annotations *mcpToolAnnotations `json:"annotations,omitempty"`
+	accessLevel string              // internal: "public", "auth", "admin" — not serialized
 }
 
 type mcpToolsListResult struct {
@@ -135,6 +150,8 @@ func newMCPServer(db *DBInstance, version string) *mcpServer {
 }
 
 func (s *mcpServer) defineTools() []mcpTool {
+	boolPtr := func(b bool) *bool { return &b }
+
 	return []mcpTool{
 		{
 			Name:        "list_benchmarks",
@@ -150,6 +167,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessPublic,
 		},
 		{
 			Name:        "get_benchmark",
@@ -161,6 +180,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessPublic,
 		},
 		{
 			Name:        "get_benchmark_data",
@@ -173,6 +194,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessPublic,
 		},
 		{
 			Name:        "get_benchmark_run",
@@ -186,24 +209,12 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessPublic,
 		},
 		{
-			Name:        "update_benchmark",
-			Description: "Update benchmark metadata (title, description) and/or run labels. Requires authentication via API token. Only the benchmark owner or an admin can update.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id"},
-				"properties": map[string]interface{}{
-					"id":          map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-					"title":       map[string]interface{}{"type": "string", "description": "New title (max 100 chars)"},
-					"description": map[string]interface{}{"type": "string", "description": "New description (max 5000 chars)"},
-					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
-				},
-			},
-		},
-		{
-			Name:        "delete_benchmark",
-			Description: "Delete a benchmark and all its data. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
+			Name:        "download_benchmark",
+			Description: "Download benchmark data as CSV text. Returns each run as a separate CSV string in MangoHud format. This is the text equivalent of the ZIP download endpoint.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -211,18 +222,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 				},
 			},
-		},
-		{
-			Name:        "delete_benchmark_run",
-			Description: "Delete a specific run from a benchmark. Cannot delete the last remaining run. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id", "run_index"},
-				"properties": map[string]interface{}{
-					"id":        map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-					"run_index": map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
-				},
-			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessPublic,
 		},
 		{
 			Name:        "get_current_user",
@@ -231,62 +232,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			},
-		},
-		{
-			Name:        "list_api_tokens",
-			Description: "List all API tokens for the currently authenticated user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			Name:        "create_api_token",
-			Description: "Create a new API token for the currently authenticated user. Maximum 10 tokens per user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"name"},
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
-				},
-			},
-		},
-		{
-			Name:        "delete_api_token",
-			Description: "Delete an API token belonging to the currently authenticated user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"token_id"},
-				"properties": map[string]interface{}{
-					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
-				},
-			},
-		},
-		{
-			Name:        "list_users",
-			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"page":     map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
-					"per_page": map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
-					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
-				},
-			},
-		},
-		{
-			Name:        "list_audit_logs",
-			Description: "List audit logs with pagination and optional filters. Admin only. Requires authentication via API token with admin privileges.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"page":        map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
-					"per_page":    map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 50)"},
-					"user_id":     map[string]interface{}{"type": "integer", "description": "Filter by user ID who performed the action"},
-					"action":      map[string]interface{}{"type": "string", "description": "Filter by action (partial match)"},
-					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
-				},
-			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
 		},
 		{
 			Name:        "create_benchmark",
@@ -311,6 +258,51 @@ func (s *mcpServer) defineTools() []mcpTool {
 					},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "update_benchmark",
+			Description: "Update benchmark metadata (title, description) and/or run labels. Requires authentication via API token. Only the benchmark owner or an admin can update.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id":          map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"title":       map[string]interface{}{"type": "string", "description": "New title (max 100 chars)"},
+					"description": map[string]interface{}{"type": "string", "description": "New description (max 5000 chars)"},
+					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "delete_benchmark",
+			Description: "Delete a benchmark and all its data. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "delete_benchmark_run",
+			Description: "Delete a specific run from a benchmark. Cannot delete the last remaining run. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id", "run_index"},
+				"properties": map[string]interface{}{
+					"id":        map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"run_index": map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			accessLevel: toolAccessAuth,
 		},
 		{
 			Name:        "add_benchmark_runs",
@@ -334,17 +326,74 @@ func (s *mcpServer) defineTools() []mcpTool {
 					},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
 		},
 		{
-			Name:        "download_benchmark",
-			Description: "Download benchmark data as CSV text. Returns each run as a separate CSV string in MangoHud format. This is the text equivalent of the ZIP download endpoint.",
+			Name:        "list_api_tokens",
+			Description: "List all API tokens for the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "create_api_token",
+			Description: "Create a new API token for the currently authenticated user. Maximum 10 tokens per user. Requires authentication via API token.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
-				"required": []string{"id"},
+				"required": []string{"name"},
 				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "delete_api_token",
+			Description: "Delete an API token belonging to the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"token_id"},
+				"properties": map[string]interface{}{
+					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			accessLevel: toolAccessAuth,
+		},
+		{
+			Name:        "list_users",
+			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":     map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page": map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
+					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAdmin,
+		},
+		{
+			Name:        "list_audit_logs",
+			Description: "List audit logs with pagination and optional filters. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":        map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page":    map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 50)"},
+					"user_id":     map[string]interface{}{"type": "integer", "description": "Filter by user ID who performed the action"},
+					"action":      map[string]interface{}{"type": "string", "description": "Filter by action (partial match)"},
+					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
+				},
+			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAdmin,
 		},
 		{
 			Name:        "delete_user",
@@ -357,6 +406,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"delete_data": map[string]interface{}{"type": "boolean", "description": "Also delete all benchmark data files (default: false)"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			accessLevel: toolAccessAdmin,
 		},
 		{
 			Name:        "delete_user_benchmarks",
@@ -368,6 +419,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"user_id": map[string]interface{}{"type": "integer", "description": "User ID whose benchmarks to delete"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true)},
+			accessLevel: toolAccessAdmin,
 		},
 		{
 			Name:        "ban_user",
@@ -380,6 +433,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"banned":  map[string]interface{}{"type": "boolean", "description": "true to ban, false to unban"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAdmin,
 		},
 		{
 			Name:        "toggle_user_admin",
@@ -392,6 +447,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"is_admin": map[string]interface{}{"type": "boolean", "description": "true to grant admin, false to revoke"},
 				},
 			},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false)},
+			accessLevel: toolAccessAdmin,
 		},
 	}
 }
@@ -445,7 +502,7 @@ func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
 		case "initialize":
 			resp = server.handleInitialize(&req)
 		case "tools/list":
-			resp = server.handleToolsList(&req)
+			resp = server.handleToolsList(c, &req)
 		case "tools/call":
 			resp = server.handleToolsCall(c, &req)
 		case "ping":
@@ -491,11 +548,28 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 	}
 }
 
-func (s *mcpServer) handleToolsList(req *jsonrpcRequest) jsonrpcResponse {
+func (s *mcpServer) handleToolsList(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
+	_, isAdmin, authenticated := s.authenticateFromHeader(c)
+
+	filtered := make([]mcpTool, 0, len(s.tools))
+	for _, tool := range s.tools {
+		switch tool.accessLevel {
+		case toolAccessAdmin:
+			if !isAdmin {
+				continue
+			}
+		case toolAccessAuth:
+			if !authenticated {
+				continue
+			}
+		}
+		filtered = append(filtered, tool)
+	}
+
 	return jsonrpcResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result:  mcpToolsListResult{Tools: s.tools},
+		Result:  mcpToolsListResult{Tools: filtered},
 	}
 }
 
@@ -512,40 +586,15 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	// Determine authentication state
 	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
 
-	// Check if tool requires authentication
-	authRequiredTools := map[string]bool{
-		"update_benchmark":       true,
-		"delete_benchmark":       true,
-		"delete_benchmark_run":   true,
-		"get_current_user":       true,
-		"list_api_tokens":        true,
-		"create_api_token":       true,
-		"delete_api_token":       true,
-		"list_users":             true,
-		"list_audit_logs":        true,
-		"create_benchmark":       true,
-		"add_benchmark_runs":     true,
-		"delete_user":            true,
-		"delete_user_benchmarks": true,
-		"ban_user":               true,
-		"toggle_user_admin":      true,
-	}
-
-	if authRequiredTools[params.Name] && !authenticated {
+	// Check access level from tool definition (defense-in-depth: enforced even if tools/list was bypassed)
+	toolLevel := s.getToolAccessLevel(params.Name)
+	if toolLevel == toolAccessAuth && !authenticated {
 		return s.toolError(req.ID, "authentication required: provide API token via Authorization: Bearer <token> header")
 	}
-
-	// Check if tool requires admin privileges
-	adminTools := map[string]bool{
-		"list_users":             true,
-		"list_audit_logs":        true,
-		"delete_user":            true,
-		"delete_user_benchmarks": true,
-		"ban_user":               true,
-		"toggle_user_admin":      true,
+	if toolLevel == toolAccessAdmin && !authenticated {
+		return s.toolError(req.ID, "authentication required: provide API token via Authorization: Bearer <token> header")
 	}
-
-	if adminTools[params.Name] && !isAdmin {
+	if toolLevel == toolAccessAdmin && !isAdmin {
 		return s.toolError(req.ID, "admin privileges required")
 	}
 
@@ -658,6 +707,16 @@ func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
 			IsError: true,
 		},
 	}
+}
+
+// getToolAccessLevel returns the access level for a tool by name.
+func (s *mcpServer) getToolAccessLevel(name string) string {
+	for _, tool := range s.tools {
+		if tool.Name == name {
+			return tool.accessLevel
+		}
+	}
+	return toolAccessPublic
 }
 
 // --- Tool implementations ---
