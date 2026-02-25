@@ -871,6 +871,8 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 
 	summary := summarizeBenchmarkData(run, maxPoints)
 
+	runtime.GC()
+
 	data, err := json.Marshal(summary)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %w", err)
@@ -1416,6 +1418,8 @@ func (s *mcpServer) toolCreateBenchmark(args json.RawMessage, userID uint, isAdm
 	}
 
 	LogBenchmarkCreated(s.db, userID, benchmark.ID, benchmark.Title)
+
+	runtime.GC()
 
 	data, err := json.Marshal(benchmark)
 	if err != nil {

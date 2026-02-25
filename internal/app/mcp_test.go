@@ -1178,6 +1178,201 @@ func TestMCPAdminToolsRequireAdmin(t *testing.T) {
 	}
 }
 
+// mcpCreateBenchmarkHelper creates a benchmark via MCP and returns its ID
+func mcpCreateBenchmarkHelper(t *testing.T, router *gin.Engine, token string) int {
+	t.Helper()
+	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":100,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Helper Bench","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, createBody, token)
+	_, createResult := parseMCPToolResult(t, w)
+	if createResult.IsError {
+		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
+	}
+	var benchData map[string]interface{}
+	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
+		t.Fatalf("Failed to parse create result: %v", err)
+	}
+	idVal, ok := benchData["ID"].(float64)
+	if !ok {
+		t.Fatal("Failed to extract benchmark ID from result")
+	}
+	return int(idVal)
+}
+
+func TestMCPGetBenchmarkData(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpgetdata", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "getdata-token-abcdef1234567890", Name: "GetData Token"}
+	db.DB.Create(apiToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"get_benchmark_data","arguments":{"id":%d,"max_points":100}}}`, benchID)
+	w := mcpRequest(t, router, body, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "fps") {
+		t.Error("Expected fps metric in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "frame_time") {
+		t.Error("Expected frame_time metric in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "total_data_points") {
+		t.Error("Expected total_data_points in result")
+	}
+}
+
+func TestMCPGetBenchmarkRun(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpgetrun", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "getrun-token-abcdef12345678901", Name: "GetRun Token"}
+	db.DB.Create(apiToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"get_benchmark_run","arguments":{"id":%d,"run_index":0,"max_points":50}}}`, benchID)
+	w := mcpRequest(t, router, body, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "Run 1") {
+		t.Error("Expected run label in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "fps") {
+		t.Error("Expected fps metric in result")
+	}
+}
+
+func TestMCPDeleteBenchmarkWithData(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpdelbench", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "delbench-token-abcdef123456789", Name: "DelBench Token"}
+	db.DB.Create(apiToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+
+	// Verify benchmark exists
+	var count int64
+	db.DB.Model(&Benchmark{}).Where("id = ?", benchID).Count(&count)
+	if count != 1 {
+		t.Fatalf("Expected 1 benchmark, got %d", count)
+	}
+
+	// Delete benchmark
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"delete_benchmark","arguments":{"id":%d}}}`, benchID)
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "benchmark deleted") {
+		t.Error("Expected deletion confirmation")
+	}
+
+	// Verify benchmark is deleted from DB
+	db.DB.Model(&Benchmark{}).Where("id = ?", benchID).Count(&count)
+	if count != 0 {
+		t.Error("Expected benchmark to be deleted")
+	}
+}
+
+func TestMCPDeleteBenchmarkRunWithData(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpdelrun", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "delrun-token-abcdef12345678901", Name: "DelRun Token"}
+	db.DB.Create(apiToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+
+	// Add a second run so we can delete one
+	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"Run 2","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, addBody, apiToken.Token)
+	_, addResult := parseMCPToolResult(t, w)
+	if addResult.IsError {
+		t.Fatalf("Failed to add run: %s", addResult.Content[0].Text)
+	}
+
+	// Delete run 0
+	delBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{"name":"delete_benchmark_run","arguments":{"id":%d,"run_index":0}}}`, benchID)
+	w = mcpRequest(t, router, delBody, apiToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "run deleted successfully") {
+		t.Error("Expected run deletion confirmation")
+	}
+}
+
+func TestMCPAddBenchmarkRunsOwnership(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	owner := createTestUser(db, "mcprunowner", false)
+	ownerToken := &APIToken{UserID: owner.ID, Token: "runowner-token-abcdef123456789", Name: "Owner Token"}
+	db.DB.Create(ownerToken)
+
+	other := createTestUser(db, "mcprunother", false)
+	otherToken := &APIToken{UserID: other.ID, Token: "runother-token-abcdef123456789", Name: "Other Token"}
+	db.DB.Create(otherToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, router, ownerToken.Token)
+
+	// Other user tries to add runs
+	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":45,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"Evil Run","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
+	w := mcpRequest(t, router, addBody, otherToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for non-owner add_benchmark_runs")
+	}
+	if !strings.Contains(result.Content[0].Text, "not authorized") {
+		t.Error("Expected authorization error message")
+	}
+}
+
 // jsonEscape returns a JSON-escaped string literal (with quotes) suitable for embedding in JSON
 func jsonEscape(s string) string { //nolint:unparam // test helper used with constant test data
 	b, err := json.Marshal(s)
