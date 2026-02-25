@@ -33,7 +33,7 @@ func TestUploadParsingMemoryUsage(t *testing.T) {
 	
 	// Data rows
 	for i := 0; i < numDataPoints; i++ {
-		csvContent.WriteString(fmt.Sprintf("%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.0f,%.0f,%.0f,%.1f,%.0f,%.0f\n",
+		fmt.Fprintf(&csvContent, "%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.0f,%.0f,%.0f,%.1f,%.0f,%.0f\n",
 			60.0+float64(i%30),     // fps
 			16.67,                   // frametime
 			50.0+float64(i%40),     // cpu_load
@@ -47,7 +47,7 @@ func TestUploadParsingMemoryUsage(t *testing.T) {
 			250.0,                   // gpu_power
 			16000.0,                 // ram_used
 			0.0,                     // swap_used
-		))
+		)
 	}
 	
 	csvBytes := []byte(csvContent.String())
