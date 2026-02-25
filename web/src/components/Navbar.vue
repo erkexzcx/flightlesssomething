@@ -55,7 +55,7 @@
                 </li>
                 <li>
                   <router-link to="/api-tokens" class="dropdown-item">
-                    <i class="fa-solid fa-key"></i> API Tokens
+                    <i class="fa-solid fa-key"></i> API Tokens & MCP
                   </router-link>
                 </li>
                 <li><hr class="dropdown-divider"></li>

@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2>API Tokens</h2>
+      <h2>API Tokens & MCP</h2>
       <button class="btn btn-primary" @click="showCreateModal = true" :disabled="tokens.length >= 10">
         <i class="fa-solid fa-plus"></i> Create Token
       </button>
@@ -84,6 +84,97 @@
       </div>
     </div>
 
+    <!-- MCP Server Configuration -->
+    <div class="mt-5">
+      <h3 class="mb-3"><i class="fa-solid fa-plug"></i> MCP Server</h3>
+      <p class="text-muted">
+        This server exposes an <a href="https://github.com/erkexzcx/flightlesssomething/blob/main/docs/mcp.md" target="_blank" rel="noopener noreferrer">MCP (Model Context Protocol)</a> endpoint that AI assistants can use to interact with your benchmarks. 
+        Connect without authentication for read-only access, or enable authentication below for read-write access.
+      </p>
+
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="mcpAuthEnabled" v-model="mcpAuthEnabled" :disabled="tokens.length === 0">
+        <label class="form-check-label" for="mcpAuthEnabled">
+          Enable authentication (read-write access)
+        </label>
+        <div v-if="tokens.length === 0" class="form-text text-muted">Create an API token above to enable authenticated access.</div>
+      </div>
+
+      <div v-if="mcpAuthEnabled && tokens.length > 0" class="mb-3">
+        <label for="mcpTokenSelect" class="form-label fw-bold">Select token for MCP configuration:</label>
+        <select id="mcpTokenSelect" class="form-select" v-model="selectedMCPTokenId">
+          <option v-for="token in tokens" :key="token.ID" :value="token.ID">{{ token.Name }}</option>
+        </select>
+      </div>
+
+      <!-- VS Code -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="fa-solid fa-code"></i> Visual Studio Code</span>
+          <div>
+            <button 
+              class="btn btn-sm"
+              :class="copiedMCP.vscode ? 'btn-success' : 'btn-outline-secondary'"
+              @click="copyMCPConfig('vscode')"
+            >
+              <i class="fa-solid" :class="copiedMCP.vscode ? 'fa-check' : 'fa-copy'"></i> Copy
+            </button>
+            <button 
+              class="btn btn-sm btn-outline-primary ms-1"
+              @click="openInVSCode"
+              title="Open in VS Code (requires VS Code with MCP support)"
+            >
+              <i class="fa-solid fa-up-right-from-square"></i> Install in VS Code
+            </button>
+          </div>
+        </div>
+        <div class="collapse" :class="{ show: expandedMCP.vscode }" id="vscodeCollapse">
+          <div class="card-body">
+            <p class="small text-muted mb-2">Add this to your <code>.vscode/mcp.json</code> file in your workspace, or to your VS Code user settings under <code>"mcp"</code>:</p>
+            <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ vscodeConfig }}</code></pre>
+          </div>
+        </div>
+        <div class="card-footer text-center p-1">
+          <button class="btn btn-sm btn-link text-muted" @click="expandedMCP.vscode = !expandedMCP.vscode">
+            <i class="fa-solid" :class="expandedMCP.vscode ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            {{ expandedMCP.vscode ? 'Hide config' : 'Show config' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Claude Desktop -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="fa-solid fa-robot"></i> Claude Desktop</span>
+          <button 
+            class="btn btn-sm"
+            :class="copiedMCP.claude ? 'btn-success' : 'btn-outline-secondary'"
+            @click="copyMCPConfig('claude')"
+          >
+            <i class="fa-solid" :class="copiedMCP.claude ? 'fa-check' : 'fa-copy'"></i> Copy
+          </button>
+        </div>
+        <div class="collapse" :class="{ show: expandedMCP.claude }" id="claudeCollapse">
+          <div class="card-body">
+            <p class="small text-muted mb-2">Add this to your Claude Desktop config file (<code>claude_desktop_config.json</code>), inside the <code>"mcpServers"</code> object:</p>
+            <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ claudeConfig }}</code></pre>
+          </div>
+        </div>
+        <div class="card-footer text-center p-1">
+          <button class="btn btn-sm btn-link text-muted" @click="expandedMCP.claude = !expandedMCP.claude">
+            <i class="fa-solid" :class="expandedMCP.claude ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            {{ expandedMCP.claude ? 'Hide config' : 'Show config' }}
+          </button>
+        </div>
+      </div>
+
+      <p class="small text-muted">
+        <i class="fa-solid fa-circle-info"></i>
+        Tool call approval is controlled by your MCP client (e.g. VS Code, Claude Desktop) and applies to all tools 
+        from this server — there is no per-tool granularity. This is a client-side setting, not an MCP server feature.
+      </p>
+    </div>
+
     <!-- Create Token Modal -->
     <div class="modal fade" :class="{ show: showCreateModal, 'd-block': showCreateModal }" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" v-if="showCreateModal">
       <div class="modal-dialog">
@@ -156,7 +247,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -178,6 +269,50 @@ const createError = ref(null)
 const showDeleteModal = ref(false)
 const tokenToDelete = ref(null)
 const deleting = ref(false)
+
+// MCP configuration
+const selectedMCPTokenId = ref(null)
+const mcpAuthEnabled = ref(false)
+const copiedMCP = reactive({ vscode: false, claude: false })
+const expandedMCP = reactive({ vscode: false, claude: false })
+
+const selectedMCPToken = computed(() => {
+  return tokens.value.find(t => t.ID === selectedMCPTokenId.value)
+})
+
+const mcpServerUrl = computed(() => {
+  return `${window.location.origin}/mcp`
+})
+
+const vscodeConfig = computed(() => {
+  const server = {
+    type: "http",
+    url: mcpServerUrl.value,
+  }
+  if (mcpAuthEnabled.value) {
+    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
+    server.headers = { "Authorization": `Bearer ${token}` }
+  }
+  return JSON.stringify({ servers: { "FlightlessSomething": server } }, null, 2)
+})
+
+const claudeConfig = computed(() => {
+  const server = {
+    type: "http",
+    url: mcpServerUrl.value,
+  }
+  if (mcpAuthEnabled.value) {
+    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
+    server.headers = { "Authorization": `Bearer ${token}` }
+  }
+  return JSON.stringify({ "FlightlessSomething": server }, null, 2)
+})
+
+watch(tokens, (newTokens) => {
+  if (newTokens.length > 0 && !selectedMCPTokenId.value) {
+    selectedMCPTokenId.value = newTokens[0].ID
+  }
+})
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
@@ -264,6 +399,33 @@ async function deleteToken() {
 function formatDate(dateString) {
   const date = new Date(dateString)
   return date.toLocaleString()
+}
+
+async function copyMCPConfig(type) {
+  try {
+    const text = type === 'vscode' ? vscodeConfig.value : claudeConfig.value
+    await navigator.clipboard.writeText(text)
+    copiedMCP[type] = true
+    setTimeout(() => {
+      copiedMCP[type] = false
+    }, 1000)
+  } catch (err) {
+    console.error('Failed to copy MCP config:', err)
+  }
+}
+
+function openInVSCode() {
+  const config = {
+    name: "FlightlessSomething",
+    type: "http",
+    url: mcpServerUrl.value,
+  }
+  if (mcpAuthEnabled.value) {
+    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
+    config.headers = { "Authorization": `Bearer ${token}` }
+  }
+  const uri = `vscode:mcp/install?${encodeURIComponent(JSON.stringify(config))}`
+  window.open(uri, '_blank')
 }
 </script>
 

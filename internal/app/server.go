@@ -106,6 +106,11 @@ func Start(config *Config, version string) error {
 	admin.PUT("/users/:id/admin", HandleToggleUserAdmin(db))
 	admin.GET("/logs", HandleListAuditLogs(db))
 
+	// MCP (Model Context Protocol) server
+	r.POST("/mcp", HandleMCP(db, version))
+	r.GET("/mcp", HandleMCPGet)
+	r.DELETE("/mcp", HandleMCPDelete)
+
 	// Serve Vue.js SPA
 	setupSPA(r)
 
