@@ -127,7 +127,9 @@ func TestMCPToolsList(t *testing.T) {
 	expectedTools := []string{
 		"list_benchmarks", "get_benchmark", "get_benchmark_data",
 		"get_benchmark_run", "update_benchmark", "delete_benchmark",
-		"delete_benchmark_run",
+		"delete_benchmark_run", "get_current_user", "list_api_tokens",
+		"create_api_token", "delete_api_token", "list_users",
+		"list_audit_logs",
 	}
 	if len(result.Tools) != len(expectedTools) {
 		t.Errorf("Expected %d tools, got %d", len(expectedTools), len(result.Tools))
@@ -519,4 +521,273 @@ func TestComputeFPSFromFrametime(t *testing.T) {
 
 func idStr(id uint) string {
 	return fmt.Sprintf("%d", id)
+}
+
+func TestMCPGetCurrentUser(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpcurrentuser", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "current-user-token-abcdef123456", Name: "Current User Token"}
+	db.DB.Create(apiToken)
+
+	body := `{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_current_user","arguments":{}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "mcpcurrentuser") {
+		t.Error("Expected username in result")
+	}
+	if !strings.Contains(result.Content[0].Text, fmt.Sprintf("\"user_id\":%d", user.ID)) {
+		t.Error("Expected user_id in result")
+	}
+}
+
+func TestMCPGetCurrentUserRequiresAuth(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	body := `{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_current_user","arguments":{}}}`
+	w := mcpRequest(t, router, body, "")
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for unauthenticated get_current_user")
+	}
+	if !strings.Contains(result.Content[0].Text, "authentication required") {
+		t.Error("Expected authentication error message")
+	}
+}
+
+func TestMCPListAPITokens(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcptokenuser", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "list-tokens-abcdef1234567890ab", Name: "List Token"}
+	db.DB.Create(apiToken)
+	apiToken2 := &APIToken{UserID: user.ID, Token: "second-token-abcdef1234567890a", Name: "Second Token"}
+	db.DB.Create(apiToken2)
+
+	body := `{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"list_api_tokens","arguments":{}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "List Token") {
+		t.Error("Expected first token name in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "Second Token") {
+		t.Error("Expected second token name in result")
+	}
+}
+
+func TestMCPCreateAPIToken(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpcreatetoken", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "create-token-abcdef1234567890a", Name: "Auth Token"}
+	db.DB.Create(apiToken)
+
+	body := `{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"create_api_token","arguments":{"name":"New MCP Token"}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "New MCP Token") {
+		t.Error("Expected new token name in result")
+	}
+
+	// Verify token was created in DB
+	var count int64
+	db.DB.Model(&APIToken{}).Where("user_id = ?", user.ID).Count(&count)
+	if count != 2 { // original + new
+		t.Errorf("Expected 2 tokens, got %d", count)
+	}
+}
+
+func TestMCPDeleteAPIToken(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpdeletetoken", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "delete-token-abcdef1234567890a", Name: "Auth Token"}
+	db.DB.Create(apiToken)
+	targetToken := &APIToken{UserID: user.ID, Token: "target-token-abcdef1234567890a", Name: "To Delete"}
+	db.DB.Create(targetToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"delete_api_token","arguments":{"token_id":%d}}}`, targetToken.ID)
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "token deleted") {
+		t.Error("Expected deletion confirmation")
+	}
+
+	// Verify token was deleted
+	var count int64
+	db.DB.Model(&APIToken{}).Where("id = ?", targetToken.ID).Count(&count)
+	if count != 0 {
+		t.Error("Expected token to be deleted")
+	}
+}
+
+func TestMCPDeleteAPITokenOwnership(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user1 := createTestUser(db, "mcptokenowner1", false)
+	user2 := createTestUser(db, "mcptokenowner2", false)
+
+	token1 := &APIToken{UserID: user1.ID, Token: "owner1-token-abcdef1234567890a", Name: "User1 Token"}
+	db.DB.Create(token1)
+	token2 := &APIToken{UserID: user2.ID, Token: "owner2-token-abcdef1234567890a", Name: "User2 Token"}
+	db.DB.Create(token2)
+
+	// User1 tries to delete User2's token
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"delete_api_token","arguments":{"token_id":%d}}}`, token2.ID)
+	w := mcpRequest(t, router, body, token1.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for deleting another user's token")
+	}
+	if !strings.Contains(result.Content[0].Text, "token not found") {
+		t.Error("Expected token not found error")
+	}
+}
+
+func TestMCPListUsersRequiresAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpnonadmin", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin-token-abcdef12345678", Name: "Non-Admin Token"}
+	db.DB.Create(apiToken)
+
+	body := `{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_users","arguments":{}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for non-admin list_users")
+	}
+	if !strings.Contains(result.Content[0].Text, "admin privileges required") {
+		t.Error("Expected admin privileges error")
+	}
+}
+
+func TestMCPListUsersAsAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpadminuser", true)
+	apiToken := &APIToken{UserID: admin.ID, Token: "admin-token-abcdef12345678901", Name: "Admin Token"}
+	db.DB.Create(apiToken)
+
+	createTestUser(db, "regularuser1", false)
+
+	body := `{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"list_users","arguments":{"page":1,"per_page":10}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "mcpadminuser") {
+		t.Error("Expected admin username in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "regularuser1") {
+		t.Error("Expected regular user in result")
+	}
+}
+
+func TestMCPListAuditLogsRequiresAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpnonadmin2", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin2-token-abcdef1234567", Name: "Non-Admin Token"}
+	db.DB.Create(apiToken)
+
+	body := `{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"list_audit_logs","arguments":{}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for non-admin list_audit_logs")
+	}
+	if !strings.Contains(result.Content[0].Text, "admin privileges required") {
+		t.Error("Expected admin privileges error")
+	}
+}
+
+func TestMCPListAuditLogsAsAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	admin := createTestUser(db, "mcpadmin2", true)
+	apiToken := &APIToken{UserID: admin.ID, Token: "admin2-token-abcdef1234567890", Name: "Admin Token"}
+	db.DB.Create(apiToken)
+
+	// Create a benchmark to generate an audit log entry
+	b := &Benchmark{Title: "Audit Test Bench", UserID: admin.ID}
+	db.DB.Create(b)
+	LogBenchmarkCreated(db, admin.ID, b.ID, b.Title)
+
+	body := `{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"list_audit_logs","arguments":{"page":1,"per_page":10}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "Benchmark Created") {
+		t.Error("Expected audit log entry in result")
+	}
 }

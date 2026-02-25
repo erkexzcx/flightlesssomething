@@ -224,6 +224,70 @@ func (s *mcpServer) defineTools() []mcpTool {
 				},
 			},
 		},
+		{
+			Name:        "get_current_user",
+			Description: "Get the currently authenticated user's information including user ID, username, and admin status. Requires authentication via API token. Use the returned user ID with list_benchmarks to find your own benchmarks.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			Name:        "list_api_tokens",
+			Description: "List all API tokens for the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			Name:        "create_api_token",
+			Description: "Create a new API token for the currently authenticated user. Maximum 10 tokens per user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"name"},
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
+				},
+			},
+		},
+		{
+			Name:        "delete_api_token",
+			Description: "Delete an API token belonging to the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"token_id"},
+				"properties": map[string]interface{}{
+					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
+				},
+			},
+		},
+		{
+			Name:        "list_users",
+			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":     map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page": map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
+					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
+				},
+			},
+		},
+		{
+			Name:        "list_audit_logs",
+			Description: "List audit logs with pagination and optional filters. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":        map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page":    map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 50)"},
+					"user_id":     map[string]interface{}{"type": "integer", "description": "Filter by user ID who performed the action"},
+					"action":      map[string]interface{}{"type": "string", "description": "Filter by action (partial match)"},
+					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
+				},
+			},
+		},
 	}
 }
 
@@ -344,14 +408,30 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
 
 	// Check if tool requires authentication
-	writeTools := map[string]bool{
+	authRequiredTools := map[string]bool{
 		"update_benchmark":     true,
 		"delete_benchmark":     true,
 		"delete_benchmark_run": true,
+		"get_current_user":     true,
+		"list_api_tokens":      true,
+		"create_api_token":     true,
+		"delete_api_token":     true,
+		"list_users":           true,
+		"list_audit_logs":      true,
 	}
 
-	if writeTools[params.Name] && !authenticated {
+	if authRequiredTools[params.Name] && !authenticated {
 		return s.toolError(req.ID, "authentication required: provide API token via Authorization: Bearer <token> header")
+	}
+
+	// Check if tool requires admin privileges
+	adminTools := map[string]bool{
+		"list_users":      true,
+		"list_audit_logs": true,
+	}
+
+	if adminTools[params.Name] && !isAdmin {
+		return s.toolError(req.ID, "admin privileges required")
 	}
 
 	// Execute tool
@@ -373,6 +453,18 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, isAdmin)
 	case "delete_benchmark_run":
 		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, isAdmin)
+	case "get_current_user":
+		result, toolErr = s.toolGetCurrentUser(userID)
+	case "list_api_tokens":
+		result, toolErr = s.toolListAPITokens(userID)
+	case "create_api_token":
+		result, toolErr = s.toolCreateAPIToken(params.Arguments, userID)
+	case "delete_api_token":
+		result, toolErr = s.toolDeleteAPIToken(params.Arguments, userID)
+	case "list_users":
+		result, toolErr = s.toolListUsers(params.Arguments)
+	case "list_audit_logs":
+		result, toolErr = s.toolListAuditLogs(params.Arguments)
 	default:
 		return jsonrpcResponse{
 			JSONRPC: "2.0",
@@ -873,6 +965,230 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 	runtime.GC()
 
 	return `{"message":"run deleted successfully"}`, nil
+}
+
+func (s *mcpServer) toolGetCurrentUser(userID uint) (string, error) {
+	var user User
+	if err := s.db.DB.First(&user, userID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	result := map[string]interface{}{
+		"user_id":  user.ID,
+		"username": user.Username,
+		"is_admin": user.IsAdmin,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListAPITokens(userID uint) (string, error) {
+	var tokens []APIToken
+	if err := s.db.DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&tokens).Error; err != nil {
+		return "", fmt.Errorf("failed to retrieve tokens: %w", err)
+	}
+
+	data, err := json.Marshal(tokens)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolCreateAPIToken(args json.RawMessage, userID uint) (string, error) {
+	var params struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.Name == "" || len(params.Name) > 100 {
+		return "", fmt.Errorf("name is required and must be at most 100 characters")
+	}
+
+	// Check token limit
+	var count int64
+	if err := s.db.DB.Model(&APIToken{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return "", fmt.Errorf("failed to check token count: %w", err)
+	}
+	if count >= maxTokensPerUser {
+		return "", fmt.Errorf("maximum number of tokens reached (%d)", maxTokensPerUser)
+	}
+
+	token, err := generateAPIToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	apiToken := APIToken{
+		UserID: userID,
+		Token:  token,
+		Name:   params.Name,
+	}
+	if createErr := s.db.DB.Create(&apiToken).Error; createErr != nil {
+		return "", fmt.Errorf("failed to create token: %w", createErr)
+	}
+
+	data, err := json.Marshal(apiToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteAPIToken(args json.RawMessage, userID uint) (string, error) {
+	var params struct {
+		TokenID int `json:"token_id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.TokenID <= 0 {
+		return "", fmt.Errorf("token_id is required")
+	}
+
+	var token APIToken
+	if err := s.db.DB.Where("id = ? AND user_id = ?", params.TokenID, userID).First(&token).Error; err != nil {
+		return "", fmt.Errorf("token not found")
+	}
+
+	if err := s.db.DB.Delete(&token).Error; err != nil {
+		return "", fmt.Errorf("failed to delete token: %w", err)
+	}
+
+	result := map[string]interface{}{
+		"message":  "token deleted",
+		"token_id": params.TokenID,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
+	var params struct {
+		Page    int    `json:"page"`
+		PerPage int    `json:"per_page"`
+		Search  string `json:"search"`
+	}
+	if args != nil {
+		if err := json.Unmarshal(args, &params); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 10
+	}
+
+	query := s.db.DB.Model(&User{})
+	if params.Search != "" {
+		query = query.Where("username LIKE ? OR discord_id LIKE ?", "%"+params.Search+"%", "%"+params.Search+"%")
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	var users []User
+	offset := (params.Page - 1) * params.PerPage
+	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&users).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	for i := range users {
+		var benchCount int64
+		s.db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&benchCount)
+		users[i].BenchmarkCount = int(benchCount)
+
+		var tokenCount int64
+		s.db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
+		users[i].APITokenCount = int(tokenCount)
+	}
+
+	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
+
+	result := map[string]interface{}{
+		"users":       users,
+		"page":        params.Page,
+		"per_page":    params.PerPage,
+		"total":       total,
+		"total_pages": totalPages,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListAuditLogs(args json.RawMessage) (string, error) {
+	var params struct {
+		Page       int    `json:"page"`
+		PerPage    int    `json:"per_page"`
+		UserID     int    `json:"user_id"`
+		Action     string `json:"action"`
+		TargetType string `json:"target_type"`
+	}
+	if args != nil {
+		if err := json.Unmarshal(args, &params); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 50
+	}
+
+	query := s.db.DB.Model(&AuditLog{}).Preload("User")
+
+	if params.UserID > 0 {
+		query = query.Where("user_id = ?", params.UserID)
+	}
+	if params.Action != "" {
+		query = query.Where("action LIKE ?", "%"+params.Action+"%")
+	}
+	if params.TargetType != "" {
+		query = query.Where("target_type = ?", params.TargetType)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	var logs []AuditLog
+	offset := (params.Page - 1) * params.PerPage
+	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&logs).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
+
+	result := map[string]interface{}{
+		"logs":        logs,
+		"page":        params.Page,
+		"per_page":    params.PerPage,
+		"total":       total,
+		"total_pages": totalPages,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
 }
 
 // --- Statistics computation (matches web frontend statsCalculations.js) ---
