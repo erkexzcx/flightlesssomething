@@ -224,6 +224,175 @@ func (s *mcpServer) defineTools() []mcpTool {
 				},
 			},
 		},
+		{
+			Name:        "get_current_user",
+			Description: "Get the currently authenticated user's information including user ID, username, and admin status. Requires authentication via API token. Use the returned user ID with list_benchmarks to find your own benchmarks.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			Name:        "list_api_tokens",
+			Description: "List all API tokens for the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			Name:        "create_api_token",
+			Description: "Create a new API token for the currently authenticated user. Maximum 10 tokens per user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"name"},
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
+				},
+			},
+		},
+		{
+			Name:        "delete_api_token",
+			Description: "Delete an API token belonging to the currently authenticated user. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"token_id"},
+				"properties": map[string]interface{}{
+					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
+				},
+			},
+		},
+		{
+			Name:        "list_users",
+			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":     map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page": map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
+					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
+				},
+			},
+		},
+		{
+			Name:        "list_audit_logs",
+			Description: "List audit logs with pagination and optional filters. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"page":        map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page":    map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 50)"},
+					"user_id":     map[string]interface{}{"type": "integer", "description": "Filter by user ID who performed the action"},
+					"action":      map[string]interface{}{"type": "string", "description": "Filter by action (partial match)"},
+					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
+				},
+			},
+		},
+		{
+			Name:        "create_benchmark",
+			Description: "Create a new benchmark with CSV data files. Each file should be in MangoHud CSV or Afterburner HML format provided as raw text content. Requires authentication via API token.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"title", "files"},
+				"properties": map[string]interface{}{
+					"title":       map[string]interface{}{"type": "string", "description": "Benchmark title (max 100 chars)"},
+					"description": map[string]interface{}{"type": "string", "description": "Benchmark description (max 5000 chars)"},
+					"files": map[string]interface{}{
+						"type":        "array",
+						"description": "Array of benchmark data files. Each file has a 'name' (used as run label) and 'content' (raw CSV/HML text content).",
+						"items": map[string]interface{}{
+							"type":     "object",
+							"required": []string{"name", "content"},
+							"properties": map[string]interface{}{
+								"name":    map[string]interface{}{"type": "string", "description": "File name / run label"},
+								"content": map[string]interface{}{"type": "string", "description": "Raw CSV/HML file content"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:        "add_benchmark_runs",
+			Description: "Add new runs to an existing benchmark. Each file should be in MangoHud CSV or Afterburner HML format provided as raw text content. Requires authentication via API token. Only the benchmark owner or an admin can add runs.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id", "files"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"files": map[string]interface{}{
+						"type":        "array",
+						"description": "Array of benchmark data files to add as new runs.",
+						"items": map[string]interface{}{
+							"type":     "object",
+							"required": []string{"name", "content"},
+							"properties": map[string]interface{}{
+								"name":    map[string]interface{}{"type": "string", "description": "File name / run label"},
+								"content": map[string]interface{}{"type": "string", "description": "Raw CSV/HML file content"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:        "download_benchmark",
+			Description: "Download benchmark data as CSV text. Returns each run as a separate CSV string in MangoHud format. This is the text equivalent of the ZIP download endpoint.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+				},
+			},
+		},
+		{
+			Name:        "delete_user",
+			Description: "Delete a user account. Admin only. Cannot delete your own account. Optionally delete all user data (benchmarks). Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"user_id"},
+				"properties": map[string]interface{}{
+					"user_id":     map[string]interface{}{"type": "integer", "description": "User ID to delete"},
+					"delete_data": map[string]interface{}{"type": "boolean", "description": "Also delete all benchmark data files (default: false)"},
+				},
+			},
+		},
+		{
+			Name:        "delete_user_benchmarks",
+			Description: "Delete all benchmarks belonging to a user. Admin only. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"user_id"},
+				"properties": map[string]interface{}{
+					"user_id": map[string]interface{}{"type": "integer", "description": "User ID whose benchmarks to delete"},
+				},
+			},
+		},
+		{
+			Name:        "ban_user",
+			Description: "Ban or unban a user. Admin only. Cannot ban your own account. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"user_id", "banned"},
+				"properties": map[string]interface{}{
+					"user_id": map[string]interface{}{"type": "integer", "description": "User ID to ban/unban"},
+					"banned":  map[string]interface{}{"type": "boolean", "description": "true to ban, false to unban"},
+				},
+			},
+		},
+		{
+			Name:        "toggle_user_admin",
+			Description: "Grant or revoke admin privileges for a user. Admin only. Cannot revoke your own admin privileges. Requires authentication via API token with admin privileges.",
+			InputSchema: map[string]interface{}{
+				"type":     "object",
+				"required": []string{"user_id", "is_admin"},
+				"properties": map[string]interface{}{
+					"user_id":  map[string]interface{}{"type": "integer", "description": "User ID to modify"},
+					"is_admin": map[string]interface{}{"type": "boolean", "description": "true to grant admin, false to revoke"},
+				},
+			},
+		},
 	}
 }
 
@@ -344,14 +513,40 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
 
 	// Check if tool requires authentication
-	writeTools := map[string]bool{
-		"update_benchmark":     true,
-		"delete_benchmark":     true,
-		"delete_benchmark_run": true,
+	authRequiredTools := map[string]bool{
+		"update_benchmark":       true,
+		"delete_benchmark":       true,
+		"delete_benchmark_run":   true,
+		"get_current_user":       true,
+		"list_api_tokens":        true,
+		"create_api_token":       true,
+		"delete_api_token":       true,
+		"list_users":             true,
+		"list_audit_logs":        true,
+		"create_benchmark":       true,
+		"add_benchmark_runs":     true,
+		"delete_user":            true,
+		"delete_user_benchmarks": true,
+		"ban_user":               true,
+		"toggle_user_admin":      true,
 	}
 
-	if writeTools[params.Name] && !authenticated {
+	if authRequiredTools[params.Name] && !authenticated {
 		return s.toolError(req.ID, "authentication required: provide API token via Authorization: Bearer <token> header")
+	}
+
+	// Check if tool requires admin privileges
+	adminTools := map[string]bool{
+		"list_users":             true,
+		"list_audit_logs":        true,
+		"delete_user":            true,
+		"delete_user_benchmarks": true,
+		"ban_user":               true,
+		"toggle_user_admin":      true,
+	}
+
+	if adminTools[params.Name] && !isAdmin {
+		return s.toolError(req.ID, "admin privileges required")
 	}
 
 	// Execute tool
@@ -373,6 +568,32 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, isAdmin)
 	case "delete_benchmark_run":
 		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, isAdmin)
+	case "get_current_user":
+		result, toolErr = s.toolGetCurrentUser(userID)
+	case "list_api_tokens":
+		result, toolErr = s.toolListAPITokens(userID)
+	case "create_api_token":
+		result, toolErr = s.toolCreateAPIToken(params.Arguments, userID)
+	case "delete_api_token":
+		result, toolErr = s.toolDeleteAPIToken(params.Arguments, userID)
+	case "list_users":
+		result, toolErr = s.toolListUsers(params.Arguments)
+	case "list_audit_logs":
+		result, toolErr = s.toolListAuditLogs(params.Arguments)
+	case "create_benchmark":
+		result, toolErr = s.toolCreateBenchmark(params.Arguments, userID, isAdmin)
+	case "add_benchmark_runs":
+		result, toolErr = s.toolAddBenchmarkRuns(params.Arguments, userID, isAdmin)
+	case "download_benchmark":
+		result, toolErr = s.toolDownloadBenchmark(params.Arguments)
+	case "delete_user":
+		result, toolErr = s.toolDeleteUser(params.Arguments, userID)
+	case "delete_user_benchmarks":
+		result, toolErr = s.toolDeleteUserBenchmarks(params.Arguments, userID)
+	case "ban_user":
+		result, toolErr = s.toolBanUser(params.Arguments, userID)
+	case "toggle_user_admin":
+		result, toolErr = s.toolToggleUserAdmin(params.Arguments, userID)
 	default:
 		return jsonrpcResponse{
 			JSONRPC: "2.0",
@@ -873,6 +1094,668 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 	runtime.GC()
 
 	return `{"message":"run deleted successfully"}`, nil
+}
+
+func (s *mcpServer) toolGetCurrentUser(userID uint) (string, error) {
+	var user User
+	if err := s.db.DB.First(&user, userID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	result := map[string]interface{}{
+		"user_id":  user.ID,
+		"username": user.Username,
+		"is_admin": user.IsAdmin,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListAPITokens(userID uint) (string, error) {
+	var tokens []APIToken
+	if err := s.db.DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&tokens).Error; err != nil {
+		return "", fmt.Errorf("failed to retrieve tokens: %w", err)
+	}
+
+	data, err := json.Marshal(tokens)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolCreateAPIToken(args json.RawMessage, userID uint) (string, error) {
+	var params struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.Name == "" || len(params.Name) > 100 {
+		return "", fmt.Errorf("name is required and must be at most 100 characters")
+	}
+
+	// Check token limit
+	var count int64
+	if err := s.db.DB.Model(&APIToken{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return "", fmt.Errorf("failed to check token count: %w", err)
+	}
+	if count >= maxTokensPerUser {
+		return "", fmt.Errorf("maximum number of tokens reached (%d)", maxTokensPerUser)
+	}
+
+	token, err := generateAPIToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	apiToken := APIToken{
+		UserID: userID,
+		Token:  token,
+		Name:   params.Name,
+	}
+	if createErr := s.db.DB.Create(&apiToken).Error; createErr != nil {
+		return "", fmt.Errorf("failed to create token: %w", createErr)
+	}
+
+	data, err := json.Marshal(apiToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteAPIToken(args json.RawMessage, userID uint) (string, error) {
+	var params struct {
+		TokenID int `json:"token_id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.TokenID <= 0 {
+		return "", fmt.Errorf("token_id is required")
+	}
+
+	var token APIToken
+	if err := s.db.DB.Where("id = ? AND user_id = ?", params.TokenID, userID).First(&token).Error; err != nil {
+		return "", fmt.Errorf("token not found")
+	}
+
+	if err := s.db.DB.Delete(&token).Error; err != nil {
+		return "", fmt.Errorf("failed to delete token: %w", err)
+	}
+
+	result := map[string]interface{}{
+		"message":  "token deleted",
+		"token_id": params.TokenID,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
+	var params struct {
+		Page    int    `json:"page"`
+		PerPage int    `json:"per_page"`
+		Search  string `json:"search"`
+	}
+	if args != nil {
+		if err := json.Unmarshal(args, &params); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 10
+	}
+
+	query := s.db.DB.Model(&User{})
+	if params.Search != "" {
+		query = query.Where("username LIKE ? OR discord_id LIKE ?", "%"+params.Search+"%", "%"+params.Search+"%")
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	var users []User
+	offset := (params.Page - 1) * params.PerPage
+	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&users).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	for i := range users {
+		var benchCount int64
+		s.db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&benchCount)
+		users[i].BenchmarkCount = int(benchCount)
+
+		var tokenCount int64
+		s.db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
+		users[i].APITokenCount = int(tokenCount)
+	}
+
+	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
+
+	result := map[string]interface{}{
+		"users":       users,
+		"page":        params.Page,
+		"per_page":    params.PerPage,
+		"total":       total,
+		"total_pages": totalPages,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolListAuditLogs(args json.RawMessage) (string, error) {
+	var params struct {
+		Page       int    `json:"page"`
+		PerPage    int    `json:"per_page"`
+		UserID     int    `json:"user_id"`
+		Action     string `json:"action"`
+		TargetType string `json:"target_type"`
+	}
+	if args != nil {
+		if err := json.Unmarshal(args, &params); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 50
+	}
+
+	query := s.db.DB.Model(&AuditLog{}).Preload("User")
+
+	if params.UserID > 0 {
+		query = query.Where("user_id = ?", params.UserID)
+	}
+	if params.Action != "" {
+		query = query.Where("action LIKE ?", "%"+params.Action+"%")
+	}
+	if params.TargetType != "" {
+		query = query.Where("target_type = ?", params.TargetType)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	var logs []AuditLog
+	offset := (params.Page - 1) * params.PerPage
+	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&logs).Error; err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
+
+	result := map[string]interface{}{
+		"logs":        logs,
+		"page":        params.Page,
+		"per_page":    params.PerPage,
+		"total":       total,
+		"total_pages": totalPages,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolCreateBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+	var params struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Files       []struct {
+			Name    string `json:"name"`
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.Title == "" || len(params.Title) > 100 {
+		return "", fmt.Errorf("title is required and must be at most 100 characters")
+	}
+	if len(params.Description) > 5000 {
+		return "", fmt.Errorf("description must be at most 5000 characters")
+	}
+	if len(params.Files) == 0 {
+		return "", fmt.Errorf("at least one file is required")
+	}
+
+	// Check if user is banned
+	if !isAdmin {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err != nil {
+			return "", fmt.Errorf("user not found")
+		}
+		if user.IsBanned {
+			return "", fmt.Errorf("your account has been banned")
+		}
+
+		// Check rate limiting
+		limiter := GetBenchmarkUploadLimiter()
+		userKey := fmt.Sprintf("user_%d", userID)
+		if !limiter.Allow(userKey) {
+			remaining := limiter.GetRemainingTime(userKey)
+			return "", fmt.Errorf("rate limit exceeded: maximum 5 benchmarks per 10 minutes (retry after %d seconds)", int(remaining.Seconds()))
+		}
+	}
+
+	// Parse CSV content from each file
+	benchmarkData := make([]*BenchmarkData, 0, len(params.Files))
+	for _, f := range params.Files {
+		if f.Name == "" {
+			return "", fmt.Errorf("file name is required")
+		}
+		if f.Content == "" {
+			return "", fmt.Errorf("file content is required for '%s'", f.Name)
+		}
+		data, err := ReadBenchmarkCSVContent(f.Content, f.Name)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse file '%s': %w", f.Name, err)
+		}
+		benchmarkData = append(benchmarkData, data)
+	}
+
+	// Validate data
+	if err := ValidatePerRunDataLines(benchmarkData); err != nil {
+		return "", err
+	}
+	totalLines := CountTotalDataLines(benchmarkData)
+	if totalLines > maxTotalDataLines {
+		return "", fmt.Errorf("total data lines (%d) exceeds maximum allowed (%d)", totalLines, maxTotalDataLines)
+	}
+
+	// Create benchmark record
+	benchmark := Benchmark{
+		UserID:      userID,
+		Title:       params.Title,
+		Description: params.Description,
+	}
+	if err := s.db.DB.Create(&benchmark).Error; err != nil {
+		return "", fmt.Errorf("failed to create benchmark: %w", err)
+	}
+
+	// Store benchmark data
+	if storeErr := StoreBenchmarkData(benchmarkData, benchmark.ID); storeErr != nil {
+		s.db.DB.Delete(&benchmark)
+		return "", fmt.Errorf("failed to store benchmark data: %w", storeErr)
+	}
+
+	// Extract and update searchable metadata
+	runNames, specifications := ExtractSearchableMetadata(benchmarkData)
+	benchmark.RunNames = runNames
+	benchmark.Specifications = specifications
+	if saveErr := s.db.DB.Save(&benchmark).Error; saveErr != nil {
+		fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, saveErr)
+	}
+
+	// Reload with user data
+	if loadErr := s.db.DB.Preload("User").First(&benchmark, benchmark.ID).Error; loadErr != nil {
+		return "", fmt.Errorf("failed to load benchmark: %w", loadErr)
+	}
+
+	LogBenchmarkCreated(s.db, userID, benchmark.ID, benchmark.Title)
+
+	data, err := json.Marshal(benchmark)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolAddBenchmarkRuns(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+	var params struct {
+		ID    int `json:"id"`
+		Files []struct {
+			Name    string `json:"name"`
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+	if len(params.Files) == 0 {
+		return "", fmt.Errorf("at least one file is required")
+	}
+
+	// Check if user is banned
+	if !isAdmin {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err != nil {
+			return "", fmt.Errorf("user not found")
+		}
+		if user.IsBanned {
+			return "", fmt.Errorf("your account has been banned")
+		}
+	}
+
+	// Verify benchmark exists and check ownership
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+	if benchmark.UserID != userID && !isAdmin {
+		return "", fmt.Errorf("not authorized")
+	}
+
+	// Parse CSV content from each file
+	newBenchmarkData := make([]*BenchmarkData, 0, len(params.Files))
+	for _, f := range params.Files {
+		if f.Name == "" {
+			return "", fmt.Errorf("file name is required")
+		}
+		if f.Content == "" {
+			return "", fmt.Errorf("file content is required for '%s'", f.Name)
+		}
+		data, err := ReadBenchmarkCSVContent(f.Content, f.Name)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse file '%s': %w", f.Name, err)
+		}
+		newBenchmarkData = append(newBenchmarkData, data)
+	}
+
+	// Validate new runs
+	if err := ValidatePerRunDataLines(newBenchmarkData); err != nil {
+		return "", err
+	}
+
+	// Retrieve existing data
+	existingData, err := RetrieveBenchmarkData(uint(params.ID))
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve existing benchmark data: %w", err)
+	}
+
+	// Combine
+	existingData = append(existingData, newBenchmarkData...)
+
+	// Check total limit
+	totalLines := CountTotalDataLines(existingData)
+	if totalLines > maxTotalDataLines {
+		return "", fmt.Errorf("total data lines (%d) would exceed maximum allowed (%d)", totalLines, maxTotalDataLines)
+	}
+
+	// Store combined data
+	if storeErr := StoreBenchmarkData(existingData, uint(params.ID)); storeErr != nil {
+		return "", fmt.Errorf("failed to store benchmark data: %w", storeErr)
+	}
+
+	// Update searchable metadata
+	runNames, specifications := ExtractSearchableMetadata(existingData)
+	benchmark.RunNames = runNames
+	benchmark.Specifications = specifications
+	if saveErr := s.db.DB.Save(&benchmark).Error; saveErr != nil {
+		return "", fmt.Errorf("failed to update benchmark: %w", saveErr)
+	}
+
+	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
+	runtime.GC()
+
+	result := map[string]interface{}{
+		"message":         "runs added successfully",
+		"runs_added":      len(newBenchmarkData),
+		"total_run_count": len(existingData),
+	}
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", marshalErr)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDownloadBenchmark(args json.RawMessage) (string, error) {
+	var params struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.ID <= 0 {
+		return "", fmt.Errorf("id is required")
+	}
+
+	// Verify benchmark exists
+	var benchmark Benchmark
+	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+		return "", fmt.Errorf("benchmark not found")
+	}
+
+	// Retrieve benchmark data
+	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
+	}
+
+	// Convert each run to CSV text
+	type runCSV struct {
+		Label   string `json:"label"`
+		Content string `json:"content"`
+	}
+	runs := make([]runCSV, len(benchmarkData))
+	for i, run := range benchmarkData {
+		var buf strings.Builder
+		if csvErr := writeBenchmarkDataAsCSV(run, &buf); csvErr != nil {
+			return "", fmt.Errorf("failed to export run %d: %w", i, csvErr)
+		}
+		runs[i] = runCSV{
+			Label:   run.Label,
+			Content: buf.String(),
+		}
+	}
+
+	runtime.GC()
+
+	data, marshalErr := json.Marshal(map[string]interface{}{
+		"benchmark_id": params.ID,
+		"title":        benchmark.Title,
+		"runs":         runs,
+	})
+	if marshalErr != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", marshalErr)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (string, error) {
+	var params struct {
+		UserID     int  `json:"user_id"`
+		DeleteData bool `json:"delete_data"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.UserID <= 0 {
+		return "", fmt.Errorf("user_id is required")
+	}
+
+	var user User
+	if err := s.db.DB.First(&user, params.UserID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	// Prevent self-deletion
+	if user.ID == adminUserID {
+		return "", fmt.Errorf("cannot delete your own account")
+	}
+
+	username := user.Username
+
+	if params.DeleteData {
+		var benchmarks []Benchmark
+		if err := s.db.DB.Where("user_id = ?", user.ID).Find(&benchmarks).Error; err != nil {
+			return "", fmt.Errorf("failed to find user benchmarks: %w", err)
+		}
+		for i := range benchmarks {
+			if delErr := DeleteBenchmarkData(benchmarks[i].ID); delErr != nil {
+				fmt.Printf("Warning: failed to delete data for benchmark %d\n", benchmarks[i].ID)
+			}
+		}
+	}
+
+	if err := s.db.DB.Delete(&user).Error; err != nil {
+		return "", fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	LogUserDeleted(s.db, adminUserID, user.ID, username)
+
+	result := map[string]interface{}{
+		"message":  "user deleted",
+		"user_id":  params.UserID,
+		"username": username,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID uint) (string, error) {
+	var params struct {
+		UserID int `json:"user_id"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.UserID <= 0 {
+		return "", fmt.Errorf("user_id is required")
+	}
+
+	var user User
+	if err := s.db.DB.First(&user, params.UserID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	var benchmarks []Benchmark
+	if err := s.db.DB.Where("user_id = ?", user.ID).Find(&benchmarks).Error; err != nil {
+		return "", fmt.Errorf("failed to find user benchmarks: %w", err)
+	}
+
+	for i := range benchmarks {
+		if delErr := DeleteBenchmarkData(benchmarks[i].ID); delErr != nil {
+			fmt.Printf("Warning: failed to delete data for benchmark %d\n", benchmarks[i].ID)
+		}
+	}
+
+	if err := s.db.DB.Where("user_id = ?", user.ID).Delete(&Benchmark{}).Error; err != nil {
+		return "", fmt.Errorf("failed to delete benchmarks: %w", err)
+	}
+
+	LogUserBenchmarksDeleted(s.db, adminUserID, user.ID, user.Username)
+
+	result := map[string]interface{}{
+		"message":  "all user benchmarks deleted",
+		"user_id":  params.UserID,
+		"username": user.Username,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint) (string, error) {
+	var params struct {
+		UserID int  `json:"user_id"`
+		Banned bool `json:"banned"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.UserID <= 0 {
+		return "", fmt.Errorf("user_id is required")
+	}
+
+	var user User
+	if err := s.db.DB.First(&user, params.UserID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	// Prevent self-ban
+	if user.ID == adminUserID && params.Banned {
+		return "", fmt.Errorf("cannot ban your own account")
+	}
+
+	user.IsBanned = params.Banned
+	if err := s.db.DB.Save(&user).Error; err != nil {
+		return "", fmt.Errorf("failed to update user: %w", err)
+	}
+
+	if params.Banned {
+		LogUserBanned(s.db, adminUserID, user.ID, user.Username)
+	} else {
+		LogUserUnbanned(s.db, adminUserID, user.ID, user.Username)
+	}
+
+	data, err := json.Marshal(user)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
+func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint) (string, error) {
+	var params struct {
+		UserID  int  `json:"user_id"`
+		IsAdmin bool `json:"is_admin"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+	if params.UserID <= 0 {
+		return "", fmt.Errorf("user_id is required")
+	}
+
+	var user User
+	if err := s.db.DB.First(&user, params.UserID).Error; err != nil {
+		return "", fmt.Errorf("user not found")
+	}
+
+	// Prevent self-demotion
+	if user.ID == adminUserID && !params.IsAdmin {
+		return "", fmt.Errorf("cannot revoke your own admin privileges")
+	}
+
+	user.IsAdmin = params.IsAdmin
+	if err := s.db.DB.Save(&user).Error; err != nil {
+		return "", fmt.Errorf("failed to update user: %w", err)
+	}
+
+	if params.IsAdmin {
+		LogUserAdminGranted(s.db, adminUserID, user.ID, user.Username)
+	} else {
+		LogUserAdminRevoked(s.db, adminUserID, user.ID, user.Username)
+	}
+
+	data, err := json.Marshal(user)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
 }
 
 // --- Statistics computation (matches web frontend statsCalculations.js) ---

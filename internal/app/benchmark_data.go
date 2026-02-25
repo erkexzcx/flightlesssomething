@@ -365,6 +365,40 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 	return benchmarkData, nil
 }
 
+// ReadBenchmarkCSVContent parses benchmark CSV content from a string (for MCP tool usage).
+// The label parameter sets the run label. The content should be MangoHud CSV or Afterburner HML format.
+func ReadBenchmarkCSVContent(content, label string) (*BenchmarkData, error) {
+	// Count lines for pre-allocation
+	lineCount := strings.Count(content, "\n") + 1
+
+	reader := strings.NewReader(content)
+	scanner := bufio.NewScanner(reader)
+
+	// First line identifies file format
+	if !scanner.Scan() {
+		if scanErr := scanner.Err(); scanErr != nil {
+			return nil, fmt.Errorf("failed to read first line: %w", scanErr)
+		}
+		return nil, errors.New("content is empty or failed to read first line")
+	}
+	firstLine := scanner.Text()
+	firstLine = strings.TrimRight(firstLine, ", ")
+	firstLine = strings.TrimSpace(firstLine)
+
+	fileType := detectFileType(firstLine)
+	if fileType == FileTypeUnknown {
+		return nil, fmt.Errorf("unsupported file format (expected MangoHud CSV or Afterburner HML, got: '%.50s...')", firstLine)
+	}
+
+	benchmarkData, err := readBenchmarkFile(scanner, fileType, lineCount)
+	if err != nil {
+		return nil, err
+	}
+
+	benchmarkData.Label = label
+	return benchmarkData, nil
+}
+
 // truncateString truncates the input string to maxStringLength characters
 func truncateString(s string) string {
 	if len(s) > maxStringLength {
