@@ -32,6 +32,21 @@ API tokens can be created from the web interface under **API Tokens**.
 1. Open your workspace in VS Code
 2. Create `.vscode/mcp.json` in your workspace root (or add to user settings under `"mcp"`):
 
+**Read-only (no authentication):**
+
+```json
+{
+  "servers": {
+    "FlightlessSomething": {
+      "type": "http",
+      "url": "https://your-server.com/mcp"
+    }
+  }
+}
+```
+
+**Read-write (with authentication):**
+
 ```json
 {
   "servers": {
@@ -51,6 +66,21 @@ Alternatively, use the **Install in VS Code** button on the [API Tokens](/api-to
 ### Claude Desktop
 
 Add to your `claude_desktop_config.json` (typically at `~/.config/claude/claude_desktop_config.json` on Linux or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+**Read-only (no authentication):**
+
+```json
+{
+  "mcpServers": {
+    "FlightlessSomething": {
+      "type": "http",
+      "url": "https://your-server.com/mcp"
+    }
+  }
+}
+```
+
+**Read-write (with authentication):**
 
 ```json
 {
