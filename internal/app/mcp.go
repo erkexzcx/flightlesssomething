@@ -50,6 +50,7 @@ type mcpInitializeResult struct {
 	ProtocolVersion string          `json:"protocolVersion"`
 	Capabilities    mcpCapabilities `json:"capabilities"`
 	ServerInfo      mcpServerInfo   `json:"serverInfo"`
+	Instructions    string          `json:"instructions,omitempty"`
 }
 
 type mcpCapabilities struct {
@@ -242,21 +243,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 			accessLevel: toolAccessPublic,
 		},
 		{
-			Name:        "download_benchmark",
-			Title:       "Download Benchmark",
-			Description: "Download benchmark data as CSV text. Returns each run as a separate CSV string in MangoHud format. This is the text equivalent of the ZIP download endpoint.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id"},
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-				},
-			},
-			Icons:       faIcon("download"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessPublic,
-		},
-		{
 			Name:        "get_current_user",
 			Title:       "My Profile",
 			Description: "Get the currently authenticated user's information including user ID, username, and admin status. Requires authentication via API token. Use the returned user ID with list_benchmarks to find your own benchmarks.",
@@ -266,34 +252,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 			},
 			Icons:       faIcon("circle-user"),
 			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "create_benchmark",
-			Title:       "Create Benchmark",
-			Description: "Create a new benchmark with CSV data files. Each file should be in MangoHud CSV or Afterburner HML format provided as raw text content. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"title", "files"},
-				"properties": map[string]interface{}{
-					"title":       map[string]interface{}{"type": "string", "description": "Benchmark title (max 100 chars)"},
-					"description": map[string]interface{}{"type": "string", "description": "Benchmark description (max 5000 chars)"},
-					"files": map[string]interface{}{
-						"type":        "array",
-						"description": "Array of benchmark data files. Each file has a 'name' (used as run label) and 'content' (raw CSV/HML text content).",
-						"items": map[string]interface{}{
-							"type":     "object",
-							"required": []string{"name", "content"},
-							"properties": map[string]interface{}{
-								"name":    map[string]interface{}{"type": "string", "description": "File name / run label"},
-								"content": map[string]interface{}{"type": "string", "description": "Raw CSV/HML file content"},
-							},
-						},
-					},
-				},
-			},
-			Icons:       faIcon("plus"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -343,33 +301,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 			},
 			Icons:       faIcon("circle-minus"),
 			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "add_benchmark_runs",
-			Title:       "Add Runs",
-			Description: "Add new runs to an existing benchmark. Each file should be in MangoHud CSV or Afterburner HML format provided as raw text content. Requires authentication via API token. Only the benchmark owner or an admin can add runs.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id", "files"},
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-					"files": map[string]interface{}{
-						"type":        "array",
-						"description": "Array of benchmark data files to add as new runs.",
-						"items": map[string]interface{}{
-							"type":     "object",
-							"required": []string{"name", "content"},
-							"properties": map[string]interface{}{
-								"name":    map[string]interface{}{"type": "string", "description": "File name / run label"},
-								"content": map[string]interface{}{"type": "string", "description": "Raw CSV/HML file content"},
-							},
-						},
-					},
-				},
-			},
-			Icons:       faIcon("file-circle-plus"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -605,6 +536,10 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 				Name:    "FlightlessSomething",
 				Version: s.version,
 			},
+			Instructions: `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
+- Create benchmark: curl -X POST /api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
+- Add runs: curl -X POST /api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
+- Download benchmark: curl /api/benchmarks/<id>/download -o benchmark.zip`,
 		},
 	}
 }
@@ -690,12 +625,6 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolListUsers(params.Arguments)
 	case "list_audit_logs":
 		result, toolErr = s.toolListAuditLogs(params.Arguments)
-	case "create_benchmark":
-		result, toolErr = s.toolCreateBenchmark(params.Arguments, userID, isAdmin)
-	case "add_benchmark_runs":
-		result, toolErr = s.toolAddBenchmarkRuns(params.Arguments, userID, isAdmin)
-	case "download_benchmark":
-		result, toolErr = s.toolDownloadBenchmark(params.Arguments)
 	case "delete_user":
 		result, toolErr = s.toolDeleteUser(params.Arguments, userID)
 	case "delete_user_benchmarks":
@@ -1439,267 +1368,6 @@ func (s *mcpServer) toolListAuditLogs(args json.RawMessage) (string, error) {
 	data, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolCreateBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
-	var params struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Files       []struct {
-			Name    string `json:"name"`
-			Content string `json:"content"`
-		} `json:"files"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.Title == "" || len(params.Title) > 100 {
-		return "", fmt.Errorf("title is required and must be at most 100 characters")
-	}
-	if len(params.Description) > 5000 {
-		return "", fmt.Errorf("description must be at most 5000 characters")
-	}
-	if len(params.Files) == 0 {
-		return "", fmt.Errorf("at least one file is required")
-	}
-
-	// Check if user is banned
-	if !isAdmin {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err != nil {
-			return "", fmt.Errorf("user not found")
-		}
-		if user.IsBanned {
-			return "", fmt.Errorf("your account has been banned")
-		}
-
-		// Check rate limiting
-		limiter := GetBenchmarkUploadLimiter()
-		userKey := fmt.Sprintf("user_%d", userID)
-		if !limiter.Allow(userKey) {
-			remaining := limiter.GetRemainingTime(userKey)
-			return "", fmt.Errorf("rate limit exceeded: maximum 5 benchmarks per 10 minutes (retry after %d seconds)", int(remaining.Seconds()))
-		}
-	}
-
-	// Parse CSV content from each file
-	benchmarkData := make([]*BenchmarkData, 0, len(params.Files))
-	for _, f := range params.Files {
-		if f.Name == "" {
-			return "", fmt.Errorf("file name is required")
-		}
-		if f.Content == "" {
-			return "", fmt.Errorf("file content is required for '%s'", f.Name)
-		}
-		data, err := ReadBenchmarkCSVContent(f.Content, f.Name)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse file '%s': %w", f.Name, err)
-		}
-		benchmarkData = append(benchmarkData, data)
-	}
-
-	// Validate data
-	if err := ValidatePerRunDataLines(benchmarkData); err != nil {
-		return "", err
-	}
-	totalLines := CountTotalDataLines(benchmarkData)
-	if totalLines > maxTotalDataLines {
-		return "", fmt.Errorf("total data lines (%d) exceeds maximum allowed (%d)", totalLines, maxTotalDataLines)
-	}
-
-	// Create benchmark record
-	benchmark := Benchmark{
-		UserID:      userID,
-		Title:       params.Title,
-		Description: params.Description,
-	}
-	if err := s.db.DB.Create(&benchmark).Error; err != nil {
-		return "", fmt.Errorf("failed to create benchmark: %w", err)
-	}
-
-	// Store benchmark data
-	if storeErr := StoreBenchmarkData(benchmarkData, benchmark.ID); storeErr != nil {
-		s.db.DB.Delete(&benchmark)
-		return "", fmt.Errorf("failed to store benchmark data: %w", storeErr)
-	}
-
-	// Extract and update searchable metadata
-	runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-	benchmark.RunNames = runNames
-	benchmark.Specifications = specifications
-	if saveErr := s.db.DB.Save(&benchmark).Error; saveErr != nil {
-		fmt.Printf("Warning: failed to update searchable metadata for benchmark %d (%s): %v\n", benchmark.ID, benchmark.Title, saveErr)
-	}
-
-	// Reload with user data
-	if loadErr := s.db.DB.Preload("User").First(&benchmark, benchmark.ID).Error; loadErr != nil {
-		return "", fmt.Errorf("failed to load benchmark: %w", loadErr)
-	}
-
-	LogBenchmarkCreated(s.db, userID, benchmark.ID, benchmark.Title)
-
-	runtime.GC()
-
-	data, err := json.Marshal(benchmark)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolAddBenchmarkRuns(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
-	var params struct {
-		ID    int `json:"id"`
-		Files []struct {
-			Name    string `json:"name"`
-			Content string `json:"content"`
-		} `json:"files"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.ID <= 0 {
-		return "", fmt.Errorf("id is required")
-	}
-	if len(params.Files) == 0 {
-		return "", fmt.Errorf("at least one file is required")
-	}
-
-	// Check if user is banned
-	if !isAdmin {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err != nil {
-			return "", fmt.Errorf("user not found")
-		}
-		if user.IsBanned {
-			return "", fmt.Errorf("your account has been banned")
-		}
-	}
-
-	// Verify benchmark exists and check ownership
-	var benchmark Benchmark
-	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
-		return "", fmt.Errorf("benchmark not found")
-	}
-	if benchmark.UserID != userID && !isAdmin {
-		return "", fmt.Errorf("not authorized")
-	}
-
-	// Parse CSV content from each file
-	newBenchmarkData := make([]*BenchmarkData, 0, len(params.Files))
-	for _, f := range params.Files {
-		if f.Name == "" {
-			return "", fmt.Errorf("file name is required")
-		}
-		if f.Content == "" {
-			return "", fmt.Errorf("file content is required for '%s'", f.Name)
-		}
-		data, err := ReadBenchmarkCSVContent(f.Content, f.Name)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse file '%s': %w", f.Name, err)
-		}
-		newBenchmarkData = append(newBenchmarkData, data)
-	}
-
-	// Validate new runs
-	if err := ValidatePerRunDataLines(newBenchmarkData); err != nil {
-		return "", err
-	}
-
-	// Retrieve existing data
-	existingData, err := RetrieveBenchmarkData(uint(params.ID))
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve existing benchmark data: %w", err)
-	}
-
-	// Combine
-	existingData = append(existingData, newBenchmarkData...)
-
-	// Check total limit
-	totalLines := CountTotalDataLines(existingData)
-	if totalLines > maxTotalDataLines {
-		return "", fmt.Errorf("total data lines (%d) would exceed maximum allowed (%d)", totalLines, maxTotalDataLines)
-	}
-
-	// Store combined data
-	if storeErr := StoreBenchmarkData(existingData, uint(params.ID)); storeErr != nil {
-		return "", fmt.Errorf("failed to store benchmark data: %w", storeErr)
-	}
-
-	// Update searchable metadata
-	runNames, specifications := ExtractSearchableMetadata(existingData)
-	benchmark.RunNames = runNames
-	benchmark.Specifications = specifications
-	if saveErr := s.db.DB.Save(&benchmark).Error; saveErr != nil {
-		return "", fmt.Errorf("failed to update benchmark: %w", saveErr)
-	}
-
-	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
-	runtime.GC()
-
-	result := map[string]interface{}{
-		"message":         "runs added successfully",
-		"runs_added":      len(newBenchmarkData),
-		"total_run_count": len(existingData),
-	}
-	data, marshalErr := json.Marshal(result)
-	if marshalErr != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", marshalErr)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolDownloadBenchmark(args json.RawMessage) (string, error) {
-	var params struct {
-		ID int `json:"id"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.ID <= 0 {
-		return "", fmt.Errorf("id is required")
-	}
-
-	// Verify benchmark exists
-	var benchmark Benchmark
-	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
-		return "", fmt.Errorf("benchmark not found")
-	}
-
-	// Retrieve benchmark data
-	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
-	}
-
-	// Convert each run to CSV text
-	type runCSV struct {
-		Label   string `json:"label"`
-		Content string `json:"content"`
-	}
-	runs := make([]runCSV, len(benchmarkData))
-	for i, run := range benchmarkData {
-		var buf strings.Builder
-		if csvErr := writeBenchmarkDataAsCSV(run, &buf); csvErr != nil {
-			return "", fmt.Errorf("failed to export run %d: %w", i, csvErr)
-		}
-		runs[i] = runCSV{
-			Label:   run.Label,
-			Content: buf.String(),
-		}
-	}
-
-	runtime.GC()
-
-	data, marshalErr := json.Marshal(map[string]interface{}{
-		"benchmark_id": params.ID,
-		"title":        benchmark.Title,
-		"runs":         runs,
-	})
-	if marshalErr != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", marshalErr)
 	}
 	return string(data), nil
 }

@@ -150,6 +150,10 @@ Get computed statistics for a specific run within a benchmark. Same format as `g
 
 ### Write Tools (authentication required)
 
+#### `get_current_user`
+
+Get the currently authenticated user's information including user ID, username, and admin status.
+
 #### `update_benchmark`
 
 Update benchmark metadata and/or run labels. Only the benchmark owner or an admin can update.
@@ -177,6 +181,116 @@ Delete a specific run from a benchmark. Cannot delete the last remaining run.
 |-------------|---------|----------|--------------------|
 | `id`        | integer | Yes      | Benchmark ID        |
 | `run_index` | integer | Yes      | Run index (0-based) |
+
+#### `list_api_tokens`
+
+List all API tokens for the currently authenticated user.
+
+#### `create_api_token`
+
+Create a new API token. Maximum 10 tokens per user.
+
+| Parameter | Type   | Required | Description              |
+|----------|--------|----------|--------------------------|
+| `name`   | string | Yes      | Token name (1-100 chars)  |
+
+#### `delete_api_token`
+
+Delete an API token belonging to the currently authenticated user.
+
+| Parameter  | Type    | Required | Description       |
+|-----------|---------|----------|-------------------|
+| `token_id`| integer | Yes      | Token ID to delete |
+
+### Admin Tools (authentication + admin privileges required)
+
+#### `list_users`
+
+List all users with pagination and optional search.
+
+| Parameter  | Type    | Description                         |
+|-----------|---------|-------------------------------------|
+| `page`    | integer | Page number (default: 1)             |
+| `per_page`| integer | Results per page, 1-100 (default: 10)|
+| `search`  | string  | Search by username or Discord ID     |
+
+#### `list_audit_logs`
+
+List audit logs with pagination and optional filters.
+
+| Parameter     | Type    | Description                              |
+|--------------|---------|------------------------------------------|
+| `page`       | integer | Page number (default: 1)                  |
+| `per_page`   | integer | Results per page, 1-100 (default: 50)     |
+| `user_id`    | integer | Filter by user ID who performed the action|
+| `action`     | string  | Filter by action (partial match)          |
+| `target_type`| string  | Filter by target type (e.g. `user`, `benchmark`)|
+
+#### `delete_user`
+
+Delete a user account. Cannot delete your own account. Optionally delete all user data.
+
+| Parameter    | Type    | Required | Description                              |
+|-------------|---------|----------|------------------------------------------|
+| `user_id`   | integer | Yes      | User ID to delete                         |
+| `delete_data`| boolean| No       | Also delete all benchmark data (default: false)|
+
+#### `delete_user_benchmarks`
+
+Delete all benchmarks belonging to a user.
+
+| Parameter | Type    | Required | Description                       |
+|----------|---------|----------|-----------------------------------|
+| `user_id`| integer | Yes      | User ID whose benchmarks to delete |
+
+#### `ban_user`
+
+Ban or unban a user. Cannot ban your own account.
+
+| Parameter | Type    | Required | Description                |
+|----------|---------|----------|----------------------------|
+| `user_id`| integer | Yes      | User ID to ban/unban        |
+| `banned` | boolean | Yes      | `true` to ban, `false` to unban|
+
+#### `toggle_user_admin`
+
+Grant or revoke admin privileges for a user. Cannot revoke your own admin privileges.
+
+| Parameter | Type    | Required | Description                           |
+|----------|---------|----------|---------------------------------------|
+| `user_id`| integer | Yes      | User ID to modify                      |
+| `is_admin`| boolean| Yes      | `true` to grant admin, `false` to revoke|
+
+## Benchmark Data Operations (via REST API)
+
+Creating benchmarks, adding runs, and downloading raw benchmark data are **not available as MCP tools** because benchmark CSV files can be extremely large (hundreds of thousands of lines) and are unsuitable for MCP's JSON-RPC transport. Use the REST API with `curl` instead.
+
+**Getting your API token:** AI assistants can retrieve a token by calling the `list_api_tokens` MCP tool, which returns the full token values for the authenticated user. Use any of the returned tokens in the `Authorization` header for curl commands below.
+
+### Create a benchmark
+
+```bash
+curl -X POST https://your-server.com/api/benchmarks \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -F "title=My Benchmark" \
+  -F "description=Optional description" \
+  -F "files=@run1.csv" \
+  -F "files=@run2.csv"
+```
+
+### Add runs to an existing benchmark
+
+```bash
+curl -X POST https://your-server.com/api/benchmarks/BENCHMARK_ID/runs \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -F "files=@new_run.csv"
+```
+
+### Download benchmark data
+
+```bash
+curl https://your-server.com/api/benchmarks/BENCHMARK_ID/download -o benchmark.zip
+```
 
 ## Computed Statistics
 
