@@ -263,7 +263,9 @@ Grant or revoke admin privileges for a user. Cannot revoke your own admin privil
 
 ## Benchmark Data Operations (via REST API)
 
-Creating benchmarks, adding runs, and downloading raw benchmark data are **not available as MCP tools** because benchmark CSV files can be extremely large (hundreds of thousands of lines) and are unsuitable for MCP's JSON-RPC transport. Use the REST API with `curl` instead:
+Creating benchmarks, adding runs, and downloading raw benchmark data are **not available as MCP tools** because benchmark CSV files can be extremely large (hundreds of thousands of lines) and are unsuitable for MCP's JSON-RPC transport. Use the REST API with `curl` instead.
+
+**Getting your API token:** AI assistants can retrieve a token by calling the `list_api_tokens` MCP tool, which returns the full token values for the authenticated user. Use any of the returned tokens in the `Authorization` header for curl commands below.
 
 ### Create a benchmark
 
