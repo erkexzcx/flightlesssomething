@@ -403,7 +403,7 @@ All settings can be provided as CLI flags or environment variables (prefix `FS_`
 | `-admin-password` | `FS_ADMIN_PASSWORD` | – | Yes | Admin login password |
 
 Memory tuning via environment variables:
-- `GOGC` – Garbage collection target percentage (default: 50, Go default is 100)
+- `GOGC` – Garbage collection target percentage (app default: 50, more aggressive than Go's standard default of 100; set in `cmd/server/main.go`)
 - `GOMEMLIMIT` – Soft memory limit (e.g., "512MiB")
 
 ---
