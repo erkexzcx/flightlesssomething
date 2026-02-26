@@ -93,11 +93,10 @@
       </p>
 
       <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" id="mcpAuthEnabled" v-model="mcpAuthEnabled" :disabled="tokens.length === 0">
+        <input class="form-check-input" type="checkbox" id="mcpAuthEnabled" v-model="mcpAuthEnabled">
         <label class="form-check-label" for="mcpAuthEnabled">
           Enable authentication (read-write access)
         </label>
-        <div v-if="tokens.length === 0" class="form-text text-muted">Create an API token above to enable authenticated access.</div>
       </div>
 
       <!-- VS Code -->
@@ -108,7 +107,7 @@
             <button 
               class="btn btn-sm"
               :class="copiedMCP.vscode ? 'btn-success' : 'btn-outline-secondary'"
-              @click="copyMCPConfig"
+              @click="copyMCPConfig('vscode')"
             >
               <i class="fa-solid" :class="copiedMCP.vscode ? 'fa-check' : 'fa-copy'"></i> Copy
             </button>
@@ -122,16 +121,30 @@
           </div>
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-2">Add this to your <code>.vscode/mcp.json</code> file in your workspace, or to your VS Code user settings under <code>"mcp"</code>:</p>
+          <p class="small text-muted mb-2">Add the following JSON to your VS Code <code>mcp.json</code>:</p>
           <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ vscodeConfig }}</code></pre>
         </div>
       </div>
 
-      <p class="small text-muted">
-        <i class="fa-solid fa-circle-info"></i>
-        Tool call approval is controlled by your MCP client (e.g. VS Code) and applies to all tools 
-        from this server — there is no per-tool granularity. This is a client-side setting, not an MCP server feature.
-      </p>
+      <!-- Claude Desktop -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="fa-solid fa-robot"></i> Claude Desktop</span>
+          <button 
+            class="btn btn-sm"
+            :class="copiedMCP.claude ? 'btn-success' : 'btn-outline-secondary'"
+            @click="copyMCPConfig('claude')"
+          >
+            <i class="fa-solid" :class="copiedMCP.claude ? 'fa-check' : 'fa-copy'"></i> Copy
+          </button>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Add the following JSON inside the <code>"mcpServers"</code> object of your <code>claude_desktop_config.json</code>:</p>
+          <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ claudeConfig }}</code></pre>
+          <p v-if="mcpAuthEnabled" class="small text-warning mt-2 mb-0"><i class="fa-solid fa-triangle-exclamation"></i> Replace the placeholder token with your actual API token.</p>
+        </div>
+      </div>
+
     </div>
 
     <!-- Create Token Modal -->
@@ -230,8 +243,8 @@ const tokenToDelete = ref(null)
 const deleting = ref(false)
 
 // MCP configuration
-const mcpAuthEnabled = ref(false)
-const copiedMCP = reactive({ vscode: false })
+const mcpAuthEnabled = ref(true)
+const copiedMCP = reactive({ vscode: false, claude: false })
 
 const mcpServerUrl = computed(() => {
   return `${window.location.origin}/mcp`
@@ -258,6 +271,17 @@ const vscodeConfig = computed(() => {
     return JSON.stringify(config, null, 2)
   }
   return JSON.stringify({ servers: { "flightlesssomething": server } }, null, 2)
+})
+
+const claudeConfig = computed(() => {
+  const server = {
+    type: "http",
+    url: mcpServerUrl.value,
+  }
+  if (mcpAuthEnabled.value) {
+    server.headers = { "Authorization": "Bearer XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" }
+  }
+  return JSON.stringify({ "flightlesssomething": server }, null, 2)
 })
 
 onMounted(async () => {
@@ -347,12 +371,13 @@ function formatDate(dateString) {
   return date.toLocaleString()
 }
 
-async function copyMCPConfig() {
+async function copyMCPConfig(type) {
   try {
-    await navigator.clipboard.writeText(vscodeConfig.value)
-    copiedMCP.vscode = true
+    const text = type === 'vscode' ? vscodeConfig.value : claudeConfig.value
+    await navigator.clipboard.writeText(text)
+    copiedMCP[type] = true
     setTimeout(() => {
-      copiedMCP.vscode = false
+      copiedMCP[type] = false
     }, 1000)
   } catch (err) {
     console.error('Failed to copy MCP config:', err)
