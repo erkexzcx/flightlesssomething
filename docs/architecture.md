@@ -28,12 +28,12 @@ The application compiles into a **single Go binary** with the Vue.js frontend em
 └──────────────────────────────────┼───────────────┘
                                    │
                         ┌──────────▼──────────┐
-                        │    Filesystem       │
-                        │  ├── *.db (SQLite)  │
-                        │  └── benchmarks/    │
-                        │      ├── 1.bin      │
-                        │      ├── 1.meta     │
-                        │      └── ...        │
+                        │      Filesystem              │
+                        │  ├── flightlesssomething.db  │
+                        │  └── benchmarks/             │
+                        │      ├── {id}.bin            │
+                        │      ├── {id}.meta           │
+                        │      └── ...                 │
                         └─────────────────────┘
 ```
 
