@@ -128,7 +128,7 @@ func TestMCPToolsList(t *testing.T) {
 
 	body := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
 
-	// Anonymous: should only see public tools (5)
+	// Anonymous: should only see public tools (4)
 	t.Run("anonymous sees only public tools", func(t *testing.T) {
 		w := mcpRequest(t, router, body, "")
 		if w.Code != http.StatusOK {
@@ -137,7 +137,7 @@ func TestMCPToolsList(t *testing.T) {
 		names := parseToolsList(t, w)
 		publicTools := []string{
 			"list_benchmarks", "get_benchmark", "get_benchmark_data",
-			"get_benchmark_run", "download_benchmark",
+			"get_benchmark_run",
 		}
 		if len(names) != len(publicTools) {
 			t.Errorf("Expected %d public tools, got %d: %v", len(publicTools), len(names), names)
@@ -157,9 +157,15 @@ func TestMCPToolsList(t *testing.T) {
 				t.Errorf("Anonymous should not see admin tool: %s", n)
 			}
 		}
+		// Removed data tools must NOT be visible
+		for _, n := range names {
+			if n == "create_benchmark" || n == "add_benchmark_runs" || n == "download_benchmark" {
+				t.Errorf("Removed data tool should not be visible: %s", n)
+			}
+		}
 	})
 
-	// Authenticated regular user: should see public + auth tools (14)
+	// Authenticated regular user: should see public + auth tools (11)
 	t.Run("regular user sees public and auth tools", func(t *testing.T) {
 		user := createTestUser(db, "mcptoolslistuser", false)
 		apiToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef123", Name: "ToolsList Token"}
@@ -170,15 +176,15 @@ func TestMCPToolsList(t *testing.T) {
 			t.Fatalf("Expected 200, got %d", w.Code)
 		}
 		names := parseToolsList(t, w)
-		if len(names) != 14 {
-			t.Errorf("Expected 14 tools for regular user, got %d: %v", len(names), names)
+		if len(names) != 11 {
+			t.Errorf("Expected 11 tools for regular user, got %d: %v", len(names), names)
 		}
 		// Should include auth tools
 		nameSet := make(map[string]bool)
 		for _, n := range names {
 			nameSet[n] = true
 		}
-		for _, required := range []string{"create_benchmark", "get_current_user", "list_api_tokens"} {
+		for _, required := range []string{"get_current_user", "list_api_tokens", "update_benchmark"} {
 			if !nameSet[required] {
 				t.Errorf("Missing auth tool: %s", required)
 			}
@@ -189,9 +195,15 @@ func TestMCPToolsList(t *testing.T) {
 				t.Errorf("Regular user should not see admin tool: %s", n)
 			}
 		}
+		// Removed data tools must NOT be visible
+		for _, n := range names {
+			if n == "create_benchmark" || n == "add_benchmark_runs" || n == "download_benchmark" {
+				t.Errorf("Removed data tool should not be visible: %s", n)
+			}
+		}
 	})
 
-	// Admin user: should see all tools (20)
+	// Admin user: should see all tools (17)
 	t.Run("admin sees all tools", func(t *testing.T) {
 		admin := createTestUser(db, "mcptoolslistadmin", true)
 		adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef12", Name: "ToolsList Admin"}
@@ -204,9 +216,9 @@ func TestMCPToolsList(t *testing.T) {
 		names := parseToolsList(t, w)
 		allTools := []string{
 			"list_benchmarks", "get_benchmark", "get_benchmark_data",
-			"get_benchmark_run", "download_benchmark",
-			"get_current_user", "create_benchmark", "update_benchmark",
-			"delete_benchmark", "delete_benchmark_run", "add_benchmark_runs",
+			"get_benchmark_run",
+			"get_current_user", "update_benchmark",
+			"delete_benchmark", "delete_benchmark_run",
 			"list_api_tokens", "create_api_token", "delete_api_token",
 			"list_users", "list_audit_logs", "delete_user",
 			"delete_user_benchmarks", "ban_user", "toggle_user_admin",
@@ -879,151 +891,6 @@ fps,frametime,cpu_load,gpu_load,cpu_temp,gpu_temp,gpu_core_clock,gpu_mem_clock,g
 120,8.33,55,85,67,72,1600,950,4100,210,8200,0
 90,11.11,52,82,66,71,1550,920,4080,205,8150,0`
 
-func TestMCPCreateBenchmark(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	if err := InitBenchmarksDir(t.TempDir()); err != nil {
-		t.Fatalf("Failed to init benchmarks dir: %v", err)
-	}
-	router := setupMCPTestRouter(db)
-
-	user := createTestUser(db, "mcpcreatedbench", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "createbench-token-abcdef123456", Name: "Create Bench Token"}
-	db.DB.Create(apiToken)
-
-	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"MCP Created Bench","description":"Created via MCP","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, body, apiToken.Token)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	_, result := parseMCPToolResult(t, w)
-	if result.IsError {
-		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
-	}
-	if !strings.Contains(result.Content[0].Text, "MCP Created Bench") {
-		t.Error("Expected benchmark title in result")
-	}
-
-	// Verify in DB
-	var count int64
-	db.DB.Model(&Benchmark{}).Where("user_id = ?", user.ID).Count(&count)
-	if count != 1 {
-		t.Errorf("Expected 1 benchmark, got %d", count)
-	}
-}
-
-func TestMCPCreateBenchmarkRequiresAuth(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	router := setupMCPTestRouter(db)
-
-	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"No Auth","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, body, "")
-
-	_, result := parseMCPToolResult(t, w)
-	if !result.IsError {
-		t.Error("Expected error for unauthenticated create_benchmark")
-	}
-	if !strings.Contains(result.Content[0].Text, "authentication required") {
-		t.Error("Expected authentication error message")
-	}
-}
-
-func TestMCPAddBenchmarkRuns(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	if err := InitBenchmarksDir(t.TempDir()); err != nil {
-		t.Fatalf("Failed to init benchmarks dir: %v", err)
-	}
-	router := setupMCPTestRouter(db)
-
-	user := createTestUser(db, "mcpaddruns", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "addruns-token-abcdef1234567890", Name: "Add Runs Token"}
-	db.DB.Create(apiToken)
-
-	// First create a benchmark
-	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Add Runs Test","files":[{"name":"Initial Run","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, createBody, apiToken.Token)
-	_, createResult := parseMCPToolResult(t, w)
-	if createResult.IsError {
-		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
-	}
-
-	// Extract benchmark ID from result
-	var benchData map[string]interface{}
-	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
-		t.Fatalf("Failed to parse create result: %v", err)
-	}
-	idVal, ok := benchData["ID"].(float64)
-	if !ok {
-		t.Fatal("Failed to extract benchmark ID from result")
-	}
-	benchID := int(idVal)
-
-	// Add runs
-	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"New Run","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
-	w = mcpRequest(t, router, addBody, apiToken.Token)
-
-	_, result := parseMCPToolResult(t, w)
-	if result.IsError {
-		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
-	}
-	if !strings.Contains(result.Content[0].Text, "runs added successfully") {
-		t.Error("Expected success message")
-	}
-	if !strings.Contains(result.Content[0].Text, `"total_run_count":2`) {
-		t.Error("Expected total_run_count of 2")
-	}
-}
-
-func TestMCPDownloadBenchmark(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	if err := InitBenchmarksDir(t.TempDir()); err != nil {
-		t.Fatalf("Failed to init benchmarks dir: %v", err)
-	}
-	router := setupMCPTestRouter(db)
-
-	user := createTestUser(db, "mcpdownload", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "download-token-abcdef123456789", Name: "Download Token"}
-	db.DB.Create(apiToken)
-
-	// Create benchmark first
-	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Download Test","files":[{"name":"DL Run","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, createBody, apiToken.Token)
-	_, createResult := parseMCPToolResult(t, w)
-	if createResult.IsError {
-		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
-	}
-
-	var benchData map[string]interface{}
-	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
-		t.Fatalf("Failed to parse create result: %v", err)
-	}
-	idVal, ok := benchData["ID"].(float64)
-	if !ok {
-		t.Fatal("Failed to extract benchmark ID from result")
-	}
-	benchID := int(idVal)
-
-	// Download
-	dlBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"download_benchmark","arguments":{"id":%d}}}`, benchID)
-	w = mcpRequest(t, router, dlBody, "")
-
-	_, result := parseMCPToolResult(t, w)
-	if result.IsError {
-		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
-	}
-	if !strings.Contains(result.Content[0].Text, "DL Run") {
-		t.Error("Expected run label in download result")
-	}
-	if !strings.Contains(result.Content[0].Text, "fps,frametime") {
-		t.Error("Expected CSV headers in download result")
-	}
-}
-
 func TestMCPDeleteUser(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
@@ -1255,24 +1122,28 @@ func TestMCPAdminToolsRequireAdmin(t *testing.T) {
 	}
 }
 
-// mcpCreateBenchmarkHelper creates a benchmark via MCP and returns its ID
-func mcpCreateBenchmarkHelper(t *testing.T, router *gin.Engine, token string) int {
+// mcpCreateBenchmarkHelper creates a benchmark directly via the storage API and returns its ID.
+// This bypasses MCP tools (which don't include data upload) and creates benchmark data directly.
+func mcpCreateBenchmarkHelper(t *testing.T, db *DBInstance, userID uint) int {
 	t.Helper()
-	createBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":100,"method":"tools/call","params":{"name":"create_benchmark","arguments":{"title":"Helper Bench","files":[{"name":"Run 1","content":%s}]}}}`, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, createBody, token)
-	_, createResult := parseMCPToolResult(t, w)
-	if createResult.IsError {
-		t.Fatalf("Failed to create benchmark: %s", createResult.Content[0].Text)
+	data, err := ReadBenchmarkCSVContent(testMangoHudCSV, "Run 1")
+	if err != nil {
+		t.Fatalf("Failed to parse test CSV: %v", err)
 	}
-	var benchData map[string]interface{}
-	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &benchData); err != nil {
-		t.Fatalf("Failed to parse create result: %v", err)
+
+	benchmark := Benchmark{
+		UserID: userID,
+		Title:  "Helper Bench",
 	}
-	idVal, ok := benchData["ID"].(float64)
-	if !ok {
-		t.Fatal("Failed to extract benchmark ID from result")
+	if err := db.DB.Create(&benchmark).Error; err != nil {
+		t.Fatalf("Failed to create benchmark: %v", err)
 	}
-	return int(idVal)
+
+	if err := StoreBenchmarkData([]*BenchmarkData{data}, benchmark.ID); err != nil {
+		t.Fatalf("Failed to store benchmark data: %v", err)
+	}
+
+	return int(benchmark.ID)
 }
 
 func TestMCPGetBenchmarkData(t *testing.T) {
@@ -1287,7 +1158,7 @@ func TestMCPGetBenchmarkData(t *testing.T) {
 	apiToken := &APIToken{UserID: user.ID, Token: "getdata-token-abcdef1234567890", Name: "GetData Token"}
 	db.DB.Create(apiToken)
 
-	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"get_benchmark_data","arguments":{"id":%d,"max_points":100}}}`, benchID)
 	w := mcpRequest(t, router, body, "")
@@ -1323,7 +1194,7 @@ func TestMCPGetBenchmarkRun(t *testing.T) {
 	apiToken := &APIToken{UserID: user.ID, Token: "getrun-token-abcdef12345678901", Name: "GetRun Token"}
 	db.DB.Create(apiToken)
 
-	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"get_benchmark_run","arguments":{"id":%d,"run_index":0,"max_points":50}}}`, benchID)
 	w := mcpRequest(t, router, body, "")
@@ -1356,7 +1227,7 @@ func TestMCPDeleteBenchmarkWithData(t *testing.T) {
 	apiToken := &APIToken{UserID: user.ID, Token: "delbench-token-abcdef123456789", Name: "DelBench Token"}
 	db.DB.Create(apiToken)
 
-	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
+	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
 
 	// Verify benchmark exists
 	var count int64
@@ -1396,19 +1267,27 @@ func TestMCPDeleteBenchmarkRunWithData(t *testing.T) {
 	apiToken := &APIToken{UserID: user.ID, Token: "delrun-token-abcdef12345678901", Name: "DelRun Token"}
 	db.DB.Create(apiToken)
 
-	benchID := mcpCreateBenchmarkHelper(t, router, apiToken.Token)
-
-	// Add a second run so we can delete one
-	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"Run 2","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, addBody, apiToken.Token)
-	_, addResult := parseMCPToolResult(t, w)
-	if addResult.IsError {
-		t.Fatalf("Failed to add run: %s", addResult.Content[0].Text)
+	// Create benchmark with 2 runs directly so we can delete one
+	run1, err := ReadBenchmarkCSVContent(testMangoHudCSV, "Run 1")
+	if err != nil {
+		t.Fatalf("Failed to parse test CSV: %v", err)
 	}
+	run2, err := ReadBenchmarkCSVContent(testMangoHudCSV, "Run 2")
+	if err != nil {
+		t.Fatalf("Failed to parse test CSV: %v", err)
+	}
+	benchmark := Benchmark{UserID: user.ID, Title: "DelRun Test"}
+	if err := db.DB.Create(&benchmark).Error; err != nil {
+		t.Fatalf("Failed to create benchmark: %v", err)
+	}
+	if err := StoreBenchmarkData([]*BenchmarkData{run1, run2}, benchmark.ID); err != nil {
+		t.Fatalf("Failed to store benchmark data: %v", err)
+	}
+	benchID := int(benchmark.ID)
 
 	// Delete run 0
 	delBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{"name":"delete_benchmark_run","arguments":{"id":%d,"run_index":0}}}`, benchID)
-	w = mcpRequest(t, router, delBody, apiToken.Token)
+	w := mcpRequest(t, router, delBody, apiToken.Token)
 
 	_, result := parseMCPToolResult(t, w)
 	if result.IsError {
@@ -1417,44 +1296,4 @@ func TestMCPDeleteBenchmarkRunWithData(t *testing.T) {
 	if !strings.Contains(result.Content[0].Text, "run deleted successfully") {
 		t.Error("Expected run deletion confirmation")
 	}
-}
-
-func TestMCPAddBenchmarkRunsOwnership(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	if err := InitBenchmarksDir(t.TempDir()); err != nil {
-		t.Fatalf("Failed to init benchmarks dir: %v", err)
-	}
-	router := setupMCPTestRouter(db)
-
-	owner := createTestUser(db, "mcprunowner", false)
-	ownerToken := &APIToken{UserID: owner.ID, Token: "runowner-token-abcdef123456789", Name: "Owner Token"}
-	db.DB.Create(ownerToken)
-
-	other := createTestUser(db, "mcprunother", false)
-	otherToken := &APIToken{UserID: other.ID, Token: "runother-token-abcdef123456789", Name: "Other Token"}
-	db.DB.Create(otherToken)
-
-	benchID := mcpCreateBenchmarkHelper(t, router, ownerToken.Token)
-
-	// Other user tries to add runs
-	addBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":45,"method":"tools/call","params":{"name":"add_benchmark_runs","arguments":{"id":%d,"files":[{"name":"Evil Run","content":%s}]}}}`, benchID, jsonEscape(testMangoHudCSV))
-	w := mcpRequest(t, router, addBody, otherToken.Token)
-
-	_, result := parseMCPToolResult(t, w)
-	if !result.IsError {
-		t.Error("Expected error for non-owner add_benchmark_runs")
-	}
-	if !strings.Contains(result.Content[0].Text, "not authorized") {
-		t.Error("Expected authorization error message")
-	}
-}
-
-// jsonEscape returns a JSON-escaped string literal (with quotes) suitable for embedding in JSON
-func jsonEscape(s string) string { //nolint:unparam // test helper used with constant test data
-	b, err := json.Marshal(s)
-	if err != nil {
-		return `""`
-	}
-	return string(b)
 }
