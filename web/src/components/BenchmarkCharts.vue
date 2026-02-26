@@ -17,7 +17,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(data, index) in benchmarkData" :key="index">
+              <tr v-for="(data, index) in sortedBenchmarkData" :key="index">
                 <th scope="row">{{ data.label }}</th>
                 <td>{{ data.specOS || '-' }}</td>
                 <td>{{ data.specGPU || '-' }}</td>
@@ -230,7 +230,7 @@
                   >
                     <option :value="null">Auto (slowest)</option>
                     <option 
-                      v-for="(data, index) in benchmarkData" 
+                      v-for="(data, index) in sortedBenchmarkData" 
                       :key="index" 
                       :value="index"
                     >
@@ -327,7 +327,7 @@
                   >
                     <option :value="null">Auto (fastest)</option>
                     <option 
-                      v-for="(data, index) in benchmarkData" 
+                      v-for="(data, index) in sortedBenchmarkData" 
                       :key="index" 
                       :value="index"
                     >
@@ -507,6 +507,12 @@ const props = defineProps({
     type: Array,
     default: () => []
   }
+})
+
+// Sort benchmark data alphabetically by label for display
+const sortedBenchmarkData = computed(() => {
+  if (!props.benchmarkData || props.benchmarkData.length === 0) return []
+  return [...props.benchmarkData].sort((a, b) => a.label.localeCompare(b.label))
 })
 
 // Track which tabs have been rendered
@@ -1066,7 +1072,7 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
 
 // Computed properties to cache data arrays - only recalculated when benchmarkData changes
 const dataArrays = computed(() => {
-  if (!props.benchmarkData || props.benchmarkData.length === 0) {
+  if (sortedBenchmarkData.value.length === 0) {
     return {
       fpsDataArrays: [],
       frameTimeDataArrays: [],
@@ -1089,19 +1095,19 @@ const dataArrays = computed(() => {
   const extractY = (series) => series.map(point => point[1])
   
   return {
-    fpsDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FPS || []) })),
-    frameTimeDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.FrameTime || []) })),
-    cpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPULoad || []) })),
-    gpuLoadDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPULoad || []) })),
-    cpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUTemp || []) })),
-    cpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.CPUPower || []) })),
-    gpuTempDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUTemp || []) })),
-    gpuCoreClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUCoreClock || []) })),
-    gpuMemClockDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUMemClock || []) })),
-    gpuVRAMUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUVRAMUsed || []) })),
-    gpuPowerDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.GPUPower || []) })),
-    ramUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.RAMUsed || []) })),
-    swapUsedDataArrays: props.benchmarkData.map(d => ({ label: d.label, data: extractY(d.series?.SwapUsed || []) }))
+    fpsDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.FPS || []) })),
+    frameTimeDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.FrameTime || []) })),
+    cpuLoadDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.CPULoad || []) })),
+    gpuLoadDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPULoad || []) })),
+    cpuTempDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.CPUTemp || []) })),
+    cpuPowerDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.CPUPower || []) })),
+    gpuTempDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPUTemp || []) })),
+    gpuCoreClockDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPUCoreClock || []) })),
+    gpuMemClockDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPUMemClock || []) })),
+    gpuVRAMUsedDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPUVRAMUsed || []) })),
+    gpuPowerDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.GPUPower || []) })),
+    ramUsedDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.RAMUsed || []) })),
+    swapUsedDataArrays: sortedBenchmarkData.value.map(d => ({ label: d.label, data: extractY(d.series?.SwapUsed || []) }))
   }
 })
 
@@ -1109,12 +1115,12 @@ const dataArrays = computed(() => {
 // Statistics are calculated during incremental loading from full datasets (before downsampling)
 // This ensures 100% accuracy for bar charts and percentile panels
 const fpsStats = computed(() => {
-  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
+  if (sortedBenchmarkData.value.length === 0) return null
   
   // Select stats based on calculation method
   const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
   
-  return props.benchmarkData.map((run) => {
+  return sortedBenchmarkData.value.map((run) => {
     const stats = run[statsKey]?.FPS || { min: 0, max: 0, avg: 0, p01: 0, p97: 0, density: [] }
     const seriesData = dataArrays.value.fpsDataArrays.find(d => d.label === run.label)?.data || []
     
@@ -1134,12 +1140,12 @@ const fpsStats = computed(() => {
 
 // Computed properties using PRE-CALCULATED statistics from FULL data
 const frametimeStats = computed(() => {
-  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
+  if (sortedBenchmarkData.value.length === 0) return null
   
   // Select stats based on calculation method
   const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
   
-  return props.benchmarkData.map((run) => {
+  return sortedBenchmarkData.value.map((run) => {
     const stats = run[statsKey]?.FrameTime || { min: 0, max: 0, avg: 0, p01: 0, p97: 0, density: [] }
     const seriesData = dataArrays.value.frameTimeDataArrays.find(d => d.label === run.label)?.data || []
     
@@ -1159,20 +1165,20 @@ const frametimeStats = computed(() => {
 
 // Computed properties using PRE-CALCULATED averages from FULL data for summary charts
 const summaryStats = computed(() => {
-  if (!props.benchmarkData || props.benchmarkData.length === 0) return null
+  if (sortedBenchmarkData.value.length === 0) return null
   
   // Select stats based on calculation method
   const statsKey = appStore.calculationMethod === 'mangohud-threshold' ? 'statsMangoHud' : 'stats'
   
   return {
-    fpsAverages: props.benchmarkData.map(run => run[statsKey]?.FPS?.avg || 0),
-    frametimeAverages: props.benchmarkData.map(run => run[statsKey]?.FrameTime?.avg || 0),
-    cpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.CPULoad?.avg || 0),
-    gpuLoadAverages: props.benchmarkData.map(run => run[statsKey]?.GPULoad?.avg || 0),
-    gpuCoreClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUCoreClock?.avg || 0),
-    gpuMemClockAverages: props.benchmarkData.map(run => run[statsKey]?.GPUMemClock?.avg || 0),
-    cpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.CPUPower?.avg || 0),
-    gpuPowerAverages: props.benchmarkData.map(run => run[statsKey]?.GPUPower?.avg || 0)
+    fpsAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.FPS?.avg || 0),
+    frametimeAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.FrameTime?.avg || 0),
+    cpuLoadAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.CPULoad?.avg || 0),
+    gpuLoadAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.GPULoad?.avg || 0),
+    gpuCoreClockAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.GPUCoreClock?.avg || 0),
+    gpuMemClockAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.GPUMemClock?.avg || 0),
+    cpuPowerAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.CPUPower?.avg || 0),
+    gpuPowerAverages: sortedBenchmarkData.value.map(run => run[statsKey]?.GPUPower?.avg || 0)
   }
 })
 
