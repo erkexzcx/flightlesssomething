@@ -83,9 +83,9 @@ toggle_logging=Shift_L+F2
 
 1. Start your game with MangoHud enabled (e.g. in Steam, set launch options to `mangohud %command%`).
 2. The MangoHud overlay should be visible in-game.
-3. Press **Shift+F2** to start logging. A red dot will appear in the overlay to indicate recording is in progress.
+3. Press **Shift_L+F2** (left Shift + F2) to start logging. A red dot will appear in the overlay to indicate recording is in progress.
 4. Run your benchmark or play through the test scene.
-5. Press **Shift+F2** again to stop logging, or wait for `log_duration` to expire.
+5. Press **Shift_L+F2** again to stop logging, or wait for `log_duration` to expire.
 
 ### 4. Find Your Files
 
@@ -123,9 +123,9 @@ Open MSI Afterburner and go to **Settings** → **Monitoring** tab.
    - Framerate
    - Frametime
 3. *(Optional)* Click each metric and check **"Show in On-Screen Display"** to see them in the overlay.
-4. Check **"Log history to file"** and select a location for the log file (e.g. Desktop or Downloads).
+4. Check **"Log history to file"** and select a location for the log file (e.g. Desktop or Downloads). This step is needed to configure the file path.
 5. Check **"Recreate existing log files"** so each session creates a fresh file.
-6. **Uncheck** "Log history to file" — this disables automatic recording when a game starts. You will control recording manually with shortcuts.
+6. Now **uncheck** "Log history to file" — this prevents Afterburner from automatically recording when a game starts. You will control recording manually with the shortcuts configured below.
 7. Set **"Begin logging"** and **"End logging"** shortcuts (suggestion: **Shift+F2** and **Shift+F3**).
 8. Close MSI Afterburner settings.
 
