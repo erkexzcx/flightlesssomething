@@ -536,15 +536,10 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 				Name:    "FlightlessSomething",
 				Version: s.version,
 			},
-			Instructions: "FlightlessSomething is a gaming benchmark storage service. " +
-				"You can browse, search, and analyze benchmarks using the provided tools. " +
-				"To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools " +
-				"(these operations involve large CSV files unsuitable for MCP). " +
-				"Use 'Authorization: Bearer <token>' header for authentication. " +
-				"REST API endpoints for benchmark data operations:\n" +
-				"- Create benchmark: curl -X POST /api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'\n" +
-				"- Add runs: curl -X POST /api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'\n" +
-				"- Download benchmark: curl /api/benchmarks/<id>/download -o benchmark.zip",
+			Instructions: `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). Use 'Authorization: Bearer <token>' header for authentication. REST API endpoints for benchmark data operations:
+- Create benchmark: curl -X POST /api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
+- Add runs: curl -X POST /api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
+- Download benchmark: curl /api/benchmarks/<id>/download -o benchmark.zip`,
 		},
 	}
 }
