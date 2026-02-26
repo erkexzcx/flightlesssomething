@@ -1297,3 +1297,79 @@ func TestMCPDeleteBenchmarkRunWithData(t *testing.T) {
 		t.Error("Expected run deletion confirmation")
 	}
 }
+
+func TestMCPListBenchmarksCreatorFilter(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	// Create two users with benchmarks
+	user1 := createTestUser(db, "alice", false)
+	user2 := createTestUser(db, "bob", false)
+	db.DB.Create(&Benchmark{Title: "Alice Bench 1", Description: "Desc", UserID: user1.ID})
+	db.DB.Create(&Benchmark{Title: "Alice Bench 2", Description: "Desc", UserID: user1.ID})
+	db.DB.Create(&Benchmark{Title: "Bob Bench", Description: "Desc", UserID: user2.ID})
+
+	t.Run("filter by creator returns only that user benchmarks", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":50,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"creator":"alice"}}}`
+		w := mcpRequest(t, router, body, "")
+		_, result := parseMCPToolResult(t, w)
+		if result.IsError {
+			t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+		}
+		text := result.Content[0].Text
+		if !strings.Contains(text, "Alice Bench 1") || !strings.Contains(text, "Alice Bench 2") {
+			t.Error("Expected both Alice benchmarks in result")
+		}
+		if strings.Contains(text, "Bob Bench") {
+			t.Error("Should not contain Bob's benchmark when filtering by creator=alice")
+		}
+		// Verify total count is 2
+		if !strings.Contains(text, `"total":2`) {
+			t.Error("Expected total to be 2 for alice's benchmarks")
+		}
+	})
+
+	t.Run("filter by creator with no benchmarks returns empty", func(t *testing.T) {
+		noBenchUser := createTestUser(db, "charlie", false)
+		_ = noBenchUser
+		body := `{"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"creator":"charlie"}}}`
+		w := mcpRequest(t, router, body, "")
+		_, result := parseMCPToolResult(t, w)
+		if result.IsError {
+			t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+		}
+		if !strings.Contains(result.Content[0].Text, `"total":0`) {
+			t.Error("Expected total to be 0 for charlie's benchmarks")
+		}
+	})
+
+	t.Run("filter by nonexistent creator returns error", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"creator":"nonexistent_user"}}}`
+		w := mcpRequest(t, router, body, "")
+		_, result := parseMCPToolResult(t, w)
+		if !result.IsError {
+			t.Error("Expected error for nonexistent creator")
+		}
+		if !strings.Contains(result.Content[0].Text, "user not found") {
+			t.Error("Expected 'user not found' error message")
+		}
+	})
+
+	t.Run("user_id takes precedence over creator", func(t *testing.T) {
+		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":53,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"user_id":%d,"creator":"bob"}}}`, user1.ID)
+		w := mcpRequest(t, router, body, "")
+		_, result := parseMCPToolResult(t, w)
+		if result.IsError {
+			t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+		}
+		text := result.Content[0].Text
+		// user_id takes precedence, so should return alice's benchmarks (user1)
+		if !strings.Contains(text, "Alice Bench") {
+			t.Error("Expected Alice's benchmarks when user_id takes precedence")
+		}
+		if strings.Contains(text, "Bob Bench") {
+			t.Error("Should not contain Bob's benchmark when user_id filters to alice")
+		}
+	})
+}
