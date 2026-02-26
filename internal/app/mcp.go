@@ -186,7 +186,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"per_page":  map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
 					"search":    map[string]interface{}{"type": "string", "description": "Search keywords (space-separated, AND logic). Searches title, description, username, run names, and specifications."},
 					"user_id":   map[string]interface{}{"type": "integer", "description": "Filter by user ID"},
-					"creator":   map[string]interface{}{"type": "string", "description": "Filter by creator username (exact match)"},
 					"sort_by":   map[string]interface{}{"type": "string", "enum": []string{"title", "created_at", "updated_at"}, "description": "Sort field (default: created_at)"},
 					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
 				},
@@ -719,7 +718,6 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 		PerPage   int    `json:"per_page"`
 		Search    string `json:"search"`
 		UserID    int    `json:"user_id"`
-		Creator   string `json:"creator"`
 		SortBy    string `json:"sort_by"`
 		SortOrder string `json:"sort_order"`
 	}
@@ -740,12 +738,6 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 
 	if params.UserID > 0 {
 		query = query.Where("user_id = ?", params.UserID)
-	} else if params.Creator != "" {
-		var user User
-		if err := s.db.DB.Where("username = ?", params.Creator).First(&user).Error; err != nil {
-			return "", fmt.Errorf("user not found: %s", params.Creator)
-		}
-		query = query.Where("user_id = ?", user.ID)
 	}
 
 	if params.Search != "" {
