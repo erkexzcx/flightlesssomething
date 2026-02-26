@@ -178,7 +178,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "list_benchmarks",
 			Title:       "Browse Benchmarks",
-			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description, user, run count, and timestamps.",
+			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description (markdown), user, run count, and timestamps. After listing, use get_benchmark_data to retrieve statistics for analysis.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -197,7 +197,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark",
 			Title:       "View Benchmark",
-			Description: "Get detailed information about a specific benchmark including title, description, user, run count, run labels, and timestamps.",
+			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Use get_benchmark_data to retrieve the actual performance statistics for this benchmark.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -257,14 +257,14 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "update_benchmark",
 			Title:       "Edit Benchmark",
-			Description: "Update benchmark metadata (title, description) and/or run labels. Requires authentication via API token. Only the benchmark owner or an admin can update.",
+			Description: "Update benchmark metadata (title, description) and/or run labels. Description supports markdown formatting. Requires authentication via API token. Only the benchmark owner or an admin can update.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
 				"properties": map[string]interface{}{
 					"id":          map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 					"title":       map[string]interface{}{"type": "string", "description": "New title (max 100 chars)"},
-					"description": map[string]interface{}{"type": "string", "description": "New description (max 5000 chars)"},
+					"description": map[string]interface{}{"type": "string", "description": "New description in markdown format (max 5000 chars)"},
 					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
 				},
 			},
@@ -536,7 +536,7 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 				Name:    "FlightlessSomething",
 				Version: s.version,
 			},
-			Instructions: `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
+			Instructions: `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, always use get_benchmark to retrieve its metadata and then use get_benchmark_data or get_benchmark_run to retrieve the actual performance statistics (FPS, frametime, etc.) for analysis — do not skip fetching the data. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
 - Create benchmark: curl -X POST /api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
 - Add runs: curl -X POST /api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
 - Download benchmark: curl /api/benchmarks/<id>/download -o benchmark.zip`,
