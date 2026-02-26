@@ -93,18 +93,10 @@
       </p>
 
       <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" id="mcpAuthEnabled" v-model="mcpAuthEnabled" :disabled="tokens.length === 0">
+        <input class="form-check-input" type="checkbox" id="mcpAuthEnabled" v-model="mcpAuthEnabled">
         <label class="form-check-label" for="mcpAuthEnabled">
           Enable authentication (read-write access)
         </label>
-        <div v-if="tokens.length === 0" class="form-text text-muted">Create an API token above to enable authenticated access.</div>
-      </div>
-
-      <div v-if="mcpAuthEnabled && tokens.length > 0" class="mb-3">
-        <label for="mcpTokenSelect" class="form-label fw-bold">Select token for MCP configuration:</label>
-        <select id="mcpTokenSelect" class="form-select" v-model="selectedMCPTokenId">
-          <option v-for="token in tokens" :key="token.ID" :value="token.ID">{{ token.Name }}</option>
-        </select>
       </div>
 
       <!-- VS Code -->
@@ -128,17 +120,9 @@
             </button>
           </div>
         </div>
-        <div class="collapse" :class="{ show: expandedMCP.vscode }" id="vscodeCollapse">
-          <div class="card-body">
-            <p class="small text-muted mb-2">Add this to your <code>.vscode/mcp.json</code> file in your workspace, or to your VS Code user settings under <code>"mcp"</code>:</p>
-            <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ vscodeConfig }}</code></pre>
-          </div>
-        </div>
-        <div class="card-footer text-center p-1">
-          <button class="btn btn-sm btn-link text-muted" @click="expandedMCP.vscode = !expandedMCP.vscode">
-            <i class="fa-solid" :class="expandedMCP.vscode ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            {{ expandedMCP.vscode ? 'Hide config' : 'Show config' }}
-          </button>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Add the following JSON to your VS Code <code>mcp.json</code>:</p>
+          <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ vscodeConfig }}</code></pre>
         </div>
       </div>
 
@@ -154,25 +138,13 @@
             <i class="fa-solid" :class="copiedMCP.claude ? 'fa-check' : 'fa-copy'"></i> Copy
           </button>
         </div>
-        <div class="collapse" :class="{ show: expandedMCP.claude }" id="claudeCollapse">
-          <div class="card-body">
-            <p class="small text-muted mb-2">Add this to your Claude Desktop config file (<code>claude_desktop_config.json</code>), inside the <code>"mcpServers"</code> object:</p>
-            <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ claudeConfig }}</code></pre>
-          </div>
-        </div>
-        <div class="card-footer text-center p-1">
-          <button class="btn btn-sm btn-link text-muted" @click="expandedMCP.claude = !expandedMCP.claude">
-            <i class="fa-solid" :class="expandedMCP.claude ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            {{ expandedMCP.claude ? 'Hide config' : 'Show config' }}
-          </button>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Add the following JSON inside the <code>"mcpServers"</code> object of your <code>claude_desktop_config.json</code>:</p>
+          <pre class="mb-0 p-3 rounded" style="background-color: var(--bs-tertiary-bg); overflow-x: auto;"><code>{{ claudeConfig }}</code></pre>
+          <p v-if="mcpAuthEnabled" class="small text-warning mt-2 mb-0"><i class="fa-solid fa-triangle-exclamation"></i> Replace the placeholder token with your actual API token.</p>
         </div>
       </div>
 
-      <p class="small text-muted">
-        <i class="fa-solid fa-circle-info"></i>
-        Tool call approval is controlled by your MCP client (e.g. VS Code, Claude Desktop) and applies to all tools 
-        from this server — there is no per-tool granularity. This is a client-side setting, not an MCP server feature.
-      </p>
     </div>
 
     <!-- Create Token Modal -->
@@ -247,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -271,14 +243,8 @@ const tokenToDelete = ref(null)
 const deleting = ref(false)
 
 // MCP configuration
-const selectedMCPTokenId = ref(null)
-const mcpAuthEnabled = ref(false)
+const mcpAuthEnabled = ref(true)
 const copiedMCP = reactive({ vscode: false, claude: false })
-const expandedMCP = reactive({ vscode: false, claude: false })
-
-const selectedMCPToken = computed(() => {
-  return tokens.value.find(t => t.ID === selectedMCPTokenId.value)
-})
 
 const mcpServerUrl = computed(() => {
   return `${window.location.origin}/mcp`
@@ -290,10 +256,21 @@ const vscodeConfig = computed(() => {
     url: mcpServerUrl.value,
   }
   if (mcpAuthEnabled.value) {
-    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
-    server.headers = { "Authorization": `Bearer ${token}` }
+    server.headers = { "Authorization": "Bearer ${input:flightlesssomething_api_token}" }
+    const config = {
+      inputs: [
+        {
+          type: "promptString",
+          id: "flightlesssomething_api_token",
+          description: "FlightlessSomething API Token",
+          password: true
+        }
+      ],
+      servers: { "flightlesssomething": server }
+    }
+    return JSON.stringify(config, null, 2)
   }
-  return JSON.stringify({ servers: { "FlightlessSomething": server } }, null, 2)
+  return JSON.stringify({ servers: { "flightlesssomething": server } }, null, 2)
 })
 
 const claudeConfig = computed(() => {
@@ -302,16 +279,9 @@ const claudeConfig = computed(() => {
     url: mcpServerUrl.value,
   }
   if (mcpAuthEnabled.value) {
-    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
-    server.headers = { "Authorization": `Bearer ${token}` }
+    server.headers = { "Authorization": "Bearer XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" }
   }
-  return JSON.stringify({ "FlightlessSomething": server }, null, 2)
-})
-
-watch(tokens, (newTokens) => {
-  if (newTokens.length > 0 && !selectedMCPTokenId.value) {
-    selectedMCPTokenId.value = newTokens[0].ID
-  }
+  return JSON.stringify({ "flightlesssomething": server }, null, 2)
 })
 
 onMounted(async () => {
@@ -416,13 +386,20 @@ async function copyMCPConfig(type) {
 
 function openInVSCode() {
   const config = {
-    name: "FlightlessSomething",
+    name: "flightlesssomething",
     type: "http",
     url: mcpServerUrl.value,
   }
   if (mcpAuthEnabled.value) {
-    const token = selectedMCPToken.value?.Token || 'YOUR_API_TOKEN'
-    config.headers = { "Authorization": `Bearer ${token}` }
+    config.headers = { "Authorization": "Bearer ${input:flightlesssomething_api_token}" }
+    config.inputs = [
+      {
+        type: "promptString",
+        id: "flightlesssomething_api_token",
+        description: "FlightlessSomething API Token",
+        password: true
+      }
+    ]
   }
   const uri = `vscode:mcp/install?${encodeURIComponent(JSON.stringify(config))}`
   window.open(uri, '_blank')
