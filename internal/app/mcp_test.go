@@ -1331,8 +1331,7 @@ func TestMCPListBenchmarksCreatorFilter(t *testing.T) {
 	})
 
 	t.Run("filter by creator with no benchmarks returns empty", func(t *testing.T) {
-		noBenchUser := createTestUser(db, "charlie", false)
-		_ = noBenchUser
+		createTestUser(db, "charlie", false)
 		body := `{"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"creator":"charlie"}}}`
 		w := mcpRequest(t, router, body, "")
 		_, result := parseMCPToolResult(t, w)
