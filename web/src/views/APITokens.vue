@@ -286,6 +286,9 @@ const claudeConfig = computed(() => {
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
+    await authStore.checkAuth()
+  }
+  if (!authStore.isAuthenticated) {
     router.push('/login')
     return
   }
