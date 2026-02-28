@@ -250,23 +250,6 @@ const paginationPages = computed(() => {
   return pages
 })
 
-// Keep old visiblePages for backwards compatibility (not used anymore)
-const visiblePages = computed(() => {
-  const pages = []
-  const maxVisible = 5
-  let start = Math.max(1, currentPage.value - Math.floor(maxVisible / 2))
-  let end = Math.min(totalPages.value, start + maxVisible - 1)
-
-  if (end - start < maxVisible - 1) {
-    start = Math.max(1, end - maxVisible + 1)
-  }
-
-  for (let i = start; i <= end; i++) {
-    pages.push(i)
-  }
-  return pages
-})
-
 // Initialize state from URL query parameters
 function initializeFromURL() {
   const pageParam = parseInt(route.query.page)
@@ -381,11 +364,6 @@ function resetFilters() {
   currentPage.value = 1
   updateURL()
   fetchLogs()
-}
-
-function formatDate(dateString) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
 }
 
 function formatFullDate(dateString) {

@@ -646,11 +646,6 @@ function decimateForLineChart(data, targetPoints = 2000) {
   return decimated
 }
 
-function calculateAverage(data) {
-  if (!data || data.length === 0) return 0
-  return data.reduce((acc, value) => acc + value, 0) / data.length
-}
-
 // Wrapper function to render all FPS comparison charts (avg, stddev, variance)
 function renderFPSComparison() {
   renderFPSComparisonChart()
