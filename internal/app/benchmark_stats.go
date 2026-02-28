@@ -435,8 +435,8 @@ func ComputePreCalculatedRuns(runs []*BenchmarkData) []*PreCalculatedRun {
 	results := make([]*PreCalculatedRun, len(runs))
 
 	if len(runs) <= 1 {
-		for i, run := range runs {
-			results[i] = computePreCalculatedRun(run)
+		if len(runs) == 1 {
+			results[0] = computePreCalculatedRun(runs[0])
 		}
 		return results
 	}

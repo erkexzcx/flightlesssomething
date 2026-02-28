@@ -610,10 +610,10 @@ func TestComputePreCalculatedRuns(t *testing.T) {
 				}
 			}
 			// Verify stats values are distinct per run (min should differ)
-			if fpsStats, ok := r.Stats["CPULoad"]; ok {
+			if cpuLoadStats, ok := r.Stats["CPULoad"]; ok {
 				expectedMin := float64(i*1000) + 0.5
-				if !approxEqual(fpsStats.Min, expectedMin, 0.01) {
-					t.Errorf("run %d: CPULoad min = %f, want %f", i, fpsStats.Min, expectedMin)
+				if !approxEqual(cpuLoadStats.Min, expectedMin, 0.01) {
+					t.Errorf("run %d: CPULoad min = %f, want %f", i, cpuLoadStats.Min, expectedMin)
 				}
 			}
 		}
