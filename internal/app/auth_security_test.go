@@ -15,7 +15,7 @@ import (
 )
 
 // setupAuthTestRouter creates a test router with session support and RequireAuthOrToken middleware
-func setupAuthTestRouter(db *DBInstance) *gin.Engine {
+func setupAuthTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	store := cookie.NewStore([]byte("test-secret"))
@@ -58,7 +58,7 @@ func TestBannedUserRejectedViaAPIToken(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.GET("/test", func(c *gin.Context) {
@@ -111,7 +111,7 @@ func TestBannedUserRejectedViaSession(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.GET("/test", func(c *gin.Context) {
@@ -166,7 +166,7 @@ func TestDeletedUserRejectedViaSession(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.GET("/test", func(c *gin.Context) {
@@ -199,7 +199,7 @@ func TestDemotedAdminRejectedViaSession(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	admin := router.Group("/api/admin")
 	admin.Use(RequireAuthOrToken(db), RequireAdmin())
 	admin.GET("/users", HandleListUsers(db))
@@ -244,7 +244,7 @@ func TestDemotedAdminRejectedViaAPIToken(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	admin := router.Group("/api/admin")
 	admin.Use(RequireAuthOrToken(db), RequireAdmin())
 	admin.GET("/users", HandleListUsers(db))
@@ -287,7 +287,7 @@ func TestNonAdminCannotAccessAdminRoutes(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	admin := router.Group("/api/admin")
 	admin.Use(RequireAuthOrToken(db), RequireAdmin())
 	admin.GET("/users", HandleListUsers(db))
@@ -333,7 +333,7 @@ func TestUnauthenticatedCannotAccessProtectedRoutes(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.POST("/benchmarks", func(c *gin.Context) {
@@ -377,7 +377,7 @@ func TestSessionContextReflectsCurrentDBState(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.GET("/whoami", func(c *gin.Context) {
@@ -427,7 +427,7 @@ func TestBenchmarkOwnershipEnforcement(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.PUT("/benchmarks/:id", HandleUpdateBenchmark(db))
@@ -490,7 +490,7 @@ func TestAdminCanAccessOtherUsersBenchmarks(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.PUT("/benchmarks/:id", HandleUpdateBenchmark(db))
@@ -746,7 +746,7 @@ func TestAPITokenCannotDeleteOtherUsersToken(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
-	router := setupAuthTestRouter(db)
+	router := setupAuthTestRouter()
 	authorized := router.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))
 	authorized.DELETE("/tokens/:id", HandleDeleteAPIToken(db))
