@@ -75,7 +75,7 @@ func TestPercentileLinearVsMangoHud(t *testing.T) {
 
 func TestComputeDensityData(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		result := computeDensityData(nil, nil, 0, 100)
+		result := computeDensityData(nil, 0, 100)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -83,8 +83,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("all outside range", func(t *testing.T) {
 		values := []float64{1, 2, 3}
-		sorted := []float64{1, 2, 3}
-		result := computeDensityData(values, sorted, 10, 20)
+		result := computeDensityData(values, 10, 20)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -92,8 +91,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("at boundaries", func(t *testing.T) {
 		values := []float64{10, 10, 20, 20}
-		sorted := []float64{10, 10, 20, 20}
-		result := computeDensityData(values, sorted, 10, 20)
+		result := computeDensityData(values, 10, 20)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -107,8 +105,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("rounding", func(t *testing.T) {
 		values := []float64{10.3, 10.7, 10.5}
-		sorted := []float64{10.3, 10.5, 10.7}
-		result := computeDensityData(values, sorted, 10, 11)
+		result := computeDensityData(values, 10, 11)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -123,8 +120,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("sorted output", func(t *testing.T) {
 		values := []float64{30, 10, 20}
-		sorted := []float64{10, 20, 30}
-		result := computeDensityData(values, sorted, 0, 50)
+		result := computeDensityData(values, 0, 50)
 		for i := 1; i < len(result); i++ {
 			if result[i][0] < result[i-1][0] {
 				t.Errorf("density not sorted: %v", result)
@@ -172,6 +168,21 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 		if result.Count != 5 {
 			t.Errorf("count wrong: %v", result.Count)
 		}
+		// Verify extended percentiles are populated and ordered
+		if result.P01 > result.P05 || result.P05 > result.P10 || result.P10 > result.P25 {
+			t.Errorf("lower percentiles not in order: p01=%v p05=%v p10=%v p25=%v", result.P01, result.P05, result.P10, result.P25)
+		}
+		if result.P25 > result.Median || result.Median > result.P75 || result.P75 > result.P90 {
+			t.Errorf("mid percentiles not in order: p25=%v median=%v p75=%v p90=%v", result.P25, result.Median, result.P75, result.P90)
+		}
+		if result.P90 > result.P95 || result.P95 > result.P97 || result.P97 > result.P99 {
+			t.Errorf("upper percentiles not in order: p90=%v p95=%v p97=%v p99=%v", result.P90, result.P95, result.P97, result.P99)
+		}
+		// IQR = P75 - P25
+		expectedIQR := result.P75 - result.P25
+		if !approxEqual(result.IQR, expectedIQR, 0.01) {
+			t.Errorf("IQR wrong: got %v, want %v", result.IQR, expectedIQR)
+		}
 	})
 
 	t.Run("mangohud method", func(t *testing.T) {
@@ -209,7 +220,15 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 		check("Avg", result.Avg)
 		check("Median", result.Median)
 		check("P01", result.P01)
+		check("P05", result.P05)
+		check("P10", result.P10)
+		check("P25", result.P25)
+		check("P75", result.P75)
+		check("P90", result.P90)
+		check("P95", result.P95)
 		check("P97", result.P97)
+		check("P99", result.P99)
+		check("IQR", result.IQR)
 		check("StdDev", result.StdDev)
 		check("Variance", result.Variance)
 	})
@@ -217,7 +236,7 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 
 func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 	t.Run("empty returns nil", func(t *testing.T) {
-		result := computeFPSFromFrametimeForMethod(nil, nil, "linear")
+		result := computeFPSFromFrametimeForMethod(nil, "linear")
 		if result != nil {
 			t.Errorf("expected nil, got %v", result)
 		}
@@ -225,8 +244,7 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("zero frametime handling", func(t *testing.T) {
 		ft := []float64{0, 0, 0}
-		fps := []float64{0, 0, 0}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -238,12 +256,10 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("constant frametime", func(t *testing.T) {
 		ft := make([]float64, 100)
-		fps := make([]float64, 100)
 		for i := range ft {
 			ft[i] = 16.67 // ~60 FPS
-			fps[i] = 1000 / 16.67
 		}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -259,18 +275,27 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 	t.Run("inverted percentiles", func(t *testing.T) {
 		// Slower frametime = lower FPS
 		ft := make([]float64, 1000)
-		fps := make([]float64, 1000)
 		for i := range ft {
 			ft[i] = float64(10 + i) // 10ms to 1009ms
-			fps[i] = 1000 / ft[i]
 		}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
 		// P97 FPS should be higher than P01 FPS
 		if result.P97 <= result.P01 {
 			t.Errorf("p97 (%v) should be > p01 (%v) for FPS", result.P97, result.P01)
+		}
+		// All extended percentiles should be ordered
+		if result.P01 > result.P05 || result.P05 > result.P10 || result.P10 > result.P25 {
+			t.Errorf("lower FPS percentiles not in order: p01=%v p05=%v p10=%v p25=%v", result.P01, result.P05, result.P10, result.P25)
+		}
+		if result.P75 > result.P90 || result.P90 > result.P95 || result.P95 > result.P97 || result.P97 > result.P99 {
+			t.Errorf("upper FPS percentiles not in order: p75=%v p90=%v p95=%v p97=%v p99=%v", result.P75, result.P90, result.P95, result.P97, result.P99)
+		}
+		// IQR should be positive
+		if result.IQR <= 0 {
+			t.Errorf("IQR should be > 0, got %v", result.IQR)
 		}
 		// Min FPS should come from max frametime
 		if result.Min <= 0 {
@@ -280,13 +305,11 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("mangohud method", func(t *testing.T) {
 		ft := make([]float64, 100)
-		fps := make([]float64, 100)
 		for i := range ft {
 			ft[i] = float64(10 + i)
-			fps[i] = 1000 / ft[i]
 		}
-		resultLinear := computeFPSFromFrametimeForMethod(ft, fps, "linear")
-		resultMango := computeFPSFromFrametimeForMethod(ft, fps, "mangohud")
+		resultLinear := computeFPSFromFrametimeForMethod(ft, "linear")
+		resultMango := computeFPSFromFrametimeForMethod(ft, "mangohud")
 		if resultLinear == nil || resultMango == nil {
 			t.Fatal("expected non-nil results")
 		}
@@ -298,8 +321,7 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("density uses FPS values", func(t *testing.T) {
 		ft := []float64{10, 10, 10, 20, 20} // 100, 100, 100, 50, 50 FPS
-		fps := []float64{100, 100, 100, 50, 50}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -551,7 +573,8 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 	// Build a pre-calculated run with some data
 	fpsStats := &MetricStats{
 		Min: 50, Max: 120, Avg: 90, Median: 91,
-		P01: 55, P97: 115, StdDev: 10, Variance: 100,
+		P01: 55, P05: 60, P10: 65, P25: 75, P75: 105, P90: 110, P95: 113, P97: 115, P99: 118,
+		IQR: 30, StdDev: 10, Variance: 100,
 		Count: 500, Density: [][2]int{{55, 1}, {90, 10}, {115, 1}},
 	}
 	series := make([][2]float64, 100)
@@ -582,6 +605,9 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 		}
 		if fps.Min != 50 || fps.Max != 120 {
 			t.Errorf("fps stats wrong: min=%v max=%v", fps.Min, fps.Max)
+		}
+		if fps.P05 != 60 || fps.P10 != 65 || fps.P25 != 75 || fps.P75 != 105 || fps.P90 != 110 || fps.P95 != 113 || fps.P99 != 118 || fps.IQR != 30 {
+			t.Error("extended percentile fields not mapped correctly to MCP summary")
 		}
 		if fps.Data != nil {
 			t.Error("expected no data when maxPoints=0")

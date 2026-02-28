@@ -1044,6 +1044,12 @@ func TestMCPGetBenchmarkData(t *testing.T) {
 	if !strings.Contains(result.Content[0].Text, "total_data_points") {
 		t.Error("Expected total_data_points in result")
 	}
+	// Verify extended percentile fields are present
+	for _, field := range []string{`"p05"`, `"p10"`, `"p25"`, `"p75"`, `"p90"`, `"p95"`, `"p99"`, `"iqr"`} {
+		if !strings.Contains(result.Content[0].Text, field) {
+			t.Errorf("Expected %s in result", field)
+		}
+	}
 }
 
 func TestMCPGetBenchmarkRun(t *testing.T) {
@@ -1076,6 +1082,12 @@ func TestMCPGetBenchmarkRun(t *testing.T) {
 	}
 	if !strings.Contains(result.Content[0].Text, "fps") {
 		t.Error("Expected fps metric in result")
+	}
+	// Verify extended percentile fields are present
+	for _, field := range []string{`"p05"`, `"p10"`, `"p25"`, `"p75"`, `"p90"`, `"p95"`, `"p99"`, `"iqr"`} {
+		if !strings.Contains(result.Content[0].Text, field) {
+			t.Errorf("Expected %s in result", field)
+		}
 	}
 }
 
