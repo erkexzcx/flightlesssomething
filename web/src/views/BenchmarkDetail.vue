@@ -493,23 +493,12 @@ async function loadBenchmarkData(id) {
       return
     }
     
-    // Load data incrementally - one run at a time to prevent browser freezing
-    // Progress tracking: Each run has 2 phases (download + processing)
-    // For N runs, total segments = 2N (each segment = 50/N percent)
+    // Load runs in parallel (concurrency based on CPU cores)
+    // Only onRunProcessComplete is used for progress; other callbacks are optional
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
-      onRunDownloadStart: (runIndex, total) => {
-        loadingStatus.value = `Loading run ${runIndex + 1}/${total}`
-        // Simple "ahead" progress: each run = one chunk
-        loadingProgress.value = Math.round(((runIndex + 1) / total) * 100)
-      },
-      onRunDownloadProgress: (progress) => {
-        // progress is -1 (indeterminate) - not used
-      },
-      onRunDownloadComplete: (runIndex, runData, total) => {
-        // Keep the same progress (already set in onRunDownloadStart)
-      },
-      onRunProcessComplete: (runIndex, total) => {
-        // Keep the same progress (already set in onRunDownloadStart)
+      onRunProcessComplete: (runIndex, completedCount, total) => {
+        loadingStatus.value = `Loaded ${completedCount}/${total} runs`
+        loadingProgress.value = Math.round((completedCount / total) * 100)
       },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
