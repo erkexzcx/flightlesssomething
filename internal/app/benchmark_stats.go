@@ -100,7 +100,7 @@ func percentileFunc(method string) func([]float64, float64) float64 {
 }
 
 // computeDensityData computes a density histogram from values, filtering outliers outside p01-p97.
-func computeDensityData(values, sorted []float64, p01, p97 float64) [][2]int {
+func computeDensityData(values []float64, p01, p97 float64) [][2]int {
 	counts := make(map[int]int)
 	for _, v := range values {
 		if v >= p01 && v <= p97 {
@@ -161,7 +161,7 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 	p01 := pFunc(sorted, 1)
 	p97 := pFunc(sorted, 97)
 
-	density := computeDensityData(data, sorted, p01, p97)
+	density := computeDensityData(data, p01, p97)
 
 	return &MetricStats{
 		Min:      math.Round(minVal*100) / 100,
@@ -179,7 +179,7 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 
 // computeFPSFromFrametimeForMethod computes FPS statistics derived from frametime data.
 // Percentiles are inverted: p03 frametime → p97 FPS, p99 frametime → p01 FPS.
-func computeFPSFromFrametimeForMethod(frametimeData, fpsData []float64, method string) *MetricStats {
+func computeFPSFromFrametimeForMethod(frametimeData []float64, method string) *MetricStats {
 	n := len(frametimeData)
 	if n == 0 {
 		return nil
@@ -257,7 +257,7 @@ func computeFPSFromFrametimeForMethod(frametimeData, fpsData []float64, method s
 	medianFPS := pFunc(sortedFPS, 50)
 
 	// Density uses converted FPS values
-	density := computeDensityData(fpsValues, sortedFPS, fpsP01, fpsP97)
+	density := computeDensityData(fpsValues, fpsP01, fpsP97)
 
 	return &MetricStats{
 		Min:      math.Round(minFPS*100) / 100,
@@ -446,8 +446,8 @@ func computePreCalculatedRun(run *BenchmarkData) *PreCalculatedRun {
 
 	// FPS: compute from frametime when available, otherwise from raw FPS data
 	if len(run.DataFrameTime) > 0 {
-		result.Stats["FPS"] = computeFPSFromFrametimeForMethod(run.DataFrameTime, run.DataFPS, "linear")
-		result.StatsMangoHud["FPS"] = computeFPSFromFrametimeForMethod(run.DataFrameTime, run.DataFPS, "mangohud")
+		result.Stats["FPS"] = computeFPSFromFrametimeForMethod(run.DataFrameTime, "linear")
+		result.StatsMangoHud["FPS"] = computeFPSFromFrametimeForMethod(run.DataFrameTime, "mangohud")
 
 		// Series uses raw FPS data if available
 		if len(run.DataFPS) > 0 {

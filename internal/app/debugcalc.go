@@ -38,8 +38,8 @@ func HandleDebugCalc() gin.HandlerFunc {
 		// Calculate FPS stats
 		if len(req.Frametime) > 0 {
 			// Derive FPS from frametime (the correct way)
-			result.Linear.FPS = computeFPSFromFrametimeForMethod(req.Frametime, req.FPS, "linear")
-			result.MangoHud.FPS = computeFPSFromFrametimeForMethod(req.Frametime, req.FPS, "mangohud")
+			result.Linear.FPS = computeFPSFromFrametimeForMethod(req.Frametime, "linear")
+			result.MangoHud.FPS = computeFPSFromFrametimeForMethod(req.Frametime, "mangohud")
 
 			// Frametime stats
 			result.Linear.Frametime = computeMetricStatsForMethod(req.Frametime, "linear")

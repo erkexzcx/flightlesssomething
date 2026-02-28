@@ -75,7 +75,7 @@ func TestPercentileLinearVsMangoHud(t *testing.T) {
 
 func TestComputeDensityData(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		result := computeDensityData(nil, nil, 0, 100)
+		result := computeDensityData(nil, 0, 100)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -83,8 +83,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("all outside range", func(t *testing.T) {
 		values := []float64{1, 2, 3}
-		sorted := []float64{1, 2, 3}
-		result := computeDensityData(values, sorted, 10, 20)
+		result := computeDensityData(values, 10, 20)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -92,8 +91,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("at boundaries", func(t *testing.T) {
 		values := []float64{10, 10, 20, 20}
-		sorted := []float64{10, 10, 20, 20}
-		result := computeDensityData(values, sorted, 10, 20)
+		result := computeDensityData(values, 10, 20)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -107,8 +105,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("rounding", func(t *testing.T) {
 		values := []float64{10.3, 10.7, 10.5}
-		sorted := []float64{10.3, 10.5, 10.7}
-		result := computeDensityData(values, sorted, 10, 11)
+		result := computeDensityData(values, 10, 11)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -123,8 +120,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("sorted output", func(t *testing.T) {
 		values := []float64{30, 10, 20}
-		sorted := []float64{10, 20, 30}
-		result := computeDensityData(values, sorted, 0, 50)
+		result := computeDensityData(values, 0, 50)
 		for i := 1; i < len(result); i++ {
 			if result[i][0] < result[i-1][0] {
 				t.Errorf("density not sorted: %v", result)
@@ -217,7 +213,7 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 
 func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 	t.Run("empty returns nil", func(t *testing.T) {
-		result := computeFPSFromFrametimeForMethod(nil, nil, "linear")
+		result := computeFPSFromFrametimeForMethod(nil, "linear")
 		if result != nil {
 			t.Errorf("expected nil, got %v", result)
 		}
@@ -225,8 +221,7 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("zero frametime handling", func(t *testing.T) {
 		ft := []float64{0, 0, 0}
-		fps := []float64{0, 0, 0}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -238,12 +233,10 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("constant frametime", func(t *testing.T) {
 		ft := make([]float64, 100)
-		fps := make([]float64, 100)
 		for i := range ft {
 			ft[i] = 16.67 // ~60 FPS
-			fps[i] = 1000 / 16.67
 		}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -259,12 +252,10 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 	t.Run("inverted percentiles", func(t *testing.T) {
 		// Slower frametime = lower FPS
 		ft := make([]float64, 1000)
-		fps := make([]float64, 1000)
 		for i := range ft {
 			ft[i] = float64(10 + i) // 10ms to 1009ms
-			fps[i] = 1000 / ft[i]
 		}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -280,13 +271,11 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("mangohud method", func(t *testing.T) {
 		ft := make([]float64, 100)
-		fps := make([]float64, 100)
 		for i := range ft {
 			ft[i] = float64(10 + i)
-			fps[i] = 1000 / ft[i]
 		}
-		resultLinear := computeFPSFromFrametimeForMethod(ft, fps, "linear")
-		resultMango := computeFPSFromFrametimeForMethod(ft, fps, "mangohud")
+		resultLinear := computeFPSFromFrametimeForMethod(ft, "linear")
+		resultMango := computeFPSFromFrametimeForMethod(ft, "mangohud")
 		if resultLinear == nil || resultMango == nil {
 			t.Fatal("expected non-nil results")
 		}
@@ -298,8 +287,7 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 
 	t.Run("density uses FPS values", func(t *testing.T) {
 		ft := []float64{10, 10, 10, 20, 20} // 100, 100, 100, 50, 50 FPS
-		fps := []float64{100, 100, 100, 50, 50}
-		result := computeFPSFromFrametimeForMethod(ft, fps, "linear")
+		result := computeFPSFromFrametimeForMethod(ft, "linear")
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}

@@ -90,7 +90,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 		client := discordOAuthConfig.Client(context.Background(), token)
-		res, err := client.Do(req) //nolint:gosec // G704: URL is a hardcoded constant, not user-controlled
+		res, err := client.Do(req)
 		if err != nil || res.StatusCode != 200 {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
 			return
@@ -176,7 +176,7 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 
 		var loginReq struct {
 			Username string `json:"username" binding:"required"`
-			Password string `json:"password" binding:"required"` //nolint:gosec // G117: Request binding field, not a hardcoded secret
+			Password string `json:"password" binding:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&loginReq); err != nil {
