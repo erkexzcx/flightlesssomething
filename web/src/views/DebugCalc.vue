@@ -417,29 +417,39 @@ const spreadsheetData = computed(() => {
   lines.push('')
   
   // Add raw data
-  lines.push('fps,frametime')
+  // Calculate row numbers (accounting for header lines)
+  const headerLines = 4 // NOTE lines + blank line
+  const dataStartRow = headerLines + 2 // After header lines + data header row
   const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
+  const hasFT = parsedData.value.frametimeValues.length > 0
+  const fpsStartRow = dataStartRow
+  const fpsEndRow = fpsStartRow + parsedData.value.fpsValues.length - 1
+  const ftStartRow = dataStartRow
+  const ftEndRow = ftStartRow + parsedData.value.frametimeValues.length - 1
+  
+  // When FPS is derived from frametime, add a helper column C with =1000/B{row}
+  if (hasFT) {
+    lines.push('fps,frametime,fps_from_ft')
+  } else {
+    lines.push('fps,frametime')
+  }
   for (let i = 0; i < maxLength; i++) {
     const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
     const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
-    lines.push(`${fps},${frametime}`)
+    if (hasFT) {
+      lines.push(`${fps},${frametime},=1000/B${dataStartRow + i}`)
+    } else {
+      lines.push(`${fps},${frametime}`)
+    }
   }
   
   // Add blank line
   lines.push('')
   
-  // Calculate row numbers (accounting for header lines)
-  const headerLines = 4 // NOTE lines + blank line
-  const dataStartRow = headerLines + 2 // After header lines + data header row
-  const fpsStartRow = dataStartRow
-  const fpsEndRow = fpsStartRow + parsedData.value.fpsValues.length - 1
-  const ftStartRow = dataStartRow
-  const ftEndRow = ftStartRow + parsedData.value.frametimeValues.length - 1
-  const hasFT = parsedData.value.frametimeValues.length > 0
-  
-  // Helper: MangoHud INDEX formula with MIN/MAX clamping (comma separator for CSV/Excel)
+  // Helper: MangoHud INDEX formula with MIN/MAX clamping (comma separator for CSV/Excel, no leading =)
+  // Uses INT() instead of FLOOR() because FLOOR errors on negative values in LibreOffice
   const mangoHudFormulaCSV = (range, pDecimal) => {
-    return `=INDEX(SORT(${range}),MIN(MAX(COUNT(${range})-FLOOR(${pDecimal}*COUNT(${range})-1;1);1);COUNT(${range})))`
+    return `INDEX(SORT(${range}),MIN(MAX(COUNT(${range})-INT(${pDecimal}*COUNT(${range})-1),1),COUNT(${range})))`
   }
   
   // Add FPS statistics - Linear Interpolation
@@ -448,10 +458,11 @@ const spreadsheetData = computed(() => {
   
   if (hasFT) {
     const ftR = `B${ftStartRow}:B${ftEndRow}`
+    const fpsFromFtR = `C${ftStartRow}:C${ftEndRow}`
     lines.push(`Min,${formatNumber(results.value.fps.linear.min)},=1000/MAX(${ftR}),`)
     lines.push(`Max,${formatNumber(results.value.fps.linear.max)},=1000/MIN(${ftR}),`)
     lines.push(`Average,${formatNumber(results.value.fps.linear.avg)},=1000/AVERAGE(${ftR}),`)
-    lines.push(`Median,${formatNumber(results.value.fps.linear.median)},=MEDIAN(1000/${ftR}),`)
+    lines.push(`Median,${formatNumber(results.value.fps.linear.median)},=MEDIAN(${fpsFromFtR}),`)
     lines.push(`1st Percentile,${formatNumber(results.value.fps.linear.p01)},=1000/PERCENTILE.INC(${ftR},0.99),`)
     lines.push(`5th Percentile,${formatNumber(results.value.fps.linear.p05)},=1000/PERCENTILE.INC(${ftR},0.95),`)
     lines.push(`10th Percentile,${formatNumber(results.value.fps.linear.p10)},=1000/PERCENTILE.INC(${ftR},0.90),`)
@@ -462,8 +473,8 @@ const spreadsheetData = computed(() => {
     lines.push(`97th Percentile,${formatNumber(results.value.fps.linear.p97)},=1000/PERCENTILE.INC(${ftR},0.03),`)
     lines.push(`99th Percentile,${formatNumber(results.value.fps.linear.p99)},=1000/PERCENTILE.INC(${ftR},0.01),`)
     lines.push(`IQR (P75-P25),${formatNumber(results.value.fps.linear.iqr)},=1000/PERCENTILE.INC(${ftR},0.25)-1000/PERCENTILE.INC(${ftR},0.75),`)
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(1000/${ftR}),`)
-    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(1000/${ftR}),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.linear.stddev)},=STDEV(${fpsFromFtR}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.linear.variance)},=VAR(${fpsFromFtR}),`)
     lines.push(`Count,${formatNumber(results.value.fps.linear.count)},=COUNT(${ftR}),`)
   } else {
     const fpsR = `A${fpsStartRow}:A${fpsEndRow}`
@@ -494,10 +505,11 @@ const spreadsheetData = computed(() => {
   
   if (hasFT) {
     const ftR = `B${ftStartRow}:B${ftEndRow}`
+    const fpsFromFtR = `C${ftStartRow}:C${ftEndRow}`
     lines.push(`Min,${formatNumber(results.value.fps.mangohud.min)},=1000/MAX(${ftR}),`)
     lines.push(`Max,${formatNumber(results.value.fps.mangohud.max)},=1000/MIN(${ftR}),`)
     lines.push(`Average,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(${ftR}),`)
-    lines.push(`Median,${formatNumber(results.value.fps.mangohud.median)},=MEDIAN(1000/${ftR}),`)
+    lines.push(`Median,${formatNumber(results.value.fps.mangohud.median)},=MEDIAN(${fpsFromFtR}),`)
     lines.push(`1st Percentile,${formatNumber(results.value.fps.mangohud.p01)},=1000/${mangoHudFormulaCSV(ftR, 0.01)},`)
     lines.push(`5th Percentile,${formatNumber(results.value.fps.mangohud.p05)},=1000/${mangoHudFormulaCSV(ftR, 0.05)},`)
     lines.push(`10th Percentile,${formatNumber(results.value.fps.mangohud.p10)},=1000/${mangoHudFormulaCSV(ftR, 0.10)},`)
@@ -508,8 +520,8 @@ const spreadsheetData = computed(() => {
     lines.push(`97th Percentile,${formatNumber(results.value.fps.mangohud.p97)},=1000/${mangoHudFormulaCSV(ftR, 0.97)},`)
     lines.push(`99th Percentile,${formatNumber(results.value.fps.mangohud.p99)},=1000/${mangoHudFormulaCSV(ftR, 0.99)},`)
     lines.push(`IQR (P75-P25),${formatNumber(results.value.fps.mangohud.iqr)},=1000/${mangoHudFormulaCSV(ftR, 0.25)}-1000/${mangoHudFormulaCSV(ftR, 0.75)},`)
-    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(1000/${ftR}),`)
-    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(1000/${ftR}),`)
+    lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(${fpsFromFtR}),`)
+    lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(${fpsFromFtR}),`)
     lines.push(`Count,${formatNumber(results.value.fps.mangohud.count)},=COUNT(${ftR}),`)
   } else {
     const fpsR = `A${fpsStartRow}:A${fpsEndRow}`
@@ -517,15 +529,15 @@ const spreadsheetData = computed(() => {
     lines.push(`Max,${formatNumber(results.value.fps.mangohud.max)},=MAX(${fpsR}),`)
     lines.push(`Average,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(${fpsR}),`)
     lines.push(`Median,${formatNumber(results.value.fps.mangohud.median)},=MEDIAN(${fpsR}),`)
-    lines.push(`1st Percentile,${formatNumber(results.value.fps.mangohud.p01)},${mangoHudFormulaCSV(fpsR, 0.99)},`)
-    lines.push(`5th Percentile,${formatNumber(results.value.fps.mangohud.p05)},${mangoHudFormulaCSV(fpsR, 0.95)},`)
-    lines.push(`10th Percentile,${formatNumber(results.value.fps.mangohud.p10)},${mangoHudFormulaCSV(fpsR, 0.90)},`)
-    lines.push(`25th Percentile,${formatNumber(results.value.fps.mangohud.p25)},${mangoHudFormulaCSV(fpsR, 0.75)},`)
-    lines.push(`75th Percentile,${formatNumber(results.value.fps.mangohud.p75)},${mangoHudFormulaCSV(fpsR, 0.25)},`)
-    lines.push(`90th Percentile,${formatNumber(results.value.fps.mangohud.p90)},${mangoHudFormulaCSV(fpsR, 0.10)},`)
-    lines.push(`95th Percentile,${formatNumber(results.value.fps.mangohud.p95)},${mangoHudFormulaCSV(fpsR, 0.05)},`)
-    lines.push(`97th Percentile,${formatNumber(results.value.fps.mangohud.p97)},${mangoHudFormulaCSV(fpsR, 0.03)},`)
-    lines.push(`99th Percentile,${formatNumber(results.value.fps.mangohud.p99)},${mangoHudFormulaCSV(fpsR, 0.01)},`)
+    lines.push(`1st Percentile,${formatNumber(results.value.fps.mangohud.p01)},=${mangoHudFormulaCSV(fpsR, 0.99)},`)
+    lines.push(`5th Percentile,${formatNumber(results.value.fps.mangohud.p05)},=${mangoHudFormulaCSV(fpsR, 0.95)},`)
+    lines.push(`10th Percentile,${formatNumber(results.value.fps.mangohud.p10)},=${mangoHudFormulaCSV(fpsR, 0.90)},`)
+    lines.push(`25th Percentile,${formatNumber(results.value.fps.mangohud.p25)},=${mangoHudFormulaCSV(fpsR, 0.75)},`)
+    lines.push(`75th Percentile,${formatNumber(results.value.fps.mangohud.p75)},=${mangoHudFormulaCSV(fpsR, 0.25)},`)
+    lines.push(`90th Percentile,${formatNumber(results.value.fps.mangohud.p90)},=${mangoHudFormulaCSV(fpsR, 0.10)},`)
+    lines.push(`95th Percentile,${formatNumber(results.value.fps.mangohud.p95)},=${mangoHudFormulaCSV(fpsR, 0.05)},`)
+    lines.push(`97th Percentile,${formatNumber(results.value.fps.mangohud.p97)},=${mangoHudFormulaCSV(fpsR, 0.03)},`)
+    lines.push(`99th Percentile,${formatNumber(results.value.fps.mangohud.p99)},=${mangoHudFormulaCSV(fpsR, 0.01)},`)
     lines.push(`IQR (P75-P25),${formatNumber(results.value.fps.mangohud.iqr)},=${mangoHudFormulaCSV(fpsR, 0.25)}-${mangoHudFormulaCSV(fpsR, 0.75)},`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(${fpsR}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(${fpsR}),`)
@@ -569,15 +581,15 @@ const spreadsheetData = computed(() => {
     lines.push(`Max,${formatNumber(results.value.frametime.mangohud.max)},=MAX(${ftR}),`)
     lines.push(`Average,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(${ftR}),`)
     lines.push(`Median,${formatNumber(results.value.frametime.mangohud.median)},=MEDIAN(${ftR}),`)
-    lines.push(`1st Percentile,${formatNumber(results.value.frametime.mangohud.p01)},${mangoHudFormulaCSV(ftR, 0.99)},`)
-    lines.push(`5th Percentile,${formatNumber(results.value.frametime.mangohud.p05)},${mangoHudFormulaCSV(ftR, 0.95)},`)
-    lines.push(`10th Percentile,${formatNumber(results.value.frametime.mangohud.p10)},${mangoHudFormulaCSV(ftR, 0.90)},`)
-    lines.push(`25th Percentile,${formatNumber(results.value.frametime.mangohud.p25)},${mangoHudFormulaCSV(ftR, 0.75)},`)
-    lines.push(`75th Percentile,${formatNumber(results.value.frametime.mangohud.p75)},${mangoHudFormulaCSV(ftR, 0.25)},`)
-    lines.push(`90th Percentile,${formatNumber(results.value.frametime.mangohud.p90)},${mangoHudFormulaCSV(ftR, 0.10)},`)
-    lines.push(`95th Percentile,${formatNumber(results.value.frametime.mangohud.p95)},${mangoHudFormulaCSV(ftR, 0.05)},`)
-    lines.push(`97th Percentile,${formatNumber(results.value.frametime.mangohud.p97)},${mangoHudFormulaCSV(ftR, 0.03)},`)
-    lines.push(`99th Percentile,${formatNumber(results.value.frametime.mangohud.p99)},${mangoHudFormulaCSV(ftR, 0.01)},`)
+    lines.push(`1st Percentile,${formatNumber(results.value.frametime.mangohud.p01)},=${mangoHudFormulaCSV(ftR, 0.99)},`)
+    lines.push(`5th Percentile,${formatNumber(results.value.frametime.mangohud.p05)},=${mangoHudFormulaCSV(ftR, 0.95)},`)
+    lines.push(`10th Percentile,${formatNumber(results.value.frametime.mangohud.p10)},=${mangoHudFormulaCSV(ftR, 0.90)},`)
+    lines.push(`25th Percentile,${formatNumber(results.value.frametime.mangohud.p25)},=${mangoHudFormulaCSV(ftR, 0.75)},`)
+    lines.push(`75th Percentile,${formatNumber(results.value.frametime.mangohud.p75)},=${mangoHudFormulaCSV(ftR, 0.25)},`)
+    lines.push(`90th Percentile,${formatNumber(results.value.frametime.mangohud.p90)},=${mangoHudFormulaCSV(ftR, 0.10)},`)
+    lines.push(`95th Percentile,${formatNumber(results.value.frametime.mangohud.p95)},=${mangoHudFormulaCSV(ftR, 0.05)},`)
+    lines.push(`97th Percentile,${formatNumber(results.value.frametime.mangohud.p97)},=${mangoHudFormulaCSV(ftR, 0.03)},`)
+    lines.push(`99th Percentile,${formatNumber(results.value.frametime.mangohud.p99)},=${mangoHudFormulaCSV(ftR, 0.01)},`)
     lines.push(`IQR (P75-P25),${formatNumber(results.value.frametime.mangohud.iqr)},=${mangoHudFormulaCSV(ftR, 0.25)}-${mangoHudFormulaCSV(ftR, 0.75)},`)
     lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(${ftR}),`)
     lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(${ftR}),`)
@@ -594,14 +606,26 @@ const spreadsheetDataLibreOffice = computed(() => {
   const lines = []
   
   // Add raw data (no header text, start directly with column headers)
-  lines.push('fps\tframetime')
   const maxLength = Math.max(parsedData.value.fpsValues.length, parsedData.value.frametimeValues.length)
   const dataStartRow = 2 // After column headers
+  const hasFT = parsedData.value.frametimeValues.length > 0
+  
+  // When FPS is derived from frametime, add a helper column C with =1000/B{row}
+  // so that Median/StdDev/Variance formulas can reference actual FPS values
+  if (hasFT) {
+    lines.push('fps\tframetime\tfps_from_ft')
+  } else {
+    lines.push('fps\tframetime')
+  }
   
   for (let i = 0; i < maxLength; i++) {
     const fps = i < parsedData.value.fpsValues.length ? parsedData.value.fpsValues[i] : ''
     const frametime = i < parsedData.value.frametimeValues.length ? parsedData.value.frametimeValues[i] : ''
-    lines.push(`${fps}\t${frametime}`)
+    if (hasFT) {
+      lines.push(`${fps}\t${frametime}\t=1000/B${dataStartRow + i}`)
+    } else {
+      lines.push(`${fps}\t${frametime}`)
+    }
   }
   
   lines.push('')
@@ -610,16 +634,16 @@ const spreadsheetDataLibreOffice = computed(() => {
   const fpsEndRow = dataStartRow + parsedData.value.fpsValues.length - 1
   const ftStartRow = dataStartRow
   const ftEndRow = dataStartRow + parsedData.value.frametimeValues.length - 1
-  const hasFT = parsedData.value.frametimeValues.length > 0
   
   // Helper: LibreOffice PERCENTILE formula (semicolon separator)
   const linearPercentileFormula = (range, p) => `=PERCENTILE(${range};${p})`
-  // Helper: MangoHud INDEX formula with MIN/MAX clamping
+  // Helper: MangoHud INDEX formula with MIN/MAX clamping (returns without leading =)
   // MangoHud: idx = floor(val * n - 1) on descending, ascending: idx = n - 1 - floor((1-p/100)*n - 1)
   // Excel 1-based row = n - floor((1-p/100)*n - 1), clamped to [1, n]
+  // Uses INT() instead of FLOOR(;1) because FLOOR errors on negative values in LibreOffice
   const mangoHudFormula = (range, pDecimal) => {
     const r = range
-    return `=INDEX(SORT(${r});MIN(MAX(COUNT(${r})-FLOOR(${pDecimal}*COUNT(${r})-1;1);1);COUNT(${r})))`
+    return `INDEX(SORT(${r});MIN(MAX(COUNT(${r})-INT(${pDecimal}*COUNT(${r})-1);1);COUNT(${r})))`
   }
   
   // Helper to add a row and advance currentRow
@@ -643,11 +667,11 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   if (hasFT) {
     const ftR = `B${ftStartRow}:B${ftEndRow}`
-    const fpsR = `A${fpsStartRow}:A${fpsEndRow}`
+    const fpsFromFtR = `C${ftStartRow}:C${ftEndRow}`
     addRow('Min', results.value.fps.linear.min, `=1000/MAX(${ftR})`, ref)
     addRow('Max', results.value.fps.linear.max, `=1000/MIN(${ftR})`, ref)
     addRow('Average', results.value.fps.linear.avg, `=1000/AVERAGE(${ftR})`, ref)
-    addRow('Median', results.value.fps.linear.median, `=MEDIAN(1000/${ftR})`, ref)
+    addRow('Median', results.value.fps.linear.median, `=MEDIAN(${fpsFromFtR})`, ref)
     addRow('1st Percentile', results.value.fps.linear.p01, `=1000/PERCENTILE(${ftR};0.99)`, ref)
     addRow('5th Percentile', results.value.fps.linear.p05, `=1000/PERCENTILE(${ftR};0.95)`, ref)
     addRow('10th Percentile', results.value.fps.linear.p10, `=1000/PERCENTILE(${ftR};0.90)`, ref)
@@ -658,8 +682,8 @@ const spreadsheetDataLibreOffice = computed(() => {
     addRow('97th Percentile', results.value.fps.linear.p97, `=1000/PERCENTILE(${ftR};0.03)`, ref)
     addRow('99th Percentile', results.value.fps.linear.p99, `=1000/PERCENTILE(${ftR};0.01)`, ref)
     addRow('IQR (P75-P25)', results.value.fps.linear.iqr, `=1000/PERCENTILE(${ftR};0.25)-1000/PERCENTILE(${ftR};0.75)`, ref)
-    addRow('Standard Deviation', results.value.fps.linear.stddev, `=STDEV(1000/${ftR})`, ref)
-    addRow('Variance', results.value.fps.linear.variance, `=VAR(1000/${ftR})`, ref)
+    addRow('Standard Deviation', results.value.fps.linear.stddev, `=STDEV(${fpsFromFtR})`, ref)
+    addRow('Variance', results.value.fps.linear.variance, `=VAR(${fpsFromFtR})`, ref)
     addRow('Count', results.value.fps.linear.count, `=COUNT(${ftR})`, ref)
   } else {
     const fpsR = `A${fpsStartRow}:A${fpsEndRow}`
@@ -687,10 +711,11 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   if (hasFT) {
     const ftR = `B${ftStartRow}:B${ftEndRow}`
+    const fpsFromFtR = `C${ftStartRow}:C${ftEndRow}`
     addRow('Min', results.value.fps.mangohud.min, `=1000/MAX(${ftR})`, ref)
     addRow('Max', results.value.fps.mangohud.max, `=1000/MIN(${ftR})`, ref)
     addRow('Average', results.value.fps.mangohud.avg, `=1000/AVERAGE(${ftR})`, ref)
-    addRow('Median', results.value.fps.mangohud.median, `=MEDIAN(1000/${ftR})`, ref)
+    addRow('Median', results.value.fps.mangohud.median, `=MEDIAN(${fpsFromFtR})`, ref)
     addRow('1st Percentile', results.value.fps.mangohud.p01, `=1000/${mangoHudFormula(ftR, 0.01)}`, ref)
     addRow('5th Percentile', results.value.fps.mangohud.p05, `=1000/${mangoHudFormula(ftR, 0.05)}`, ref)
     addRow('10th Percentile', results.value.fps.mangohud.p10, `=1000/${mangoHudFormula(ftR, 0.10)}`, ref)
@@ -701,8 +726,8 @@ const spreadsheetDataLibreOffice = computed(() => {
     addRow('97th Percentile', results.value.fps.mangohud.p97, `=1000/${mangoHudFormula(ftR, 0.97)}`, ref)
     addRow('99th Percentile', results.value.fps.mangohud.p99, `=1000/${mangoHudFormula(ftR, 0.99)}`, ref)
     addRow('IQR (P75-P25)', results.value.fps.mangohud.iqr, `=1000/${mangoHudFormula(ftR, 0.25)}-1000/${mangoHudFormula(ftR, 0.75)}`, ref)
-    addRow('Standard Deviation', results.value.fps.mangohud.stddev, `=STDEV(1000/${ftR})`, ref)
-    addRow('Variance', results.value.fps.mangohud.variance, `=VAR(1000/${ftR})`, ref)
+    addRow('Standard Deviation', results.value.fps.mangohud.stddev, `=STDEV(${fpsFromFtR})`, ref)
+    addRow('Variance', results.value.fps.mangohud.variance, `=VAR(${fpsFromFtR})`, ref)
     addRow('Count', results.value.fps.mangohud.count, `=COUNT(${ftR})`, ref)
   } else {
     const fpsR = `A${fpsStartRow}:A${fpsEndRow}`
@@ -710,15 +735,15 @@ const spreadsheetDataLibreOffice = computed(() => {
     addRow('Max', results.value.fps.mangohud.max, `=MAX(${fpsR})`, ref)
     addRow('Average', results.value.fps.mangohud.avg, `=AVERAGE(${fpsR})`, ref)
     addRow('Median', results.value.fps.mangohud.median, `=MEDIAN(${fpsR})`, ref)
-    addRow('1st Percentile', results.value.fps.mangohud.p01, mangoHudFormula(fpsR, 0.99), ref)
-    addRow('5th Percentile', results.value.fps.mangohud.p05, mangoHudFormula(fpsR, 0.95), ref)
-    addRow('10th Percentile', results.value.fps.mangohud.p10, mangoHudFormula(fpsR, 0.90), ref)
-    addRow('25th Percentile', results.value.fps.mangohud.p25, mangoHudFormula(fpsR, 0.75), ref)
-    addRow('75th Percentile', results.value.fps.mangohud.p75, mangoHudFormula(fpsR, 0.25), ref)
-    addRow('90th Percentile', results.value.fps.mangohud.p90, mangoHudFormula(fpsR, 0.10), ref)
-    addRow('95th Percentile', results.value.fps.mangohud.p95, mangoHudFormula(fpsR, 0.05), ref)
-    addRow('97th Percentile', results.value.fps.mangohud.p97, mangoHudFormula(fpsR, 0.03), ref)
-    addRow('99th Percentile', results.value.fps.mangohud.p99, mangoHudFormula(fpsR, 0.01), ref)
+    addRow('1st Percentile', results.value.fps.mangohud.p01, `=${mangoHudFormula(fpsR, 0.99)}`, ref)
+    addRow('5th Percentile', results.value.fps.mangohud.p05, `=${mangoHudFormula(fpsR, 0.95)}`, ref)
+    addRow('10th Percentile', results.value.fps.mangohud.p10, `=${mangoHudFormula(fpsR, 0.90)}`, ref)
+    addRow('25th Percentile', results.value.fps.mangohud.p25, `=${mangoHudFormula(fpsR, 0.75)}`, ref)
+    addRow('75th Percentile', results.value.fps.mangohud.p75, `=${mangoHudFormula(fpsR, 0.25)}`, ref)
+    addRow('90th Percentile', results.value.fps.mangohud.p90, `=${mangoHudFormula(fpsR, 0.10)}`, ref)
+    addRow('95th Percentile', results.value.fps.mangohud.p95, `=${mangoHudFormula(fpsR, 0.05)}`, ref)
+    addRow('97th Percentile', results.value.fps.mangohud.p97, `=${mangoHudFormula(fpsR, 0.03)}`, ref)
+    addRow('99th Percentile', results.value.fps.mangohud.p99, `=${mangoHudFormula(fpsR, 0.01)}`, ref)
     addRow('IQR (P75-P25)', results.value.fps.mangohud.iqr, `=${mangoHudFormula(fpsR, 0.25)}-${mangoHudFormula(fpsR, 0.75)}`, ref)
     addRow('Standard Deviation', results.value.fps.mangohud.stddev, `=STDEV(${fpsR})`, ref)
     addRow('Variance', results.value.fps.mangohud.variance, `=VAR(${fpsR})`, ref)
@@ -756,15 +781,15 @@ const spreadsheetDataLibreOffice = computed(() => {
     addRow('Max', results.value.frametime.mangohud.max, `=MAX(${ftR})`, ref)
     addRow('Average', results.value.frametime.mangohud.avg, `=AVERAGE(${ftR})`, ref)
     addRow('Median', results.value.frametime.mangohud.median, `=MEDIAN(${ftR})`, ref)
-    addRow('1st Percentile', results.value.frametime.mangohud.p01, mangoHudFormula(ftR, 0.99), ref)
-    addRow('5th Percentile', results.value.frametime.mangohud.p05, mangoHudFormula(ftR, 0.95), ref)
-    addRow('10th Percentile', results.value.frametime.mangohud.p10, mangoHudFormula(ftR, 0.90), ref)
-    addRow('25th Percentile', results.value.frametime.mangohud.p25, mangoHudFormula(ftR, 0.75), ref)
-    addRow('75th Percentile', results.value.frametime.mangohud.p75, mangoHudFormula(ftR, 0.25), ref)
-    addRow('90th Percentile', results.value.frametime.mangohud.p90, mangoHudFormula(ftR, 0.10), ref)
-    addRow('95th Percentile', results.value.frametime.mangohud.p95, mangoHudFormula(ftR, 0.05), ref)
-    addRow('97th Percentile', results.value.frametime.mangohud.p97, mangoHudFormula(ftR, 0.03), ref)
-    addRow('99th Percentile', results.value.frametime.mangohud.p99, mangoHudFormula(ftR, 0.01), ref)
+    addRow('1st Percentile', results.value.frametime.mangohud.p01, `=${mangoHudFormula(ftR, 0.99)}`, ref)
+    addRow('5th Percentile', results.value.frametime.mangohud.p05, `=${mangoHudFormula(ftR, 0.95)}`, ref)
+    addRow('10th Percentile', results.value.frametime.mangohud.p10, `=${mangoHudFormula(ftR, 0.90)}`, ref)
+    addRow('25th Percentile', results.value.frametime.mangohud.p25, `=${mangoHudFormula(ftR, 0.75)}`, ref)
+    addRow('75th Percentile', results.value.frametime.mangohud.p75, `=${mangoHudFormula(ftR, 0.25)}`, ref)
+    addRow('90th Percentile', results.value.frametime.mangohud.p90, `=${mangoHudFormula(ftR, 0.10)}`, ref)
+    addRow('95th Percentile', results.value.frametime.mangohud.p95, `=${mangoHudFormula(ftR, 0.05)}`, ref)
+    addRow('97th Percentile', results.value.frametime.mangohud.p97, `=${mangoHudFormula(ftR, 0.03)}`, ref)
+    addRow('99th Percentile', results.value.frametime.mangohud.p99, `=${mangoHudFormula(ftR, 0.01)}`, ref)
     addRow('IQR (P75-P25)', results.value.frametime.mangohud.iqr, `=${mangoHudFormula(ftR, 0.25)}-${mangoHudFormula(ftR, 0.75)}`, ref)
     addRow('Standard Deviation', results.value.frametime.mangohud.stddev, `=STDEV(${ftR})`, ref)
     addRow('Variance', results.value.frametime.mangohud.variance, `=VAR(${ftR})`, ref)
