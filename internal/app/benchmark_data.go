@@ -848,10 +848,94 @@ func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 	return nil
 }
 
-// DeleteBenchmarkData deletes benchmark data file and metadata from disk
+// StorePreCalculatedStats stores pre-calculated statistics to disk as zstd-compressed gob.
+// These are served directly by the REST API and MCP server.
+func StorePreCalculatedStats(stats []*PreCalculatedRun, benchmarkID uint) error {
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.stats", benchmarkID))
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close stats file: %v\n", closeErr)
+		}
+	}()
+
+	bufWriter := bufio.NewWriterSize(file, 256*1024)
+	zstdEncoder, err := zstd.NewWriter(bufWriter,
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderConcurrency(2))
+	if err != nil {
+		return err
+	}
+
+	gobEncoder := gob.NewEncoder(zstdEncoder)
+	if err := gobEncoder.Encode(stats); err != nil {
+		if closeErr := zstdEncoder.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close zstd encoder after stats encode error: %v\n", closeErr)
+		}
+		return fmt.Errorf("failed to encode stats: %w", err)
+	}
+
+	if err := zstdEncoder.Close(); err != nil {
+		return fmt.Errorf("failed to close zstd encoder: %w", err)
+	}
+
+	if err := bufWriter.Flush(); err != nil {
+		return fmt.Errorf("failed to flush buffer: %w", err)
+	}
+
+	return nil
+}
+
+// RetrievePreCalculatedStats retrieves pre-calculated statistics from disk.
+func RetrievePreCalculatedStats(benchmarkID uint) ([]*PreCalculatedRun, error) {
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.stats", benchmarkID))
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close stats file: %v\n", closeErr)
+		}
+	}()
+
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return nil, err
+	}
+	defer zstdDecoder.Close()
+
+	var stats []*PreCalculatedRun
+	gobDecoder := gob.NewDecoder(zstdDecoder)
+	if err := gobDecoder.Decode(&stats); err != nil {
+		return nil, fmt.Errorf("failed to decode stats: %w", err)
+	}
+
+	return stats, nil
+}
+
+// RetrievePreCalculatedStatsRun retrieves a single run's pre-calculated stats.
+func RetrievePreCalculatedStatsRun(benchmarkID uint, runIndex int) (*PreCalculatedRun, error) {
+	stats, err := RetrievePreCalculatedStats(benchmarkID)
+	if err != nil {
+		return nil, err
+	}
+
+	if runIndex < 0 || runIndex >= len(stats) {
+		return nil, fmt.Errorf("run index %d out of range (0-%d)", runIndex, len(stats)-1)
+	}
+
+	return stats[runIndex], nil
+}
+
+// DeleteBenchmarkData deletes benchmark data file, metadata, and pre-calculated stats from disk
 func DeleteBenchmarkData(benchmarkID uint) error {
 	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
 	metaPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.meta", benchmarkID))
+	statsPath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.stats", benchmarkID))
 
 	// Delete the main data file
 	err := os.Remove(filePath)
@@ -860,6 +944,11 @@ func DeleteBenchmarkData(benchmarkID uint) error {
 	if metaErr := os.Remove(metaPath); metaErr != nil && !os.IsNotExist(metaErr) {
 		// Log non-existence errors (but don't fail the operation)
 		fmt.Printf("Warning: failed to delete metadata file %s: %v\n", metaPath, metaErr)
+	}
+
+	// Try to delete stats file, only ignore error if file doesn't exist
+	if statsErr := os.Remove(statsPath); statsErr != nil && !os.IsNotExist(statsErr) {
+		fmt.Printf("Warning: failed to delete stats file %s: %v\n", statsPath, statsErr)
 	}
 
 	return err

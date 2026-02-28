@@ -3,10 +3,8 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -859,7 +857,6 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 	case maxPoints > maxMaxPoints:
 		maxPoints = maxMaxPoints
 	}
-	// Default is 0 (stats only) — no switch case needed for == 0
 
 	// Verify benchmark exists
 	var benchmark Benchmark
@@ -867,18 +864,26 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 		return "", fmt.Errorf("benchmark not found")
 	}
 
-	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
+	// Use pre-calculated stats
+	preCalc, err := RetrievePreCalculatedStats(uint(params.ID))
 	if err != nil {
-		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
+		// Fallback: compute from raw data if stats file doesn't exist
+		benchmarkData, rawErr := RetrieveBenchmarkData(uint(params.ID))
+		if rawErr != nil {
+			return "", fmt.Errorf("failed to retrieve benchmark data: %w", rawErr)
+		}
+		preCalc = ComputePreCalculatedRuns(benchmarkData)
+		// Store for future requests
+		if storeErr := StorePreCalculatedStats(preCalc, uint(params.ID)); storeErr != nil {
+			fmt.Printf("Warning: failed to store pre-calculated stats for benchmark %d: %v\n", params.ID, storeErr)
+		}
+		runtime.GC()
 	}
 
-	summaries := make([]*BenchmarkDataSummary, len(benchmarkData))
-	for i, run := range benchmarkData {
-		summaries[i] = summarizeBenchmarkData(run, maxPoints)
+	summaries := make([]*BenchmarkDataSummary, len(preCalc))
+	for i, run := range preCalc {
+		summaries[i] = PreCalculatedRunToMCPSummary(run, maxPoints)
 	}
-
-	// Trigger GC to reclaim memory from loaded benchmark data
-	runtime.GC()
 
 	data, err := json.Marshal(summaries)
 	if err != nil {
@@ -914,14 +919,13 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 		return "", fmt.Errorf("benchmark not found")
 	}
 
-	run, err := RetrieveBenchmarkRun(uint(params.ID), params.RunIndex)
+	// Use pre-calculated stats for the single run
+	run, err := RetrievePreCalculatedStatsRun(uint(params.ID), params.RunIndex)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve run: %w", err)
 	}
 
-	summary := summarizeBenchmarkData(run, maxPoints)
-
-	runtime.GC()
+	summary := PreCalculatedRunToMCPSummary(run, maxPoints)
 
 	data, err := json.Marshal(summary)
 	if err != nil {
@@ -1549,293 +1553,4 @@ func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint) 
 		return "", fmt.Errorf("failed to marshal result: %w", err)
 	}
 	return string(data), nil
-}
-
-// --- Statistics computation (matches web frontend statsCalculations.js) ---
-
-// summarizeBenchmarkData computes per-metric statistics for a benchmark run.
-// FPS stats are derived from frametime data (matching the web frontend behavior).
-// If maxPoints > 0, downsampled raw data is also included.
-func summarizeBenchmarkData(run *BenchmarkData, maxPoints int) *BenchmarkDataSummary {
-	totalPoints := len(run.DataFPS)
-	if totalPoints == 0 {
-		totalPoints = len(run.DataFrameTime)
-	}
-
-	actualMax := maxPoints
-	if maxPoints > 0 && totalPoints <= maxPoints {
-		actualMax = totalPoints
-	}
-	if maxPoints <= 0 {
-		actualMax = 0
-	}
-
-	summary := &BenchmarkDataSummary{
-		Label:              run.Label,
-		SpecOS:             run.SpecOS,
-		SpecCPU:            run.SpecCPU,
-		SpecGPU:            run.SpecGPU,
-		SpecRAM:            run.SpecRAM,
-		SpecLinuxKernel:    run.SpecLinuxKernel,
-		SpecLinuxScheduler: run.SpecLinuxScheduler,
-		TotalDataPoints:    totalPoints,
-		Metrics:            make(map[string]*MetricSummary),
-	}
-	if actualMax > 0 {
-		summary.DownsampledTo = actualMax
-	}
-
-	addMetric := func(name string, data []float64) {
-		if len(data) == 0 {
-			return
-		}
-		summary.Metrics[name] = computeMetricSummary(data, actualMax)
-	}
-
-	// FPS: compute stats from frametime (matching web frontend calculateFPSStatsFromFrametime)
-	if len(run.DataFrameTime) > 0 {
-		summary.Metrics["fps"] = computeFPSFromFrametime(run.DataFrameTime, run.DataFPS, actualMax)
-	} else if len(run.DataFPS) > 0 {
-		addMetric("fps", run.DataFPS)
-	}
-
-	addMetric("frame_time", run.DataFrameTime)
-	addMetric("cpu_load", run.DataCPULoad)
-	addMetric("gpu_load", run.DataGPULoad)
-	addMetric("cpu_temp", run.DataCPUTemp)
-	addMetric("cpu_power", run.DataCPUPower)
-	addMetric("gpu_temp", run.DataGPUTemp)
-	addMetric("gpu_core_clock", run.DataGPUCoreClock)
-	addMetric("gpu_mem_clock", run.DataGPUMemClock)
-	addMetric("gpu_vram_used", run.DataGPUVRAMUsed)
-	addMetric("gpu_power", run.DataGPUPower)
-	addMetric("ram_used", run.DataRAMUsed)
-	addMetric("swap_used", run.DataSwapUsed)
-
-	return summary
-}
-
-// computeFPSFromFrametime calculates FPS statistics from frametime data,
-// matching the web frontend's calculateFPSStatsFromFrametime function.
-// FPS percentiles are inverted from frametime: low frametime = high FPS.
-func computeFPSFromFrametime(frametimeData, fpsData []float64, maxPoints int) *MetricSummary {
-	n := len(frametimeData)
-	if n == 0 {
-		return nil
-	}
-
-	// Sort frametime for percentile calculations
-	sortedFT := make([]float64, n)
-	copy(sortedFT, frametimeData)
-	sort.Float64s(sortedFT)
-
-	// FPS percentiles from frametime (inverted relationship):
-	// 3rd percentile frametime (fast) → 97th percentile FPS
-	// 99th percentile frametime (slow) → 1st percentile FPS
-	ftP03 := percentile(sortedFT, 3)
-	ftP99 := percentile(sortedFT, 99)
-
-	var fpsP97, fpsP01 float64
-	if ftP03 > 0 {
-		fpsP97 = 1000 / ftP03
-	}
-	if ftP99 > 0 {
-		fpsP01 = 1000 / ftP99
-	}
-
-	// Average FPS from average frametime
-	var ftSum float64
-	for _, v := range frametimeData {
-		ftSum += v
-	}
-	avgFT := ftSum / float64(n)
-	var avgFPS float64
-	if avgFT > 0 {
-		avgFPS = 1000 / avgFT
-	}
-
-	// Min/Max FPS from max/min frametime
-	minFT := sortedFT[0]
-	maxFT := sortedFT[n-1]
-	var maxFPS, minFPS float64
-	if minFT > 0 {
-		maxFPS = 1000 / minFT
-	}
-	if maxFT > 0 {
-		minFPS = 1000 / maxFT
-	}
-
-	// Convert all frametime to FPS for stddev/variance/median
-	fpsValues := make([]float64, n)
-	for i, ft := range frametimeData {
-		if ft > 0 {
-			fpsValues[i] = 1000 / ft
-		}
-	}
-
-	// Sample variance (n-1 divisor, matches Excel/frontend)
-	fpsMean := func() float64 {
-		var s float64
-		for _, v := range fpsValues {
-			s += v
-		}
-		return s / float64(n)
-	}()
-	var sumSq float64
-	for _, v := range fpsValues {
-		diff := v - fpsMean
-		sumSq += diff * diff
-	}
-	var variance float64
-	if n > 1 {
-		variance = sumSq / float64(n-1)
-	}
-	stdDev := math.Sqrt(variance)
-
-	// Median from FPS values
-	sortedFPS := make([]float64, n)
-	copy(sortedFPS, fpsValues)
-	sort.Float64s(sortedFPS)
-	median := percentile(sortedFPS, 50)
-
-	summary := &MetricSummary{
-		Min:      math.Round(minFPS*100) / 100,
-		Max:      math.Round(maxFPS*100) / 100,
-		Avg:      math.Round(avgFPS*100) / 100,
-		Median:   math.Round(median*100) / 100,
-		P01:      math.Round(fpsP01*100) / 100,
-		P97:      math.Round(fpsP97*100) / 100,
-		StdDev:   math.Round(stdDev*100) / 100,
-		Variance: math.Round(variance*100) / 100,
-		Count:    n,
-	}
-
-	// Optionally include downsampled FPS data points
-	if maxPoints > 0 && len(fpsData) > 0 {
-		if len(fpsData) <= maxPoints {
-			summary.Data = make([]float64, len(fpsData))
-			for i, v := range fpsData {
-				summary.Data[i] = math.Round(v*100) / 100
-			}
-		} else {
-			summary.Data = downsampleSlice(fpsData, maxPoints)
-		}
-	}
-
-	return summary
-}
-
-// computeMetricSummary computes statistics for a generic metric.
-// Uses sample variance (n-1 divisor) and linear interpolation for percentiles,
-// matching the web frontend's calculateStats function.
-func computeMetricSummary(data []float64, maxPoints int) *MetricSummary {
-	n := len(data)
-	if n == 0 {
-		return nil
-	}
-
-	// Min, max, avg
-	var sum float64
-	minVal := data[0]
-	maxVal := data[0]
-	for _, v := range data {
-		sum += v
-		if v < minVal {
-			minVal = v
-		}
-		if v > maxVal {
-			maxVal = v
-		}
-	}
-	avg := sum / float64(n)
-
-	// Sample variance (n-1), matching Excel/LibreOffice/frontend
-	var sumSq float64
-	for _, v := range data {
-		diff := v - avg
-		sumSq += diff * diff
-	}
-	var variance float64
-	if n > 1 {
-		variance = sumSq / float64(n-1)
-	}
-	stdDev := math.Sqrt(variance)
-
-	// Sort a copy for percentile calculations
-	sorted := make([]float64, n)
-	copy(sorted, data)
-	sort.Float64s(sorted)
-
-	median := percentile(sorted, 50)
-	p01 := percentile(sorted, 1)
-	p97 := percentile(sorted, 97)
-
-	summary := &MetricSummary{
-		Min:      math.Round(minVal*100) / 100,
-		Max:      math.Round(maxVal*100) / 100,
-		Avg:      math.Round(avg*100) / 100,
-		Median:   math.Round(median*100) / 100,
-		P01:      math.Round(p01*100) / 100,
-		P97:      math.Round(p97*100) / 100,
-		StdDev:   math.Round(stdDev*100) / 100,
-		Variance: math.Round(variance*100) / 100,
-		Count:    n,
-	}
-
-	// Optionally include downsampled data points
-	if maxPoints > 0 {
-		if n <= maxPoints {
-			summary.Data = make([]float64, n)
-			for i, v := range data {
-				summary.Data[i] = math.Round(v*100) / 100
-			}
-		} else {
-			summary.Data = downsampleSlice(data, maxPoints)
-		}
-	}
-
-	return summary
-}
-
-func downsampleSlice(data []float64, targetPoints int) []float64 {
-	n := len(data)
-	if n <= targetPoints || targetPoints <= 0 {
-		result := make([]float64, n)
-		for i, v := range data {
-			result[i] = math.Round(v*100) / 100
-		}
-		return result
-	}
-
-	result := make([]float64, targetPoints)
-	step := float64(n-1) / float64(targetPoints-1)
-	for i := 0; i < targetPoints; i++ {
-		idx := int(math.Round(step * float64(i)))
-		if idx >= n {
-			idx = n - 1
-		}
-		result[i] = math.Round(data[idx]*100) / 100
-	}
-	return result
-}
-
-func percentile(sorted []float64, p float64) float64 {
-	if len(sorted) == 0 {
-		return 0
-	}
-	if len(sorted) == 1 {
-		return sorted[0]
-	}
-
-	rank := (p / 100) * float64(len(sorted)-1)
-	lower := int(math.Floor(rank))
-	upper := int(math.Ceil(rank))
-
-	if lower == upper || upper >= len(sorted) {
-		return sorted[lower]
-	}
-
-	// Linear interpolation
-	frac := rank - float64(lower)
-	return sorted[lower]*(1-frac) + sorted[upper]*frac
 }

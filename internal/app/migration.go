@@ -21,8 +21,9 @@ const (
 	// - 1: Current schema (Format 3) - has schema_versions table, removed ai_summary column
 	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
 	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format) + regenerate metadata with JSON size
+	// - 4: Pre-calculate statistics for all benchmarks (.stats files) for instant loading
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 3
+	currentSchemaVersion = 4
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )

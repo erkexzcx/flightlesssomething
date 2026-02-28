@@ -10,6 +10,7 @@ const (
 )
 
 // MetricStats holds pre-calculated statistics for a single metric.
+// JSON tags match the frontend expectations (camelCase for WebUI consumption).
 type MetricStats struct {
 	Min      float64  `json:"min"`
 	Max      float64  `json:"max"`
@@ -17,22 +18,24 @@ type MetricStats struct {
 	Median   float64  `json:"median"`
 	P01      float64  `json:"p01"`
 	P97      float64  `json:"p97"`
-	StdDev   float64  `json:"std_dev"`
+	StdDev   float64  `json:"stddev"`
 	Variance float64  `json:"variance"`
 	Count    int      `json:"count"`
 	Density  [][2]int `json:"density"` // [[roundedValue, count], ...]
 }
 
 // PreCalculatedRun stores all pre-calculated data for a single benchmark run.
+// JSON tags match the frontend expectations for direct consumption by the WebUI.
+// For MCP, use PreCalculatedRunToMCPSummary to convert to the MCP format.
 type PreCalculatedRun struct {
 	Label              string `json:"label"`
-	SpecOS             string `json:"spec_os"`
-	SpecCPU            string `json:"spec_cpu"`
-	SpecGPU            string `json:"spec_gpu"`
-	SpecRAM            string `json:"spec_ram"`
-	SpecLinuxKernel    string `json:"spec_linux_kernel,omitempty"`
-	SpecLinuxScheduler string `json:"spec_linux_scheduler,omitempty"`
-	TotalDataPoints    int    `json:"total_data_points"`
+	SpecOS             string `json:"specOS"`
+	SpecCPU            string `json:"specCPU"`
+	SpecGPU            string `json:"specGPU"`
+	SpecRAM            string `json:"specRAM"`
+	SpecLinuxKernel    string `json:"specLinuxKernel,omitempty"`
+	SpecLinuxScheduler string `json:"specLinuxScheduler,omitempty"`
+	TotalDataPoints    int    `json:"totalDataPoints"`
 
 	// Downsampled series data for line charts (LTTB, max 2000 points)
 	// metric key -> [[index, value], ...]
@@ -42,7 +45,7 @@ type PreCalculatedRun struct {
 	Stats map[string]*MetricStats `json:"stats"`
 
 	// Pre-calculated stats for MangoHud threshold method
-	StatsMangoHud map[string]*MetricStats `json:"stats_mangohud"`
+	StatsMangoHud map[string]*MetricStats `json:"statsMangoHud"`
 }
 
 // percentileLinear computes the p-th percentile using linear interpolation.
