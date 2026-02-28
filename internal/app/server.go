@@ -82,6 +82,9 @@ func Start(config *Config, version string) error {
 	r.GET("/api/benchmarks/:id/runs/:runIndex", HandleGetBenchmarkRun(db))
 	r.GET("/api/benchmarks/:id/download", HandleDownloadBenchmarkData(db))
 
+	// Debug calc endpoint (public, for verifying backend calculations)
+	r.POST("/api/debugcalc", HandleDebugCalc())
+
 	// Protected benchmark routes
 	authorized := r.Group("/api")
 	authorized.Use(RequireAuthOrToken(db))

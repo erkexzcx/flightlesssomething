@@ -614,9 +614,9 @@ Highcharts.setOptions({
 // Helper functions
 function formatOSSpecific(data) {
   const parts = []
-  // Processed data uses specOSSpecific object
-  if (data.specOSSpecific?.SpecLinuxKernel) parts.push(data.specOSSpecific.SpecLinuxKernel)
-  if (data.specOSSpecific?.SpecLinuxScheduler) parts.push(data.specOSSpecific.SpecLinuxScheduler)
+  // Pre-calculated data sends specLinuxKernel/specLinuxScheduler as flat fields
+  if (data.specLinuxKernel) parts.push(data.specLinuxKernel)
+  if (data.specLinuxScheduler) parts.push(data.specLinuxScheduler)
   return parts.length > 0 ? parts.join(' ') : '-'
 }
 
