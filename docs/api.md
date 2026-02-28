@@ -337,7 +337,7 @@ Without a token, only public (read-only) tools are available. With a token, auth
 |---|---|---|
 | `list_benchmarks` | Search and list benchmarks with pagination, search, and sorting. | Yes |
 | `get_benchmark` | Get detailed benchmark metadata (title, description, user, run count, labels). | Yes |
-| `get_benchmark_data` | Get computed statistics for all runs (min, max, avg, median, P1, P97, std dev, variance). Optionally include downsampled raw data (up to 5,000 points). | Yes |
+| `get_benchmark_data` | Get computed statistics for all runs (min, max, avg, median, P1, P5, P10, P25, P75, P90, P95, P97, P99, IQR, std dev, variance). Optionally include downsampled raw data (up to 5,000 points). | Yes |
 | `get_benchmark_run` | Get computed statistics for a single run. | Yes |
 
 #### Authenticated (Bearer token required)

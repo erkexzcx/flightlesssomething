@@ -126,7 +126,15 @@ type MetricSummary struct {
 	Avg      float64   `json:"avg"`
 	Median   float64   `json:"median"`
 	P01      float64   `json:"p01"`
+	P05      float64   `json:"p05"`
+	P10      float64   `json:"p10"`
+	P25      float64   `json:"p25"`
+	P75      float64   `json:"p75"`
+	P90      float64   `json:"p90"`
+	P95      float64   `json:"p95"`
 	P97      float64   `json:"p97"`
+	P99      float64   `json:"p99"`
+	IQR      float64   `json:"iqr"`
 	StdDev   float64   `json:"std_dev"`
 	Variance float64   `json:"variance"`
 	Count    int       `json:"count"`
@@ -210,7 +218,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark_data",
 			Title:       "Benchmark Statistics",
-			Description: "Get computed statistics for all benchmark runs. Returns per-metric stats matching the web UI: min, max, avg, median, p01, p97, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series.",
+			Description: "Get computed statistics for all benchmark runs. Returns per-metric stats matching the web UI: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},

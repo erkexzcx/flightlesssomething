@@ -168,6 +168,21 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 		if result.Count != 5 {
 			t.Errorf("count wrong: %v", result.Count)
 		}
+		// Verify extended percentiles are populated and ordered
+		if result.P01 > result.P05 || result.P05 > result.P10 || result.P10 > result.P25 {
+			t.Errorf("lower percentiles not in order: p01=%v p05=%v p10=%v p25=%v", result.P01, result.P05, result.P10, result.P25)
+		}
+		if result.P25 > result.Median || result.Median > result.P75 || result.P75 > result.P90 {
+			t.Errorf("mid percentiles not in order: p25=%v median=%v p75=%v p90=%v", result.P25, result.Median, result.P75, result.P90)
+		}
+		if result.P90 > result.P95 || result.P95 > result.P97 || result.P97 > result.P99 {
+			t.Errorf("upper percentiles not in order: p90=%v p95=%v p97=%v p99=%v", result.P90, result.P95, result.P97, result.P99)
+		}
+		// IQR = P75 - P25
+		expectedIQR := result.P75 - result.P25
+		if !approxEqual(result.IQR, expectedIQR, 0.01) {
+			t.Errorf("IQR wrong: got %v, want %v", result.IQR, expectedIQR)
+		}
 	})
 
 	t.Run("mangohud method", func(t *testing.T) {
@@ -205,7 +220,15 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 		check("Avg", result.Avg)
 		check("Median", result.Median)
 		check("P01", result.P01)
+		check("P05", result.P05)
+		check("P10", result.P10)
+		check("P25", result.P25)
+		check("P75", result.P75)
+		check("P90", result.P90)
+		check("P95", result.P95)
 		check("P97", result.P97)
+		check("P99", result.P99)
+		check("IQR", result.IQR)
 		check("StdDev", result.StdDev)
 		check("Variance", result.Variance)
 	})
@@ -262,6 +285,17 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 		// P97 FPS should be higher than P01 FPS
 		if result.P97 <= result.P01 {
 			t.Errorf("p97 (%v) should be > p01 (%v) for FPS", result.P97, result.P01)
+		}
+		// All extended percentiles should be ordered
+		if result.P01 > result.P05 || result.P05 > result.P10 || result.P10 > result.P25 {
+			t.Errorf("lower FPS percentiles not in order: p01=%v p05=%v p10=%v p25=%v", result.P01, result.P05, result.P10, result.P25)
+		}
+		if result.P75 > result.P90 || result.P90 > result.P95 || result.P95 > result.P97 || result.P97 > result.P99 {
+			t.Errorf("upper FPS percentiles not in order: p75=%v p90=%v p95=%v p97=%v p99=%v", result.P75, result.P90, result.P95, result.P97, result.P99)
+		}
+		// IQR should be positive
+		if result.IQR <= 0 {
+			t.Errorf("IQR should be > 0, got %v", result.IQR)
 		}
 		// Min FPS should come from max frametime
 		if result.Min <= 0 {
@@ -539,7 +573,8 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 	// Build a pre-calculated run with some data
 	fpsStats := &MetricStats{
 		Min: 50, Max: 120, Avg: 90, Median: 91,
-		P01: 55, P97: 115, StdDev: 10, Variance: 100,
+		P01: 55, P05: 60, P10: 65, P25: 75, P75: 105, P90: 110, P95: 113, P97: 115, P99: 118,
+		IQR: 30, StdDev: 10, Variance: 100,
 		Count: 500, Density: [][2]int{{55, 1}, {90, 10}, {115, 1}},
 	}
 	series := make([][2]float64, 100)
@@ -570,6 +605,9 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 		}
 		if fps.Min != 50 || fps.Max != 120 {
 			t.Errorf("fps stats wrong: min=%v max=%v", fps.Min, fps.Max)
+		}
+		if fps.P05 != 60 || fps.P10 != 65 || fps.P25 != 75 || fps.P75 != 105 || fps.P90 != 110 || fps.P95 != 113 || fps.P99 != 118 || fps.IQR != 30 {
+			t.Error("extended percentile fields not mapped correctly to MCP summary")
 		}
 		if fps.Data != nil {
 			t.Error("expected no data when maxPoints=0")

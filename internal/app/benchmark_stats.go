@@ -17,7 +17,15 @@ type MetricStats struct {
 	Avg      float64  `json:"avg"`
 	Median   float64  `json:"median"`
 	P01      float64  `json:"p01"`
+	P05      float64  `json:"p05"`
+	P10      float64  `json:"p10"`
+	P25      float64  `json:"p25"`
+	P75      float64  `json:"p75"`
+	P90      float64  `json:"p90"`
+	P95      float64  `json:"p95"`
 	P97      float64  `json:"p97"`
+	P99      float64  `json:"p99"`
+	IQR      float64  `json:"iqr"`
 	StdDev   float64  `json:"stddev"`
 	Variance float64  `json:"variance"`
 	Count    int      `json:"count"`
@@ -159,7 +167,15 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 	pFunc := percentileFunc(method)
 	median := pFunc(sorted, 50)
 	p01 := pFunc(sorted, 1)
+	p05 := pFunc(sorted, 5)
+	p10 := pFunc(sorted, 10)
+	p25 := pFunc(sorted, 25)
+	p75 := pFunc(sorted, 75)
+	p90 := pFunc(sorted, 90)
+	p95 := pFunc(sorted, 95)
 	p97 := pFunc(sorted, 97)
+	p99 := pFunc(sorted, 99)
+	iqr := p75 - p25
 
 	density := computeDensityData(data, p01, p97)
 
@@ -169,7 +185,15 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 		Avg:      math.Round(avg*100) / 100,
 		Median:   math.Round(median*100) / 100,
 		P01:      math.Round(p01*100) / 100,
+		P05:      math.Round(p05*100) / 100,
+		P10:      math.Round(p10*100) / 100,
+		P25:      math.Round(p25*100) / 100,
+		P75:      math.Round(p75*100) / 100,
+		P90:      math.Round(p90*100) / 100,
+		P95:      math.Round(p95*100) / 100,
 		P97:      math.Round(p97*100) / 100,
+		P99:      math.Round(p99*100) / 100,
+		IQR:      math.Round(iqr*100) / 100,
 		StdDev:   math.Round(stdDev*100) / 100,
 		Variance: math.Round(variance*100) / 100,
 		Count:    n,
@@ -192,16 +216,34 @@ func computeFPSFromFrametimeForMethod(frametimeData []float64, method string) *M
 	pFunc := percentileFunc(method)
 
 	// Inverted percentiles: low frametime = high FPS
+	// FPS Px = 1000 / FT P(100-x)
+	ftP01 := pFunc(sortedFT, 1)
 	ftP03 := pFunc(sortedFT, 3)
+	ftP05 := pFunc(sortedFT, 5)
+	ftP10 := pFunc(sortedFT, 10)
+	ftP25 := pFunc(sortedFT, 25)
+	ftP75 := pFunc(sortedFT, 75)
+	ftP90 := pFunc(sortedFT, 90)
+	ftP95 := pFunc(sortedFT, 95)
 	ftP99 := pFunc(sortedFT, 99)
 
-	var fpsP97, fpsP01 float64
-	if ftP03 > 0 {
-		fpsP97 = 1000 / ftP03
+	safeDiv := func(ft float64) float64 {
+		if ft > 0 {
+			return 1000 / ft
+		}
+		return 0
 	}
-	if ftP99 > 0 {
-		fpsP01 = 1000 / ftP99
-	}
+
+	fpsP01 := safeDiv(ftP99)
+	fpsP05 := safeDiv(ftP95)
+	fpsP10 := safeDiv(ftP90)
+	fpsP25 := safeDiv(ftP75)
+	fpsP75 := safeDiv(ftP25)
+	fpsP90 := safeDiv(ftP10)
+	fpsP95 := safeDiv(ftP05)
+	fpsP97 := safeDiv(ftP03)
+	fpsP99 := safeDiv(ftP01)
+	fpsIQR := fpsP75 - fpsP25
 
 	// Average FPS from average frametime
 	var ftSum float64
@@ -265,7 +307,15 @@ func computeFPSFromFrametimeForMethod(frametimeData []float64, method string) *M
 		Avg:      math.Round(avgFPS*100) / 100,
 		Median:   math.Round(medianFPS*100) / 100,
 		P01:      math.Round(fpsP01*100) / 100,
+		P05:      math.Round(fpsP05*100) / 100,
+		P10:      math.Round(fpsP10*100) / 100,
+		P25:      math.Round(fpsP25*100) / 100,
+		P75:      math.Round(fpsP75*100) / 100,
+		P90:      math.Round(fpsP90*100) / 100,
+		P95:      math.Round(fpsP95*100) / 100,
 		P97:      math.Round(fpsP97*100) / 100,
+		P99:      math.Round(fpsP99*100) / 100,
+		IQR:      math.Round(fpsIQR*100) / 100,
 		StdDev:   math.Round(stdDev*100) / 100,
 		Variance: math.Round(variance*100) / 100,
 		Count:    n,
@@ -492,7 +542,15 @@ func PreCalculatedRunToMCPSummary(run *PreCalculatedRun, maxPoints int) *Benchma
 			Avg:      stats.Avg,
 			Median:   stats.Median,
 			P01:      stats.P01,
+			P05:      stats.P05,
+			P10:      stats.P10,
+			P25:      stats.P25,
+			P75:      stats.P75,
+			P90:      stats.P90,
+			P95:      stats.P95,
 			P97:      stats.P97,
+			P99:      stats.P99,
+			IQR:      stats.IQR,
 			StdDev:   stats.StdDev,
 			Variance: stats.Variance,
 			Count:    stats.Count,
