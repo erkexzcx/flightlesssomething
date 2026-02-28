@@ -301,23 +301,6 @@ const paginationPages = computed(() => {
   return pages
 })
 
-// Keep old displayPages for backwards compatibility (not used anymore)
-const displayPages = computed(() => {
-  const pages = []
-  const maxDisplay = 5
-  let start = Math.max(1, currentPage.value - Math.floor(maxDisplay / 2))
-  let end = Math.min(totalPages.value, start + maxDisplay - 1)
-
-  if (end - start < maxDisplay - 1) {
-    start = Math.max(1, end - maxDisplay + 1)
-  }
-
-  for (let i = start; i <= end; i++) {
-    pages.push(i)
-  }
-  return pages
-})
-
 // Helper function to check if a user is the current logged-in user
 const isCurrentUser = (user) => {
   // authStore.user.user_id is from the session API (snake_case)
