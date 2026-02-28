@@ -210,10 +210,10 @@
                   <tr v-for="field in ['p01', 'avg', 'p97', 'stddev', 'variance']" :key="'ft-' + field">
                     <td>Frametime {{ field }}</td>
                     <td>{{ formatNumber(results.frametime.linear[field]) }}</td>
-                    <td>{{ formatNumber(backendResults.linear.frametime?.[field]) }}</td>
+                    <td>{{ formatNumber(backendResults.linear.frameTime?.[field]) }}</td>
                     <td>
-                      <span :class="matchClass(results.frametime.linear[field], backendResults.linear.frametime?.[field])">
-                        {{ matchLabel(results.frametime.linear[field], backendResults.linear.frametime?.[field]) }}
+                      <span :class="matchClass(results.frametime.linear[field], backendResults.linear.frameTime?.[field])">
+                        {{ matchLabel(results.frametime.linear[field], backendResults.linear.frameTime?.[field]) }}
                       </span>
                     </td>
                   </tr>
@@ -422,7 +422,7 @@ async function verifyWithBackend() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fps: parsedData.value.fpsValues,
-        frametime: parsedData.value.frametimeValues
+        frameTime: parsedData.value.frametimeValues
       })
     })
     if (!response.ok) {

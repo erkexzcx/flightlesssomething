@@ -209,8 +209,6 @@ func MigratePreCalculateStats(dataDir string) error {
 		log.Printf("Benchmark %d: ✓ Pre-calculated stats generated (%d runs)", benchmarkID, len(benchmarkData))
 
 		// Clear loaded data to help GC
-		benchmarkData = nil //nolint:ineffassign // Intentional to help GC reclaim memory
-		preCalc = nil       //nolint:ineffassign // Intentional to help GC reclaim memory
 		runtime.GC()
 
 		successCount++
