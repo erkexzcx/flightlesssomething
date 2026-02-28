@@ -243,28 +243,12 @@
         <div class="card-body">
           <h5 class="card-title">Benchmark Data</h5>
           
-          <!-- Loading state with single progress bar -->
-          <div v-if="loadingData" class="my-4">
-            <div class="progress-container">
-              <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span class="text-muted small">
-                    <i class="fa-solid fa-download"></i> {{ loadingStatus }}
-                  </span>
-                  <span class="text-muted small">{{ loadingProgress }}%</span>
-                </div>
-                <div class="progress">
-                  <div
-                    class="progress-bar"
-                    role="progressbar"
-                    :style="{ width: loadingProgress + '%' }"
-                    :aria-valuenow="loadingProgress"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                  >{{ loadingProgress }}%</div>
-                </div>
-              </div>
+          <!-- Loading state -->
+          <div v-if="loadingData" class="my-4 text-center">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
             </div>
+            <div class="mt-2 text-muted small">Loading benchmark data...</div>
           </div>
 
           <!-- Error state -->
@@ -389,8 +373,6 @@ const runToDelete = ref(null)
 const benchmarkData = ref(null)
 const loadingData = ref(false)
 const dataError = ref(null)
-const loadingProgress = ref(0)
-const loadingStatus = ref('Initializing...')
 const totalRuns = ref(0)
 const descriptionExpanded = ref(false)
 const fileInput = ref(null)
@@ -482,8 +464,6 @@ async function loadBenchmarkData(id) {
   try {
     loadingData.value = true
     dataError.value = null
-    loadingProgress.value = 0
-    loadingStatus.value = 'Initializing...'
     
     // Get the total number of runs from benchmark metadata
     totalRuns.value = benchmark.value.run_count || 0
@@ -493,13 +473,7 @@ async function loadBenchmarkData(id) {
       return
     }
     
-    // Load runs in parallel (concurrency based on CPU cores)
-    // Only onRunProcessComplete is used for progress; other callbacks are optional
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
-      onRunProcessComplete: (runIndex, completedCount, total) => {
-        loadingStatus.value = `Loaded ${completedCount}/${total} runs`
-        loadingProgress.value = Math.round((completedCount / total) * 100)
-      },
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
       }
