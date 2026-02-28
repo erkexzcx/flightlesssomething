@@ -40,7 +40,6 @@ const (
 	jsonrpcInvalidRequest = -32600
 	jsonrpcMethodNotFound = -32601
 	jsonrpcInvalidParams  = -32602
-	jsonrpcInternalError  = -32603
 )
 
 // MCP protocol types
@@ -72,11 +71,9 @@ const (
 )
 
 type mcpToolAnnotations struct {
-	Title           string `json:"title,omitempty"`
-	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
-	DestructiveHint *bool  `json:"destructiveHint,omitempty"`
-	IdempotentHint  *bool  `json:"idempotentHint,omitempty"`
-	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
+	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool `json:"destructiveHint,omitempty"`
+	OpenWorldHint   *bool `json:"openWorldHint,omitempty"`
 }
 
 type mcpIcon struct {
