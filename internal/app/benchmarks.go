@@ -211,13 +211,24 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Stream benchmark data directly to response
-		if err := StreamBenchmarkDataAsJSON(uint(benchmarkID), c.Writer); err != nil {
-			// If streaming fails, we can't change status code (already sent headers)
-			// Log the error for debugging
-			fmt.Printf("Error streaming benchmark data %d: %v\n", benchmarkID, err)
-			return
+		// Serve pre-calculated stats (no raw data sent to frontend)
+		stats, err := RetrievePreCalculatedStats(uint(benchmarkID))
+		if err != nil {
+			// Fallback: compute from raw data if stats file doesn't exist yet
+			benchmarkData, rawErr := RetrieveBenchmarkData(uint(benchmarkID))
+			if rawErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
+				return
+			}
+			stats = ComputePreCalculatedRuns(benchmarkData)
+			// Store for future requests
+			if storeErr := StorePreCalculatedStats(stats, uint(benchmarkID)); storeErr != nil {
+				fmt.Printf("Warning: failed to store pre-calculated stats for benchmark %d: %v\n", benchmarkID, storeErr)
+			}
+			runtime.GC()
 		}
+
+		c.JSON(http.StatusOK, stats)
 	}
 }
 
@@ -321,6 +332,13 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			db.DB.Delete(&benchmark)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store benchmark data"})
 			return
+		}
+
+		// Pre-calculate and store stats for fast serving
+		preCalc := ComputePreCalculatedRuns(benchmarkData)
+		if err := StorePreCalculatedStats(preCalc, benchmark.ID); err != nil {
+			// Log but don't fail - stats can be regenerated on demand
+			fmt.Printf("Warning: failed to store pre-calculated stats for benchmark %d: %v\n", benchmark.ID, err)
 		}
 
 		// Extract and update searchable metadata
@@ -434,6 +452,12 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 				return
 			}
 
+			// Recompute pre-calculated stats after label changes
+			preCalc := ComputePreCalculatedRuns(benchmarkData)
+			if storeErr := StorePreCalculatedStats(preCalc, uint(benchmarkID)); storeErr != nil {
+				fmt.Printf("Warning: failed to update pre-calculated stats for benchmark %d: %v\n", benchmarkID, storeErr)
+			}
+
 			// Update searchable metadata after label changes
 			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 			benchmark.RunNames = runNames
@@ -509,10 +533,10 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 		// Store title for audit log
 		title := benchmark.Title
 
-		// Delete data file
+		// Delete all benchmark files (raw data, metadata, stats)
 		if err := DeleteBenchmarkData(benchmark.ID); err != nil {
 			// Log error but continue with database deletion
-			fmt.Printf("Warning: failed to delete benchmark data file: %v\n", err)
+			fmt.Printf("Warning: failed to delete benchmark data files: %v\n", err)
 		}
 
 		if err := db.DB.Delete(&benchmark).Error; err != nil {
@@ -647,6 +671,12 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Recompute pre-calculated stats after deleting run
+		preCalc := ComputePreCalculatedRuns(benchmarkData)
+		if storeErr := StorePreCalculatedStats(preCalc, uint(benchmarkID)); storeErr != nil {
+			fmt.Printf("Warning: failed to update pre-calculated stats for benchmark %d: %v\n", benchmarkID, storeErr)
+		}
+
 		// Update searchable metadata after deleting run
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 		benchmark.RunNames = runNames
@@ -772,6 +802,12 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Recompute pre-calculated stats after adding runs
+		preCalc := ComputePreCalculatedRuns(existingData)
+		if storeErr := StorePreCalculatedStats(preCalc, uint(benchmarkID)); storeErr != nil {
+			fmt.Printf("Warning: failed to update pre-calculated stats for benchmark %d: %v\n", benchmarkID, storeErr)
+		}
+
 		// Update searchable metadata after adding runs
 		runNames, specifications := ExtractSearchableMetadata(existingData)
 		benchmark.RunNames = runNames
@@ -797,37 +833,37 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 	}
 }
 
-// HandleGetBenchmarkRun returns a single run from a benchmark
+// HandleGetBenchmarkRun returns pre-calculated stats for a single run from a benchmark
 func HandleGetBenchmarkRun(db *DBInstance) gin.HandlerFunc {
-return func(c *gin.Context) {
-id := c.Param("id")
-benchmarkID, err := strconv.ParseUint(id, 10, 32)
-if err != nil {
-c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
-return
-}
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		benchmarkID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+			return
+		}
 
-runIndexStr := c.Param("runIndex")
-runIndex, err := strconv.Atoi(runIndexStr)
-if err != nil {
-c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run index"})
-return
-}
+		runIndexStr := c.Param("runIndex")
+		runIndex, err := strconv.Atoi(runIndexStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run index"})
+			return
+		}
 
-// Verify benchmark exists
-var benchmark Benchmark
-if dbErr := db.DB.First(&benchmark, benchmarkID).Error; dbErr != nil {
-c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
-return
-}
+		// Verify benchmark exists
+		var benchmark Benchmark
+		if dbErr := db.DB.First(&benchmark, benchmarkID).Error; dbErr != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
+			return
+		}
 
-// Retrieve the single run
-run, err := RetrieveBenchmarkRun(uint(benchmarkID), runIndex)
-if err != nil {
-c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-return
-}
+		// Serve pre-calculated stats for a single run
+		run, err := RetrievePreCalculatedStatsRun(uint(benchmarkID), runIndex)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-c.JSON(http.StatusOK, run)
-}
+		c.JSON(http.StatusOK, run)
+	}
 }

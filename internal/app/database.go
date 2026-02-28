@@ -125,6 +125,19 @@ func InitDB(dataDir string) (*DBInstance, error) {
 				return nil, fmt.Errorf("failed to set schema version to 3: %w", err)
 			}
 			log.Println("Successfully migrated to version 3")
+			version = 3 // Update local version for next migration step
+		}
+
+		if version == 3 {
+			log.Println("Pre-calculating statistics for all benchmarks...")
+			if err := MigratePreCalculateStats(dataDir); err != nil {
+				return nil, fmt.Errorf("failed to pre-calculate benchmark stats: %w", err)
+			}
+			// Update version to 4 after successful migration
+			if err := setSchemaVersion(db, 4); err != nil {
+				return nil, fmt.Errorf("failed to set schema version to 4: %w", err)
+			}
+			log.Println("Successfully migrated to version 4")
 		}
 	}
 

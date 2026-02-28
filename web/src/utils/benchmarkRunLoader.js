@@ -1,12 +1,11 @@
 // Utility for loading benchmark data incrementally - one run at a time
-// This prevents browser freezing and provides detailed progress tracking
+// Backend sends pre-calculated stats and downsampled series, so no heavy processing needed
 
 import { processRun } from './benchmarkDataProcessor.js'
 
 /**
- * Downloads benchmark runs one-by-one and processes them incrementally
- * IMPORTANT: Returns processed data (downsampled + stats), NOT raw data
- * This prevents Vue reactivity from creating watchers on massive arrays
+ * Downloads benchmark runs one-by-one and maps them to the chart-ready format.
+ * Backend sends pre-calculated stats, so processing is just a lightweight format mapping.
  * 
  * @param {number} benchmarkId - The benchmark ID
  * @param {number} totalRuns - Total number of runs to download
@@ -16,7 +15,7 @@ import { processRun } from './benchmarkDataProcessor.js'
  * @param {Function} callbacks.onRunDownloadComplete - Called when a run download completes (runIndex, runData, totalRuns)
  * @param {Function} callbacks.onRunProcessComplete - Called when a run is processed (runIndex, totalRuns)
  * @param {Function} callbacks.onError - Called on error (error, runIndex)
- * @returns {Promise<Array>} Array of processed benchmark runs (not raw data)
+ * @returns {Promise<Array>} Array of processed benchmark runs
  */
 export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callbacks = {}) {
   const {
@@ -36,7 +35,7 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
         onRunDownloadStart(runIndex, totalRuns)
       }
 
-      // Download this run
+      // Download this run (pre-calculated data, much smaller than raw)
       const url = `/api/benchmarks/${benchmarkId}/runs/${runIndex}`
       const response = await fetch(url, {
         credentials: 'include'
@@ -67,7 +66,7 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
       
       text += decoder.decode()
 
-      // Parse JSON for this run (small enough to do on main thread)
+      // Parse JSON for this run (small pre-calculated payload)
       const runData = JSON.parse(text)
       
       // Notify download complete
@@ -75,20 +74,9 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
         onRunDownloadComplete(runIndex, runData, totalRuns)
       }
 
-      // **CRITICAL: Process run immediately and discard raw data**
-      // Extract only downsampled points and statistics
-      // This prevents Vue from creating reactive watchers on massive arrays (thousands of points per run)
-      // processRun is now async and uses Web Workers for parallel calculation
-      const processedRun = await processRun(runData, runIndex, 2000) // Max 2000 points per metric per run
+      // Map backend format to chart-ready format (lightweight, no computation)
+      const processedRun = processRun(runData, runIndex)
       processedRuns.push(processedRun)
-      
-      // Explicitly clear the raw data to help garbage collection
-      // This is important because we don't want the raw runData lingering in memory
-      runData.FPS = null
-      runData.FrameTime = null
-      runData.CPULoad = null
-      runData.GPULoad = null
-      // (other metrics will be garbage collected automatically when runData goes out of scope)
 
       // Notify processing complete
       if (onRunProcessComplete) {

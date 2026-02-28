@@ -40,7 +40,7 @@
         <!-- Results Section -->
         <div v-if="results" class="card mb-4">
           <div class="card-body">
-            <h5 class="card-title">Results</h5>
+            <h5 class="card-title">Results (Client-Side Calculation)</h5>
             
             <!-- FPS Statistics -->
             <div class="mb-4">
@@ -166,6 +166,63 @@
           </div>
         </div>
 
+        <!-- Backend Verification Section -->
+        <div v-if="results" class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Backend Verification</h5>
+            <p class="text-muted small">
+              <i class="fa-solid fa-info-circle"></i>
+              Compare client-side calculations with backend pre-computed values.
+            </p>
+            <button class="btn btn-outline-info" @click="verifyWithBackend" :disabled="backendLoading">
+              <span v-if="backendLoading">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Verifying...
+              </span>
+              <span v-else>
+                <i class="fa-solid fa-check-double"></i> Verify with Backend
+              </span>
+            </button>
+            <div v-if="backendError" class="alert alert-danger mt-3">
+              <i class="fa-solid fa-exclamation-triangle"></i> {{ backendError }}
+            </div>
+            <div v-if="backendResults" class="mt-3">
+              <table class="table table-sm table-bordered">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Client (Linear)</th>
+                    <th>Backend (Linear)</th>
+                    <th>Match</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="field in ['p01', 'avg', 'p97', 'stddev', 'variance']" :key="'fps-' + field">
+                    <td>FPS {{ field }}</td>
+                    <td>{{ formatNumber(results.fps.linear[field]) }}</td>
+                    <td>{{ formatNumber(backendResults.linear.fps?.[field]) }}</td>
+                    <td>
+                      <span :class="matchClass(results.fps.linear[field], backendResults.linear.fps?.[field])">
+                        {{ matchLabel(results.fps.linear[field], backendResults.linear.fps?.[field]) }}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr v-for="field in ['p01', 'avg', 'p97', 'stddev', 'variance']" :key="'ft-' + field">
+                    <td>Frametime {{ field }}</td>
+                    <td>{{ formatNumber(results.frametime.linear[field]) }}</td>
+                    <td>{{ formatNumber(backendResults.linear.frameTime?.[field]) }}</td>
+                    <td>
+                      <span :class="matchClass(results.frametime.linear[field], backendResults.linear.frameTime?.[field])">
+                        {{ matchLabel(results.frametime.linear[field], backendResults.linear.frameTime?.[field]) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Spreadsheet Export Section -->
         <div v-if="results" class="card mb-4">
           <div class="card-body">
@@ -258,12 +315,17 @@ const inputData = ref(EXAMPLE_DATA)
 const results = ref(null)
 const error = ref(null)
 const parsedData = ref(null)
+const backendResults = ref(null)
+const backendLoading = ref(false)
+const backendError = ref(null)
 
 function resetToExample() {
   inputData.value = EXAMPLE_DATA
   results.value = null
   error.value = null
   parsedData.value = null
+  backendResults.value = null
+  backendError.value = null
 }
 
 function parseInput(input) {
@@ -347,6 +409,42 @@ function calculate() {
   } catch (err) {
     error.value = err.message
   }
+}
+
+async function verifyWithBackend() {
+  if (!parsedData.value) return
+  backendLoading.value = true
+  backendError.value = null
+  backendResults.value = null
+  try {
+    const response = await fetch('/api/debugcalc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fps: parsedData.value.fpsValues,
+        frameTime: parsedData.value.frametimeValues
+      })
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Backend verification failed')
+    }
+    backendResults.value = await response.json()
+  } catch (err) {
+    backendError.value = err.message
+  } finally {
+    backendLoading.value = false
+  }
+}
+
+function matchClass(clientVal, backendVal) {
+  if (clientVal === null || clientVal === undefined || backendVal === null || backendVal === undefined) return 'text-muted'
+  return Math.abs(clientVal - backendVal) <= 0.1 ? 'text-success' : 'text-danger'
+}
+
+function matchLabel(clientVal, backendVal) {
+  if (clientVal === null || clientVal === undefined || backendVal === null || backendVal === undefined) return 'N/A'
+  return Math.abs(clientVal - backendVal) <= 0.1 ? '✓ Match' : '✗ Mismatch'
 }
 
 const spreadsheetData = computed(() => {
