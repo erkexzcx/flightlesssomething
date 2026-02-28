@@ -1,0 +1,2 @@
+Error: you are using a configuration file for golangci-lint v2 with golangci-lint v1: please use golangci-lint v2
+Failed executing command with error: you are using a configuration file for golangci-lint v2 with golangci-lint v1: please use golangci-lint v2
