@@ -273,32 +273,13 @@ func HandleGetCurrentUser(c *gin.Context) {
 	})
 }
 
-// RequireAuth is a middleware that requires authentication
-func RequireAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		userID := session.Get("UserID")
-
-		if userID == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			c.Abort()
-			return
-		}
-
-		c.Set("UserID", userID)
-		c.Set("Username", session.Get("Username"))
-		c.Set("IsAdmin", session.Get("IsAdmin"))
-		c.Next()
-	}
-}
-
-// RequireAdmin is a middleware that requires admin privileges
+// RequireAdmin is a middleware that requires admin privileges.
+// Must be used after RequireAuthOrToken which sets "IsAdmin" in context from the database.
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		isAdmin := session.Get("IsAdmin")
+		isAdmin, exists := c.Get("IsAdmin")
 
-		if isAdmin == nil {
+		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{"error": "admin privileges required"})
 			c.Abort()
 			return

@@ -115,17 +115,32 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 		userID := session.Get("UserID")
 
 		if userID != nil {
-			// Already authenticated via session, set context values
-			c.Set("UserID", userID)
-			c.Set("Username", session.Get("Username"))
-			c.Set("IsAdmin", session.Get("IsAdmin"))
+			// Validate user against database to ensure account still exists and is not banned.
+			// This prevents stale sessions from granting access to deleted, banned, or demoted users.
+			var user User
+			if err := db.DB.First(&user, userID).Error; err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+				c.Abort()
+				return
+			}
+
+			if user.IsBanned {
+				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
+				c.Abort()
+				return
+			}
+
+			// Set context from database (not from potentially stale session values)
+			c.Set("UserID", user.ID)
+			c.Set("Username", user.Username)
+			c.Set("IsAdmin", user.IsAdmin)
 			c.Set("AuthMethod", "session") // Track authentication method
 
 			// Update user's last web activity timestamp
 			// Note: This adds a DB write on every web request. For high-traffic scenarios,
 			// consider batching updates or using a background process.
 			now := time.Now()
-			db.DB.Model(&User{}).Where("id = ?", userID).Update("last_web_activity_at", now)
+			db.DB.Model(&User{}).Where("id = ?", user.ID).Update("last_web_activity_at", now)
 
 			c.Next()
 			return
@@ -153,6 +168,13 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 		var apiToken APIToken
 		if err := db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.Abort()
+			return
+		}
+
+		// Check if user is banned
+		if apiToken.User.IsBanned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
 			c.Abort()
 			return
 		}

@@ -101,7 +101,7 @@ func Start(config *Config, version string) error {
 
 	// Admin routes
 	admin := r.Group("/api/admin")
-	admin.Use(RequireAuth(), RequireAdmin())
+	admin.Use(RequireAuthOrToken(db), RequireAdmin())
 	admin.GET("/users", HandleListUsers(db))
 	admin.DELETE("/users/:id", HandleDeleteUser(db))
 	admin.DELETE("/users/:id/benchmarks", HandleDeleteUserBenchmarks(db))
