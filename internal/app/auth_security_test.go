@@ -314,13 +314,7 @@ func TestNonAdminCannotAccessAdminRoutes(t *testing.T) {
 
 	for _, route := range routes {
 		t.Run(fmt.Sprintf("non_admin_token_%s_%s", route.method, route.path), func(t *testing.T) {
-			var body *bytes.Reader
-			if route.body != "" {
-				body = bytes.NewReader([]byte(route.body))
-			} else {
-				body = bytes.NewReader(nil)
-			}
-			req := httptest.NewRequest(route.method, route.path, body)
+			req := httptest.NewRequest(route.method, route.path, bytes.NewReader([]byte(route.body)))
 			req.Header.Set("Authorization", "Bearer "+token.Token)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
