@@ -100,7 +100,7 @@ func percentileFunc(method string) func([]float64, float64) float64 {
 }
 
 // computeDensityData computes a density histogram from values, filtering outliers outside p01-p97.
-func computeDensityData(values []float64, sorted []float64, p01, p97 float64) [][2]int {
+func computeDensityData(values, sorted []float64, p01, p97 float64) [][2]int {
 	counts := make(map[int]int)
 	for _, v := range values {
 		if v >= p01 && v <= p97 {
@@ -179,7 +179,7 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 
 // computeFPSFromFrametimeForMethod computes FPS statistics derived from frametime data.
 // Percentiles are inverted: p03 frametime → p97 FPS, p99 frametime → p01 FPS.
-func computeFPSFromFrametimeForMethod(frametimeData []float64, fpsData []float64, method string) *MetricStats {
+func computeFPSFromFrametimeForMethod(frametimeData, fpsData []float64, method string) *MetricStats {
 	n := len(frametimeData)
 	if n == 0 {
 		return nil
