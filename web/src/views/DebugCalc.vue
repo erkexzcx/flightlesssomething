@@ -50,25 +50,9 @@
                   <h6 class="text-muted small mt-3">Linear Interpolation Method</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
-                      <tr>
-                        <th>1% FPS (Low)</th>
-                        <td>{{ formatNumber(results.fps.linear.p01) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Average FPS</th>
-                        <td>{{ formatNumber(results.fps.linear.avg) }}</td>
-                      </tr>
-                      <tr>
-                        <th>97th Percentile FPS</th>
-                        <td>{{ formatNumber(results.fps.linear.p97) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Standard Deviation</th>
-                        <td>{{ formatNumber(results.fps.linear.stddev) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Variance</th>
-                        <td>{{ formatNumber(results.fps.linear.variance) }}</td>
+                      <tr v-for="field in allStatFields" :key="'fps-lin-' + field.key">
+                        <th>{{ field.label }}</th>
+                        <td>{{ formatNumber(results.fps.linear[field.key]) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -77,25 +61,9 @@
                   <h6 class="text-muted small mt-3">Mangohud</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
-                      <tr>
-                        <th>1% FPS (Low)</th>
-                        <td>{{ formatNumber(results.fps.mangohud.p01) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Average FPS</th>
-                        <td>{{ formatNumber(results.fps.mangohud.avg) }}</td>
-                      </tr>
-                      <tr>
-                        <th>97th Percentile FPS</th>
-                        <td>{{ formatNumber(results.fps.mangohud.p97) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Standard Deviation</th>
-                        <td>{{ formatNumber(results.fps.mangohud.stddev) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Variance</th>
-                        <td>{{ formatNumber(results.fps.mangohud.variance) }}</td>
+                      <tr v-for="field in allStatFields" :key="'fps-mh-' + field.key">
+                        <th>{{ field.label }}</th>
+                        <td>{{ formatNumber(results.fps.mangohud[field.key]) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -111,25 +79,9 @@
                   <h6 class="text-muted small mt-3">Linear Interpolation Method</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
-                      <tr>
-                        <th>1% Frametime (High)</th>
-                        <td>{{ formatNumber(results.frametime.linear.p01) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Average Frametime</th>
-                        <td>{{ formatNumber(results.frametime.linear.avg) }}</td>
-                      </tr>
-                      <tr>
-                        <th>97th Percentile Frametime</th>
-                        <td>{{ formatNumber(results.frametime.linear.p97) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Standard Deviation</th>
-                        <td>{{ formatNumber(results.frametime.linear.stddev) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Variance</th>
-                        <td>{{ formatNumber(results.frametime.linear.variance) }}</td>
+                      <tr v-for="field in allStatFields" :key="'ft-lin-' + field.key">
+                        <th>{{ field.label }}</th>
+                        <td>{{ formatNumber(results.frametime.linear[field.key]) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -138,25 +90,9 @@
                   <h6 class="text-muted small mt-3">Mangohud</h6>
                   <table class="table table-sm table-bordered">
                     <tbody>
-                      <tr>
-                        <th>1% Frametime (High)</th>
-                        <td>{{ formatNumber(results.frametime.mangohud.p01) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Average Frametime</th>
-                        <td>{{ formatNumber(results.frametime.mangohud.avg) }}</td>
-                      </tr>
-                      <tr>
-                        <th>97th Percentile Frametime</th>
-                        <td>{{ formatNumber(results.frametime.mangohud.p97) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Standard Deviation</th>
-                        <td>{{ formatNumber(results.frametime.mangohud.stddev) }}</td>
-                      </tr>
-                      <tr>
-                        <th>Variance</th>
-                        <td>{{ formatNumber(results.frametime.mangohud.variance) }}</td>
+                      <tr v-for="field in allStatFields" :key="'ft-mh-' + field.key">
+                        <th>{{ field.label }}</th>
+                        <td>{{ formatNumber(results.frametime.mangohud[field.key]) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -197,7 +133,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="field in ['p01', 'avg', 'p97', 'stddev', 'variance']" :key="'fps-' + field">
+                  <tr v-for="field in allStatFieldKeys" :key="'fps-' + field">
                     <td>FPS {{ field }}</td>
                     <td>{{ formatNumber(results.fps.linear[field]) }}</td>
                     <td>{{ formatNumber(backendResults.linear.fps?.[field]) }}</td>
@@ -207,7 +143,7 @@
                       </span>
                     </td>
                   </tr>
-                  <tr v-for="field in ['p01', 'avg', 'p97', 'stddev', 'variance']" :key="'ft-' + field">
+                  <tr v-for="field in allStatFieldKeys" :key="'ft-' + field">
                     <td>Frametime {{ field }}</td>
                     <td>{{ formatNumber(results.frametime.linear[field]) }}</td>
                     <td>{{ formatNumber(backendResults.linear.frameTime?.[field]) }}</td>
@@ -258,6 +194,28 @@ import {
   calculateStats, 
   calculateFPSStatsFromFrametime 
 } from '../utils/statsCalculations'
+
+// All stat fields matching backend MetricStats, in display order
+const allStatFields = [
+  { key: 'min', label: 'Min' },
+  { key: 'max', label: 'Max' },
+  { key: 'avg', label: 'Average' },
+  { key: 'median', label: 'Median' },
+  { key: 'p01', label: '1st Percentile' },
+  { key: 'p05', label: '5th Percentile' },
+  { key: 'p10', label: '10th Percentile' },
+  { key: 'p25', label: '25th Percentile' },
+  { key: 'p75', label: '75th Percentile' },
+  { key: 'p90', label: '90th Percentile' },
+  { key: 'p95', label: '95th Percentile' },
+  { key: 'p97', label: '97th Percentile' },
+  { key: 'p99', label: '99th Percentile' },
+  { key: 'iqr', label: 'IQR (P75-P25)' },
+  { key: 'stddev', label: 'Standard Deviation' },
+  { key: 'variance', label: 'Variance' },
+  { key: 'count', label: 'Count' },
+]
+const allStatFieldKeys = allStatFields.map(f => f.key)
 
 const EXAMPLE_DATA = `fps	frametime
 383.357	2.60854
@@ -507,17 +465,18 @@ const spreadsheetData = computed(() => {
     // MangoHud formula: idx = floor(val * n - 1) on descending
     // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
     // Excel 1-based: row = idx + 1 = n - floor((1-percentile/100) * n - 1)
+    // Clamped with MIN/MAX to avoid out-of-bounds INDEX errors for small datasets
     // For 1% FPS (99th percentile frametime): val=0.01, row = n - floor(0.01*n - 1)
     // For 97% FPS (3rd percentile frametime): val=0.97, row = n - floor(0.97*n - 1)
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow}))),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=1000/AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow}),MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow}))),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(1000/B${ftStartRow}:B${ftEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(1000/B${ftStartRow}:B${ftEndRow}),`)
   } else {
-    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.99*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1)),`)
+    lines.push(`1% FPS (Low),${formatNumber(results.value.fps.mangohud.p01)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),MIN(MAX(COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.99*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1);1);COUNT(A${fpsStartRow}:A${fpsEndRow}))),`)
     lines.push(`Average FPS,${formatNumber(results.value.fps.mangohud.avg)},=AVERAGE(A${fpsStartRow}:A${fpsEndRow}),`)
-    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.03*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1)),`)
+    lines.push(`97th Percentile FPS,${formatNumber(results.value.fps.mangohud.p97)},=INDEX(SORT(A${fpsStartRow}:A${fpsEndRow}),MIN(MAX(COUNT(A${fpsStartRow}:A${fpsEndRow})-FLOOR(0.03*COUNT(A${fpsStartRow}:A${fpsEndRow})-1;1);1);COUNT(A${fpsStartRow}:A${fpsEndRow}))),`)
     lines.push(`Standard Deviation,${formatNumber(results.value.fps.mangohud.stddev)},=STDEV(A${fpsStartRow}:A${fpsEndRow}),`)
     lines.push(`Variance,${formatNumber(results.value.fps.mangohud.variance)},=VAR(A${fpsStartRow}:A${fpsEndRow}),`)
   }
@@ -541,9 +500,10 @@ const spreadsheetData = computed(() => {
   // MangoHud formula: idx = floor(val * n - 1) on descending
   // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
   // Excel 1-based: row = n - floor((1-percentile/100) * n - 1)
-  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
+  // Clamped with MIN/MAX to avoid out-of-bounds INDEX errors for small datasets
+  lines.push(`1% Frametime (High),${formatNumber(results.value.frametime.mangohud.p01)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow}))),`)
   lines.push(`Average Frametime,${formatNumber(results.value.frametime.mangohud.avg)},=AVERAGE(B${ftStartRow}:B${ftEndRow}),`)
-  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1)),`)
+  lines.push(`97th Percentile Frametime,${formatNumber(results.value.frametime.mangohud.p97)},=INDEX(SORT(B${ftStartRow}:B${ftEndRow}),MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow}))),`)
   lines.push(`Standard Deviation,${formatNumber(results.value.frametime.mangohud.stddev)},=STDEV(B${ftStartRow}:B${ftEndRow}),`)
   lines.push(`Variance,${formatNumber(results.value.frametime.mangohud.variance)},=VAR(B${ftStartRow}:B${ftEndRow}),`)
   
@@ -585,16 +545,16 @@ const spreadsheetDataLibreOffice = computed(() => {
   // 1% FPS = 1000 / 99th percentile frametime (slower frametimes = lower FPS)
   // Average FPS = 1000 / average frametime (harmonic mean)
   // 97% FPS = 1000 / 3rd percentile frametime (faster frametimes = higher FPS)
-  // StdDev/Variance = use FPS column A directly (FPS values are equivalent to 1000/frametime)
+  // StdDev/Variance = calculated from derived FPS values (1000/frametime)
   lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.linear.p01)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.99)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average FPS\t${formatNumber(results.value.fps.linear.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.linear.p97)}\t=1000/PERCENTILE(B${ftStartRow}:B${ftEndRow};0.03)\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.linear.stddev)}\t=STDEV(1000/B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.linear.variance)}\t=VAR(1000/B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
@@ -608,16 +568,17 @@ const spreadsheetDataLibreOffice = computed(() => {
   // MangoHud exact formula: idx = floor(val * n - 1) on descending
   // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
   // Excel 1-based: row = n - floor((1-percentile/100) * n - 1)
+  // Clamped with MIN/MAX to avoid out-of-bounds INDEX errors for small datasets
   // For FPS from frametime: slower frametimes (99th percentile) = lower FPS (1%), faster frametimes (3rd percentile) = higher FPS (97%)
-  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`1% FPS (Low)\t${formatNumber(results.value.fps.mangohud.p01)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.01*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow})))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average FPS\t${formatNumber(results.value.fps.mangohud.avg)}\t=1000/AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`97th Percentile FPS\t${formatNumber(results.value.fps.mangohud.p97)}\t=1000/INDEX(SORT(B${ftStartRow}:B${ftEndRow});MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.97*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow})))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Standard Deviation\t${formatNumber(results.value.fps.mangohud.stddev)}\t=STDEV(1000/B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(A${fpsStartRow}:A${fpsEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`Variance\t${formatNumber(results.value.fps.mangohud.variance)}\t=VAR(1000/B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   
   lines.push('')
   
@@ -649,11 +610,12 @@ const spreadsheetDataLibreOffice = computed(() => {
   
   // MangoHud exact formula: idx = floor(val * n - 1) on descending
   // For ascending: idx = n - 1 - floor((1-percentile/100) * n - 1)
-  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  // Clamped with MIN/MAX to avoid out-of-bounds INDEX errors for small datasets
+  lines.push(`1% Frametime (High)\t${formatNumber(results.value.frametime.mangohud.p01)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.99*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow})))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Average Frametime\t${formatNumber(results.value.frametime.mangohud.avg)}\t=AVERAGE(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
-  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
+  lines.push(`97th Percentile Frametime\t${formatNumber(results.value.frametime.mangohud.p97)}\t=INDEX(SORT(B${ftStartRow}:B${ftEndRow});MIN(MAX(COUNT(B${ftStartRow}:B${ftEndRow})-FLOOR(0.03*COUNT(B${ftStartRow}:B${ftEndRow})-1;1);1);COUNT(B${ftStartRow}:B${ftEndRow})))\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
   lines.push(`Standard Deviation\t${formatNumber(results.value.frametime.mangohud.stddev)}\t=STDEV(B${ftStartRow}:B${ftEndRow})\t=IF(ABS(B${currentRow}-C${currentRow})<=0.1;"TRUE";"FALSE")`)
   currentRow++
@@ -664,6 +626,7 @@ const spreadsheetDataLibreOffice = computed(() => {
 
 function formatNumber(value) {
   if (value === null || value === undefined) return 'N/A'
+  if (Number.isInteger(value)) return value.toString()
   return value.toFixed(2)
 }
 
