@@ -192,6 +192,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"per_page":  map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
 					"search":    map[string]interface{}{"type": "string", "description": "Search keywords (space-separated, AND logic). Searches title, description, username, run names, and specifications."},
 					"user_id":   map[string]interface{}{"type": "integer", "description": "Filter by user ID"},
+					"username":  map[string]interface{}{"type": "string", "description": "Filter by exact username (case-insensitive). Use this instead of user_id when you know the username but not the ID."},
 					"sort_by":   map[string]interface{}{"type": "string", "enum": []string{"title", "created_at", "updated_at"}, "description": "Sort field (default: created_at)"},
 					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
 				},
@@ -203,7 +204,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark",
 			Title:       "View Benchmark",
-			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Use get_benchmark_data to retrieve the actual performance statistics for this benchmark.",
+			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Note: get_benchmark_data also includes this metadata alongside statistics, so prefer get_benchmark_data when you need both metadata and stats.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -218,7 +219,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark_data",
 			Title:       "Benchmark Statistics",
-			Description: "Get computed statistics for all benchmark runs. Returns per-metric stats matching the web UI: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series.",
+			Description: "Get benchmark metadata and computed statistics for all runs in a single call. Returns the benchmark info (title, description, user, timestamps) alongside per-metric stats: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series. This is the primary tool for benchmark analysis — no need to call get_benchmark separately.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -247,18 +248,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 			Icons:       faIcon("chart-line"),
 			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessPublic,
-		},
-		{
-			Name:        "get_current_user",
-			Title:       "My Profile",
-			Description: "Get the currently authenticated user's information including user ID, username, and admin status. Requires authentication via API token. Use the returned user ID with list_benchmarks to find your own benchmarks.",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-			Icons:       faIcon("circle-user"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
 		},
 		{
 			Name:        "update_benchmark",
@@ -498,7 +487,7 @@ func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
 		var resp jsonrpcResponse
 		switch req.Method {
 		case "initialize":
-			resp = server.handleInitialize(&req)
+			resp = server.handleInitialize(c, &req)
 		case "tools/list":
 			resp = server.handleToolsList(c, &req)
 		case "tools/call":
@@ -529,7 +518,37 @@ func HandleMCPDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "session terminated"})
 }
 
-func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
+func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
+	// Build base URL from request
+	scheme := c.Request.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	baseURL := scheme + "://" + c.Request.Host
+
+	// Build instructions with context
+	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
+- Create benchmark: curl -X POST ` + baseURL + `/api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
+- Add runs: curl -X POST ` + baseURL + `/api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
+- Download benchmark: curl ` + baseURL + `/api/benchmarks/<id>/download -o benchmark.zip
+
+Server base URL: ` + baseURL
+
+	// Add authenticated user context or anonymous mode notice
+	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
+	if authenticated {
+		var user User
+		if err := s.db.DB.First(&user, userID).Error; err == nil {
+			instructions += fmt.Sprintf("\n\nAuthenticated user context:\n- User ID: %d\n- Username: %s\n- Admin: %v", user.ID, user.Username, isAdmin)
+		}
+	} else {
+		instructions += "\n\nAnonymous mode: No API token provided. Only read-only operations (browsing and viewing benchmarks) are available. To access write operations, provide an API token via the Authorization header."
+	}
+
 	return jsonrpcResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
@@ -542,10 +561,7 @@ func (s *mcpServer) handleInitialize(req *jsonrpcRequest) jsonrpcResponse {
 				Name:    "FlightlessSomething",
 				Version: s.version,
 			},
-			Instructions: `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, always use get_benchmark to retrieve its metadata and then use get_benchmark_data or get_benchmark_run to retrieve the actual performance statistics (FPS, frametime, etc.) for analysis — do not skip fetching the data. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
-- Create benchmark: curl -X POST /api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
-- Add runs: curl -X POST /api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
-- Download benchmark: curl /api/benchmarks/<id>/download -o benchmark.zip`,
+			Instructions: instructions,
 		},
 	}
 }
@@ -619,8 +635,6 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, isAdmin)
 	case "delete_benchmark_run":
 		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, isAdmin)
-	case "get_current_user":
-		result, toolErr = s.toolGetCurrentUser(userID)
 	case "list_api_tokens":
 		result, toolErr = s.toolListAPITokens(userID)
 	case "create_api_token":
@@ -724,6 +738,7 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 		PerPage   int    `json:"per_page"`
 		Search    string `json:"search"`
 		UserID    int    `json:"user_id"`
+		Username  string `json:"username"`
 		SortBy    string `json:"sort_by"`
 		SortOrder string `json:"sort_order"`
 	}
@@ -744,6 +759,15 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 
 	if params.UserID > 0 {
 		query = query.Where("user_id = ?", params.UserID)
+	}
+
+	// Resolve username to user_id if provided (case-insensitive exact match)
+	if params.Username != "" && params.UserID <= 0 {
+		var user User
+		if err := s.db.DB.Where("LOWER(username) = LOWER(?)", params.Username).First(&user).Error; err != nil {
+			return "", fmt.Errorf("user not found: %s", params.Username)
+		}
+		query = query.Where("user_id = ?", user.ID)
 	}
 
 	if params.Search != "" {
@@ -866,10 +890,16 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 		maxPoints = maxMaxPoints
 	}
 
-	// Verify benchmark exists
+	// Verify benchmark exists and load metadata
 	var benchmark Benchmark
-	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
+	if err := s.db.DB.Preload("User").First(&benchmark, params.ID).Error; err != nil {
 		return "", fmt.Errorf("benchmark not found")
+	}
+
+	count, labels, err := GetBenchmarkRunCount(benchmark.ID)
+	if err == nil {
+		benchmark.RunCount = count
+		benchmark.RunLabels = labels
 	}
 
 	// Use pre-calculated stats
@@ -883,7 +913,11 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 		summaries[i] = PreCalculatedRunToMCPSummary(run, maxPoints)
 	}
 
-	data, err := json.Marshal(summaries)
+	result := map[string]interface{}{
+		"benchmark": benchmark,
+		"runs":      summaries,
+	}
+	data, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %w", err)
 	}
@@ -1148,24 +1182,6 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 	runtime.GC()
 
 	return `{"message":"run deleted successfully"}`, nil
-}
-
-func (s *mcpServer) toolGetCurrentUser(userID uint) (string, error) {
-	var user User
-	if err := s.db.DB.First(&user, userID).Error; err != nil {
-		return "", fmt.Errorf("user not found")
-	}
-
-	result := map[string]interface{}{
-		"user_id":  user.ID,
-		"username": user.Username,
-		"is_admin": user.IsAdmin,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
 }
 
 func (s *mcpServer) toolListAPITokens(userID uint) (string, error) {

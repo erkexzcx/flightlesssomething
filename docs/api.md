@@ -329,22 +329,26 @@ To connect an AI agent to the MCP server:
 
 Without a token, only public (read-only) tools are available. With a token, authenticated tools become available. Admin tokens unlock all tools.
 
+The `initialize` response includes contextual information in its `instructions` field:
+- **Server base URL** — the full URL for constructing curl commands (e.g., `https://flightlesssomething.ambrosia.one`).
+- **Authenticated user context** — if an API token is provided, the response includes the user's ID, username, and admin status, eliminating the need for a separate "who am I" call.
+- **Anonymous mode notice** — if no token is provided, the response indicates that only read-only operations are available.
+
 ### MCP Tools
 
 #### Public (no authentication required)
 
 | Tool | Description | Read-only |
 |---|---|---|
-| `list_benchmarks` | Search and list benchmarks with pagination, search, and sorting. | Yes |
+| `list_benchmarks` | Search and list benchmarks with pagination, search, sorting, and username filtering. | Yes |
 | `get_benchmark` | Get detailed benchmark metadata (title, description, user, run count, labels). | Yes |
-| `get_benchmark_data` | Get computed statistics for all runs (min, max, avg, median, P1, P5, P10, P25, P75, P90, P95, P97, P99, IQR, std dev, variance). Optionally include downsampled raw data (up to 5,000 points). | Yes |
+| `get_benchmark_data` | Get benchmark metadata and computed statistics for all runs in a single call (min, max, avg, median, P1, P5, P10, P25, P75, P90, P95, P97, P99, IQR, std dev, variance). Optionally include downsampled raw data (up to 5,000 points). | Yes |
 | `get_benchmark_run` | Get computed statistics for a single run. | Yes |
 
 #### Authenticated (Bearer token required)
 
 | Tool | Description | Read-only |
 |---|---|---|
-| `get_current_user` | Get the authenticated user's info (user ID, username, admin status). | Yes |
 | `update_benchmark` | Update title, description, and/or run labels. Owner or admin only. | No |
 | `delete_benchmark` | Delete a benchmark and all its data. Owner or admin only. | No |
 | `delete_benchmark_run` | Delete a specific run. Cannot delete the last remaining run. Owner or admin only. | No |
@@ -365,10 +369,11 @@ Without a token, only public (read-only) tools are available. With a token, auth
 
 ### API–MCP Parity
 
-Every REST API endpoint has a corresponding MCP tool **except** operations that involve binary file transfer:
+Every REST API endpoint has a corresponding MCP tool **except**:
 
 - **Benchmark file upload** (`POST /api/benchmarks`, `POST /api/benchmarks/:id/runs`) — requires multipart form data, unsuitable for MCP.
 - **Benchmark ZIP download** (`GET /api/benchmarks/:id/download`) — large binary transfer, unsuitable for MCP.
+- **Current user info** (`GET /api/auth/me`) — user context is provided in the `initialize` response instead, eliminating the need for a separate tool call.
 
 For these operations, the MCP server's initialization instructions guide AI agents to use `curl` with the REST API directly.
 
@@ -384,6 +389,7 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 | `per_page` | int | No | Results per page, 1–100 (default: 10). |
 | `search` | string | No | Search keywords (space-separated, AND logic). |
 | `user_id` | int | No | Filter by user ID. |
+| `username` | string | No | Filter by exact username (case-insensitive). Use instead of `user_id` when you know the username. |
 | `sort_by` | string | No | `title`, `created_at`, or `updated_at` (default: `created_at`). |
 | `sort_order` | string | No | `asc` or `desc` (default: `desc`). |
 
@@ -407,10 +413,6 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 | `id` | int | Yes | Benchmark ID. |
 | `run_index` | int | Yes | Zero-based run index. |
 | `max_points` | int | No | Include downsampled raw data (0 = stats only, 1–5,000 for time series). |
-
-#### `get_current_user`
-
-No parameters.
 
 #### `update_benchmark`
 
