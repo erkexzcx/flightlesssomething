@@ -764,7 +764,7 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	// Resolve username to user_id if provided (case-insensitive exact match)
 	if params.Username != "" && params.UserID <= 0 {
 		var user User
-		if err := s.db.DB.Where("LOWER(username) = LOWER(?)", params.Username).First(&user).Error; err != nil {
+		if err := s.db.DB.Where("username = ? COLLATE NOCASE", params.Username).First(&user).Error; err != nil {
 			return "", fmt.Errorf("user not found: %s", params.Username)
 		}
 		query = query.Where("user_id = ?", user.ID)

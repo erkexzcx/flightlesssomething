@@ -184,7 +184,11 @@ func TestMCPToolsList(t *testing.T) {
 		for _, n := range names {
 			nameSet[n] = true
 		}
-		for _, required := range []string{"list_api_tokens", "update_benchmark"} {
+		for _, required := range []string{
+			"list_benchmarks", "get_benchmark", "get_benchmark_data", "get_benchmark_run",
+			"update_benchmark", "delete_benchmark", "delete_benchmark_run",
+			"list_api_tokens", "create_api_token", "delete_api_token",
+		} {
 			if !nameSet[required] {
 				t.Errorf("Missing auth tool: %s", required)
 			}
