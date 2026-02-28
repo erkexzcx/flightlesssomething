@@ -3,9 +3,9 @@
 /**
  * Unit tests for benchmarkDataProcessor.js
  * 
- * Tests that FPS statistics are correctly calculated from frametime data
- * using both linear interpolation and MangoHud threshold methods.
- * Now supports async processRun with Web Workers.
+ * Tests that processRun correctly maps pre-calculated backend data
+ * to the format expected by the frontend charts.
+ * Since the backend now pre-calculates all stats, processRun is a simple mapping.
  * 
  * Run with: node tests/benchmarkDataProcessor.test.js
  */
@@ -16,9 +16,9 @@ import { processRun } from '../src/utils/benchmarkDataProcessor.js';
 let testsPassed = 0;
 let testsFailed = 0;
 
-async function test(description, fn) {
+function test(description, fn) {
   try {
-    await fn();
+    fn();
     console.log(`✓ ${description}`);
     testsPassed++;
   } catch (error) {
@@ -28,170 +28,147 @@ async function test(description, fn) {
   }
 }
 
-function assertApprox(actual, expected, tolerance, message) {
-  if (Math.abs(actual - expected) > tolerance) {
-    throw new Error(message || `Expected ${expected} (±${tolerance}) but got ${actual}`);
-  }
-}
-
-function assertGreaterThan(actual, expected, message) {
-  if (actual <= expected) {
-    throw new Error(message || `Expected ${actual} to be greater than ${expected}`);
-  }
-}
-
-function assertLessThan(actual, expected, message) {
-  if (actual >= expected) {
-    throw new Error(message || `Expected ${actual} to be less than ${expected}`);
+function assertEquals(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(message || `Expected ${expected} but got ${actual}`);
   }
 }
 
 console.log('Running benchmarkDataProcessor tests...\n');
 
-// Run all tests
-(async () => {
-  await test('Linear interpolation: Percentile calculation uses linear interpolation', async () => {
-    const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const runData = {
-      Label: 'Test Interpolation',
-      DataFPS: [],
-      DataFrameTime: [],
-      DataCPULoad: values
-    };
+test('processRun maps label from backend data', () => {
+  const runData = {
+    label: 'Test Run 1',
+    specOS: 'Linux',
+    specCPU: 'AMD Ryzen 7',
+    specGPU: 'RTX 3080',
+    specRAM: '32GB',
+    totalDataPoints: 100,
+    series: {},
+    stats: {},
+    statsMangoHud: {}
+  };
 
-    const processed = await processRun(runData, 0);
-    const stats = processed.stats.CPULoad;
+  const processed = processRun(runData, 0);
+  assertEquals(processed.label, 'Test Run 1', 'Label should be mapped');
+  assertEquals(processed.runIndex, 0, 'Run index should be set');
+});
 
-    assertApprox(stats.p01, 10.9, 0.01, `1st percentile should be ~10.9, got ${stats.p01}`);
-    assertApprox(stats.p97, 97.3, 0.01, `97th percentile should be ~97.3, got ${stats.p97}`);
-  });
+test('processRun maps spec fields correctly', () => {
+  const runData = {
+    label: 'Test',
+    specOS: 'Steam Runtime 3',
+    specCPU: 'AMD Ryzen 7 9800X3D',
+    specGPU: 'AMD RX 9070 XT',
+    specRAM: '32 GB',
+    specLinuxKernel: '6.17.8-cachyos',
+    specLinuxScheduler: 'performance',
+    totalDataPoints: 50,
+    series: {},
+    stats: {},
+    statsMangoHud: {}
+  };
 
-  await test('MangoHud threshold: Percentile calculation uses MangoHud exact formula', async () => {
-    const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const runData = {
-      Label: 'Test MangoHud',
-      DataFPS: [],
-      DataFrameTime: [],
-      DataCPULoad: values
-    };
+  const processed = processRun(runData, 1);
+  assertEquals(processed.specOS, 'Steam Runtime 3', 'specOS should be mapped');
+  assertEquals(processed.specCPU, 'AMD Ryzen 7 9800X3D', 'specCPU should be mapped');
+  assertEquals(processed.specGPU, 'AMD RX 9070 XT', 'specGPU should be mapped');
+  assertEquals(processed.specRAM, '32 GB', 'specRAM should be mapped');
+  assertEquals(processed.specLinuxKernel, '6.17.8-cachyos', 'specLinuxKernel should be mapped');
+  assertEquals(processed.specLinuxScheduler, 'performance', 'specLinuxScheduler should be mapped');
+  assertEquals(processed.totalDataPoints, 50, 'totalDataPoints should be mapped');
+});
 
-    const processed = await processRun(runData, 0);
-    const statsMangoHud = processed.statsMangoHud.CPULoad;
+test('processRun maps series data through', () => {
+  const fpsPoints = [[0, 100], [10, 200], [20, 150]];
+  const runData = {
+    label: 'Test',
+    specOS: '',
+    specCPU: '',
+    specGPU: '',
+    specRAM: '',
+    totalDataPoints: 100,
+    series: { FPS: fpsPoints, FrameTime: [[0, 10], [10, 5]] },
+    stats: {},
+    statsMangoHud: {}
+  };
 
-    // With MangoHud's formula on ascending [10,20,...,100]:
-    // 1st percentile: valMango=0.99, idxDesc=floor(8.9)=8, idx=10-1-8=1 -> value=20
-    // 97th percentile: valMango=0.03, idxDesc=floor(-0.7)=-1, idx=10-1-(-1)=10->9 -> value=100
-    assertApprox(statsMangoHud.p01, 20, 0.01, `MangoHud 1st percentile should be 20, got ${statsMangoHud.p01}`);
-    assertApprox(statsMangoHud.p97, 100, 0.01, `MangoHud 97th percentile should be 100, got ${statsMangoHud.p97}`);
-  });
+  const processed = processRun(runData, 0);
+  assertEquals(processed.series.FPS.length, 3, 'FPS series should have 3 points');
+  assertEquals(processed.series.FPS[0][1], 100, 'First FPS value should be 100');
+  assertEquals(processed.series.FrameTime.length, 2, 'FrameTime series should have 2 points');
+});
 
-  await test('FPS stats calculated from frametime - constant 60 FPS', async () => {
-    const runData = {
-      Label: 'Test Run',
-      DataFPS: Array(100).fill(60),
-      DataFrameTime: Array(100).fill(16.667)
-    };
-
-    const processed = await processRun(runData, 0);
-    const fpsStats = processed.stats.FPS;
-
-    assertApprox(fpsStats.avg, 60, 0.1, `Average FPS should be ~60, got ${fpsStats.avg}`);
-    assertApprox(fpsStats.min, 60, 0.1, `Min FPS should be ~60, got ${fpsStats.min}`);
-    assertApprox(fpsStats.max, 60, 0.1, `Max FPS should be ~60, got ${fpsStats.max}`);
-  });
-
-  await test('FPS stats calculated from frametime - varying frametimes', async () => {
-    const frametimes = [10, 20, 30];
-    const runData = {
-      Label: 'Test Run Varying',
-      DataFPS: frametimes.map(ft => 1000 / ft),
-      DataFrameTime: frametimes
-    };
-
-    const processed = await processRun(runData, 0);
-    const fpsStats = processed.stats.FPS;
-
-    assertApprox(fpsStats.avg, 50, 0.1, `Average FPS should be ~50, got ${fpsStats.avg}`);
-    assertApprox(fpsStats.max, 100, 0.1, `Max FPS should be ~100, got ${fpsStats.max}`);
-    assertApprox(fpsStats.min, 33.33, 0.1, `Min FPS should be ~33.33, got ${fpsStats.min}`);
-  });
-
-  await test('FPS percentiles calculated correctly from frametime', async () => {
-    const frametimes = Array.from({ length: 100 }, (_, i) => 10 + i);
-    const runData = {
-      Label: 'Test Run Percentiles',
-      DataFPS: frametimes.map(ft => 1000 / ft),
-      DataFrameTime: frametimes
-    };
-
-    const processed = await processRun(runData, 0);
-    const fpsStats = processed.stats.FPS;
-
-    assertLessThan(fpsStats.p01, fpsStats.avg, 
-      `p01 (${fpsStats.p01}) should be less than avg (${fpsStats.avg})`);
-    assertGreaterThan(fpsStats.p97, fpsStats.avg, 
-      `p97 (${fpsStats.p97}) should be greater than avg (${fpsStats.avg})`);
-  });
-
-  await test('FPS stats use frametime data, not FPS data', async () => {
-    const runData2 = {
-      Label: 'Test Run Verification 2',
-      DataFPS: [100, 50],
-      DataFrameTime: [10, 20]
-    };
-
-    const processed2 = await processRun(runData2, 0);
-    const fpsStats2 = processed2.stats.FPS;
-
-    assertApprox(fpsStats2.avg, 66.67, 0.1, 
-      `Average FPS should be ~66.67 (from frametime), got ${fpsStats2.avg}`);
-  });
-
-  await test('FPS stats fallback when no frametime data', async () => {
-    const runData = {
-      Label: 'Test Run No Frametime',
-      DataFPS: Array(10).fill(60),
-      DataFrameTime: []
-    };
-
-    const processed = await processRun(runData, 0);
-    const fpsStats = processed.stats.FPS;
-
-    assertApprox(fpsStats.avg, 60, 0.1, `Should fallback to FPS data when frametime missing`);
-  });
-
-  await test('Both calculation methods are present in processed data', async () => {
-    const runData = {
-      Label: 'Test Both Methods',
-      DataFPS: Array(10).fill(60),
-      DataFrameTime: Array(10).fill(16.667)
-    };
-
-    const processed = await processRun(runData, 0);
-    
-    if (!processed.stats) {
-      throw new Error('stats object is missing');
+test('processRun maps stats and statsMangoHud through', () => {
+  const runData = {
+    label: 'Test',
+    specOS: '',
+    specCPU: '',
+    specGPU: '',
+    specRAM: '',
+    totalDataPoints: 100,
+    series: {},
+    stats: {
+      FPS: { min: 50, max: 200, avg: 120, median: 115, p01: 55, p97: 190, stddev: 30, variance: 900, count: 100, density: [[50, 1], [100, 5]] }
+    },
+    statsMangoHud: {
+      FPS: { min: 50, max: 200, avg: 120, median: 110, p01: 60, p97: 185, stddev: 30, variance: 900, count: 100, density: [[55, 2], [100, 4]] }
     }
-    if (!processed.statsMangoHud) {
-      throw new Error('statsMangoHud object is missing');
-    }
-    if (!processed.stats.FPS) {
-      throw new Error('stats.FPS is missing');
-    }
-    if (!processed.statsMangoHud.FPS) {
-      throw new Error('statsMangoHud.FPS is missing');
-    }
-  });
+  };
 
-  // Print results
-  console.log('\n' + '='.repeat(50));
-  console.log(`Tests passed: ${testsPassed}`);
-  console.log(`Tests failed: ${testsFailed}`);
-  console.log('='.repeat(50));
+  const processed = processRun(runData, 0);
 
-  if (testsFailed > 0) {
-    process.exit(1);
-  } else {
-    console.log('\n✓ All tests passed!');
+  assertEquals(processed.stats.FPS.min, 50, 'Stats FPS min should be 50');
+  assertEquals(processed.stats.FPS.avg, 120, 'Stats FPS avg should be 120');
+  assertEquals(processed.stats.FPS.p01, 55, 'Stats FPS p01 should be 55');
+  assertEquals(processed.stats.FPS.density.length, 2, 'Stats FPS density should have 2 entries');
+
+  assertEquals(processed.statsMangoHud.FPS.p01, 60, 'StatsMangoHud FPS p01 should be 60');
+  assertEquals(processed.statsMangoHud.FPS.p97, 185, 'StatsMangoHud FPS p97 should be 185');
+});
+
+test('processRun provides defaults for missing fields', () => {
+  const runData = {};
+
+  const processed = processRun(runData, 5);
+  assertEquals(processed.label, 'Run 6', 'Default label should be Run N+1');
+  assertEquals(processed.runIndex, 5, 'Run index should be 5');
+  assertEquals(processed.specOS, '', 'Missing specOS should default to empty string');
+  assertEquals(processed.totalDataPoints, 0, 'Missing totalDataPoints should default to 0');
+  assertEquals(typeof processed.series, 'object', 'Series should be an object');
+  assertEquals(typeof processed.stats, 'object', 'Stats should be an object');
+  assertEquals(typeof processed.statsMangoHud, 'object', 'StatsMangoHud should be an object');
+});
+
+test('processRun is synchronous (no async needed)', () => {
+  const runData = {
+    label: 'Sync Test',
+    specOS: 'Linux',
+    specCPU: 'CPU',
+    specGPU: 'GPU',
+    specRAM: '16GB',
+    totalDataPoints: 10,
+    series: { FPS: [[0, 60]] },
+    stats: { FPS: { min: 60, max: 60, avg: 60, p01: 60, p97: 60, stddev: 0, variance: 0, count: 10, density: [] } },
+    statsMangoHud: { FPS: { min: 60, max: 60, avg: 60, p01: 60, p97: 60, stddev: 0, variance: 0, count: 10, density: [] } }
+  };
+
+  // processRun should return a plain object, not a Promise
+  const result = processRun(runData, 0);
+  if (result instanceof Promise) {
+    throw new Error('processRun should be synchronous, not return a Promise');
   }
-})();
+  assertEquals(result.label, 'Sync Test', 'Should return data synchronously');
+});
+
+// Print results
+console.log('\n' + '='.repeat(50));
+console.log(`Tests passed: ${testsPassed}`);
+console.log(`Tests failed: ${testsFailed}`);
+console.log('='.repeat(50));
+
+if (testsFailed > 0) {
+  process.exit(1);
+} else {
+  console.log('\n✓ All tests passed!');
+}
