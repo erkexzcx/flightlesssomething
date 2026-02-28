@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Bind          string
 	DataDir       string
-	SessionSecret string
+	SessionSecret string //nolint:gosec // G117: config field name, not an actual secret value
 
 	DiscordClientID     string
 	DiscordClientSecret string

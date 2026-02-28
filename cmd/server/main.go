@@ -44,7 +44,7 @@ func main() {
 		return
 	}
 
-	log.Printf("Starting server with GOGC=%d", gogc)
+	log.Printf("Starting server with GOGC=%d", gogc) //nolint:gosec // G706: gogc is an int from debug.SetGCPercent, not user-tainted
 	if err := app.Start(config, version); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

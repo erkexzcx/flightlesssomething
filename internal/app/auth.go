@@ -90,7 +90,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 		client := discordOAuthConfig.Client(context.Background(), token)
-		res, err := client.Do(req)
+		res, err := client.Do(req) //nolint:gosec // G704: URL is hardcoded to discord.com, not user-tainted
 		if err != nil || res.StatusCode != 200 {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
 			return
@@ -176,7 +176,7 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 
 		var loginReq struct {
 			Username string `json:"username" binding:"required"`
-			Password string `json:"password" binding:"required"`
+			Password string `json:"password" binding:"required"` //nolint:gosec // G117: local struct for JSON parsing, not an exported credential
 		}
 
 		if err := c.ShouldBindJSON(&loginReq); err != nil {
