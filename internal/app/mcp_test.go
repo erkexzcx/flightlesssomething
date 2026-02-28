@@ -500,7 +500,10 @@ func TestMCPInitializeWithAuthContext(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
-	resultBytes, _ := json.Marshal(resp.Result)
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
 	var result mcpInitializeResult
 	if err := json.Unmarshal(resultBytes, &result); err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
@@ -539,7 +542,10 @@ func TestMCPInitializeAnonymous(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
-	resultBytes, _ := json.Marshal(resp.Result)
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
 	var result mcpInitializeResult
 	if err := json.Unmarshal(resultBytes, &result); err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
