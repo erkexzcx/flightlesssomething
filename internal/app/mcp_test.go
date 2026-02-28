@@ -165,7 +165,7 @@ func TestMCPToolsList(t *testing.T) {
 		}
 	})
 
-	// Authenticated regular user: should see public + auth tools (11)
+	// Authenticated regular user: should see public + auth tools (10)
 	t.Run("regular user sees public and auth tools", func(t *testing.T) {
 		user := createTestUser(db, "mcptoolslistuser", false)
 		apiToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef123", Name: "ToolsList Token"}
@@ -176,18 +176,26 @@ func TestMCPToolsList(t *testing.T) {
 			t.Fatalf("Expected 200, got %d", w.Code)
 		}
 		names := parseToolsList(t, w)
-		if len(names) != 11 {
-			t.Errorf("Expected 11 tools for regular user, got %d: %v", len(names), names)
+		if len(names) != 10 {
+			t.Errorf("Expected 10 tools for regular user, got %d: %v", len(names), names)
 		}
 		// Should include auth tools
 		nameSet := make(map[string]bool)
 		for _, n := range names {
 			nameSet[n] = true
 		}
-		for _, required := range []string{"get_current_user", "list_api_tokens", "update_benchmark"} {
+		for _, required := range []string{
+			"list_benchmarks", "get_benchmark", "get_benchmark_data", "get_benchmark_run",
+			"update_benchmark", "delete_benchmark", "delete_benchmark_run",
+			"list_api_tokens", "create_api_token", "delete_api_token",
+		} {
 			if !nameSet[required] {
 				t.Errorf("Missing auth tool: %s", required)
 			}
+		}
+		// get_current_user must NOT be visible (removed, context provided in initialize)
+		if nameSet["get_current_user"] {
+			t.Error("get_current_user should not be visible (removed)")
 		}
 		// Admin tools must NOT be visible
 		for _, n := range names {
@@ -203,7 +211,7 @@ func TestMCPToolsList(t *testing.T) {
 		}
 	})
 
-	// Admin user: should see all tools (17)
+	// Admin user: should see all tools (16)
 	t.Run("admin sees all tools", func(t *testing.T) {
 		admin := createTestUser(db, "mcptoolslistadmin", true)
 		adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef12", Name: "ToolsList Admin"}
@@ -217,7 +225,7 @@ func TestMCPToolsList(t *testing.T) {
 		allTools := []string{
 			"list_benchmarks", "get_benchmark", "get_benchmark_data",
 			"get_benchmark_run",
-			"get_current_user", "update_benchmark",
+			"update_benchmark",
 			"delete_benchmark", "delete_benchmark_run",
 			"list_api_tokens", "create_api_token", "delete_api_token",
 			"list_users", "list_audit_logs", "delete_user",
@@ -472,17 +480,161 @@ func idStr(id uint) string {
 	return fmt.Sprintf("%d", id)
 }
 
-func TestMCPGetCurrentUser(t *testing.T) {
+func TestMCPInitializeWithAuthContext(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 	router := setupMCPTestRouter(db)
 
-	user := createTestUser(db, "mcpcurrentuser", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "current-user-token-abcdef123456", Name: "Current User Token"}
+	user := createTestUser(db, "mcpinituser", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "init-context-token-abcdef123456", Name: "Init Token"}
 	db.DB.Create(apiToken)
 
-	body := `{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_current_user","arguments":{}}}`
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
 	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp jsonrpcResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
+	var result mcpInitializeResult
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		t.Fatalf("Failed to unmarshal result: %v", err)
+	}
+
+	// Should contain user context
+	if !strings.Contains(result.Instructions, "mcpinituser") {
+		t.Error("Expected username in initialize instructions")
+	}
+	if !strings.Contains(result.Instructions, fmt.Sprintf("User ID: %d", user.ID)) {
+		t.Error("Expected user ID in initialize instructions")
+	}
+	// Should contain base URL
+	if !strings.Contains(result.Instructions, "Server base URL:") {
+		t.Error("Expected base URL in initialize instructions")
+	}
+	// Should NOT contain anonymous mode
+	if strings.Contains(result.Instructions, "Anonymous mode") {
+		t.Error("Should not contain anonymous mode for authenticated user")
+	}
+}
+
+func TestMCPInitializeAnonymous(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	w := mcpRequest(t, router, body, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp jsonrpcResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
+	var result mcpInitializeResult
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		t.Fatalf("Failed to unmarshal result: %v", err)
+	}
+
+	// Should contain anonymous mode notice
+	if !strings.Contains(result.Instructions, "Anonymous mode") {
+		t.Error("Expected anonymous mode notice in initialize instructions")
+	}
+	// Should contain base URL
+	if !strings.Contains(result.Instructions, "Server base URL:") {
+		t.Error("Expected base URL in initialize instructions")
+	}
+	// Should NOT contain user context
+	if strings.Contains(result.Instructions, "Authenticated user context") {
+		t.Error("Should not contain user context for anonymous user")
+	}
+}
+
+func TestMCPListBenchmarksByUsername(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user1 := createTestUser(db, "benchuser1", false)
+	user2 := createTestUser(db, "benchuser2", false)
+	db.DB.Create(&Benchmark{Title: "User1 Bench", UserID: user1.ID})
+	db.DB.Create(&Benchmark{Title: "User2 Bench", UserID: user2.ID})
+
+	// Filter by username
+	body := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"username":"benchuser1"}}}`
+	w := mcpRequest(t, router, body, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "User1 Bench") {
+		t.Error("Expected user1's benchmark in result")
+	}
+	if strings.Contains(result.Content[0].Text, "User2 Bench") {
+		t.Error("Should not contain user2's benchmark when filtering by user1")
+	}
+
+	// Case-insensitive username match
+	body = `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"username":"BENCHUSER1"}}}`
+	w = mcpRequest(t, router, body, "")
+
+	_, result = parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error for case-insensitive match: %s", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "User1 Bench") {
+		t.Error("Expected case-insensitive match to find benchmarks")
+	}
+
+	// Non-existent username
+	body = `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"username":"nonexistent"}}}`
+	w = mcpRequest(t, router, body, "")
+
+	_, result = parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for non-existent username")
+	}
+	if !strings.Contains(result.Content[0].Text, "user not found") {
+		t.Error("Expected user not found error")
+	}
+}
+
+func TestMCPGetBenchmarkDataIncludesMetadata(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpmetadata", false)
+	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
+
+	// Update benchmark title for verification
+	db.DB.Model(&Benchmark{}).Where("id = ?", benchID).Update("title", "Metadata Test Bench")
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"get_benchmark_data","arguments":{"id":%d}}}`, benchID)
+	w := mcpRequest(t, router, body, "")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
@@ -492,28 +644,45 @@ func TestMCPGetCurrentUser(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
 	}
-	if !strings.Contains(result.Content[0].Text, "mcpcurrentuser") {
+	// Should contain benchmark metadata
+	if !strings.Contains(result.Content[0].Text, "Metadata Test Bench") {
+		t.Error("Expected benchmark title in result")
+	}
+	if !strings.Contains(result.Content[0].Text, "mcpmetadata") {
 		t.Error("Expected username in result")
 	}
-	if !strings.Contains(result.Content[0].Text, fmt.Sprintf("\"user_id\":%d", user.ID)) {
-		t.Error("Expected user_id in result")
+	// Should contain runs data
+	if !strings.Contains(result.Content[0].Text, "runs") {
+		t.Error("Expected runs field in result")
+	}
+	// Should contain benchmark field
+	if !strings.Contains(result.Content[0].Text, "benchmark") {
+		t.Error("Expected benchmark field in result")
 	}
 }
 
-func TestMCPGetCurrentUserRequiresAuth(t *testing.T) {
+func TestMCPGetCurrentUserRemoved(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 	router := setupMCPTestRouter(db)
 
-	body := `{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_current_user","arguments":{}}}`
-	w := mcpRequest(t, router, body, "")
+	user := createTestUser(db, "mcpremoveduser", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "removed-tool-token-abcdef123456", Name: "Removed Tool Token"}
+	db.DB.Create(apiToken)
 
+	// get_current_user should return unknown tool error
+	body := `{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_current_user","arguments":{}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	var resp jsonrpcResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Should fail since tool was removed (admin access level fallback for unknown tools)
 	_, result := parseMCPToolResult(t, w)
 	if !result.IsError {
-		t.Error("Expected error for unauthenticated get_current_user")
-	}
-	if !strings.Contains(result.Content[0].Text, "authentication required") {
-		t.Error("Expected authentication error message")
+		t.Error("Expected error for removed get_current_user tool")
 	}
 }
 
