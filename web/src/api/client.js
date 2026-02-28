@@ -128,25 +128,6 @@ export const api = {
       })
     },
 
-    async getData(id) {
-      return fetchJSON(`/api/benchmarks/${id}/data`)
-    },
-
-    getDataUrl(id) {
-      return `${API_BASE}/api/benchmarks/${id}/data`
-    },
-
-    // Get benchmark data with progress tracking
-    // Returns a promise that resolves with the data
-    // Callbacks: onDownloadProgress(percent), onParseProgress(percent)
-    async getDataWithProgress(id, progressCallbacks) {
-      const { loadBenchmarkDataWithProgress } = await import('../utils/benchmarkLoader.js')
-      return loadBenchmarkDataWithProgress(
-        `${API_BASE}/api/benchmarks/${id}/data`,
-        progressCallbacks
-      )
-    },
-
     // Get benchmark data incrementally - downloads and processes one run at a time
     // This prevents browser freezing with large benchmarks
     // Callbacks: onRunDownloadStart(runIndex, totalRuns), onRunDownloadProgress(percent),

@@ -214,18 +214,8 @@ func HandleGetBenchmarkData(db *DBInstance) gin.HandlerFunc {
 		// Serve pre-calculated stats (no raw data sent to frontend)
 		stats, err := RetrievePreCalculatedStats(uint(benchmarkID))
 		if err != nil {
-			// Fallback: compute from raw data if stats file doesn't exist yet
-			benchmarkData, rawErr := RetrieveBenchmarkData(uint(benchmarkID))
-			if rawErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
-				return
-			}
-			stats = ComputePreCalculatedRuns(benchmarkData)
-			// Store for future requests
-			if storeErr := StorePreCalculatedStats(stats, uint(benchmarkID)); storeErr != nil {
-				fmt.Printf("Warning: failed to store pre-calculated stats for benchmark %d: %v\n", benchmarkID, storeErr)
-			}
-			runtime.GC()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "pre-calculated stats not available"})
+			return
 		}
 
 		c.JSON(http.StatusOK, stats)

@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -271,90 +269,4 @@ fps,frametime,cpu_load,gpu_load
 	// This test would require creating a multipart.FileHeader which is complex
 	// In a real scenario, you'd use httptest to create proper file uploads
 	t.Skip("Skipping file parsing test - requires complex multipart setup")
-}
-
-func TestStreamBenchmarkDataAsJSON(t *testing.T) {
-	// Setup temporary directory
-	tmpDir := t.TempDir()
-	if err := InitBenchmarksDir(tmpDir); err != nil {
-		t.Fatalf("Failed to initialize benchmarks dir: %v", err)
-	}
-
-	// Create test data
-	testData := []*BenchmarkData{
-		{
-			Label:   "Stream Test 1",
-			SpecOS:  "Linux",
-			SpecCPU: "Test CPU",
-			SpecGPU: "Test GPU",
-			DataFPS: []float64{60.0, 59.5, 61.2},
-		},
-		{
-			Label:         "Stream Test 2",
-			SpecOS:        "Windows",
-			DataFrameTime: []float64{16.67, 16.81, 16.34},
-		},
-	}
-
-	benchmarkID := uint(300)
-
-	// Store the benchmark data
-	if err := StoreBenchmarkData(testData, benchmarkID); err != nil {
-		t.Fatalf("Failed to store benchmark data: %v", err)
-	}
-
-	// Create a mock response writer that captures output
-	mock := &mockResponseWriter{
-		headers: make(http.Header),
-	}
-	
-	// Stream the data
-	if err := StreamBenchmarkDataAsJSON(benchmarkID, mock); err != nil {
-		t.Fatalf("Failed to stream benchmark data: %v", err)
-	}
-
-	// Verify content type header was set
-	if contentType := mock.headers.Get("Content-Type"); contentType != "application/json; charset=utf-8" {
-		t.Errorf("Content-Type = %s, want application/json; charset=utf-8", contentType)
-	}
-
-	// Verify data was written
-	if len(mock.body) == 0 {
-		t.Error("No data was written to response")
-	}
-
-	// Verify JSON can be decoded
-	var decoded []*BenchmarkData
-	if err := json.Unmarshal(mock.body, &decoded); err != nil {
-		t.Fatalf("Failed to decode JSON: %v", err)
-	}
-
-	// Verify the decoded data matches
-	if len(decoded) != len(testData) {
-		t.Errorf("Decoded data length = %d, want %d", len(decoded), len(testData))
-	}
-
-	if decoded[0].Label != testData[0].Label {
-		t.Errorf("Decoded label = %s, want %s", decoded[0].Label, testData[0].Label)
-	}
-}
-
-// Helper type for mock response writer
-type mockResponseWriter struct {
-	headers http.Header
-	body    []byte
-	status  int
-}
-
-func (m *mockResponseWriter) Header() http.Header {
-	return m.headers
-}
-
-func (m *mockResponseWriter) Write(b []byte) (int, error) {
-	m.body = append(m.body, b...)
-	return len(b), nil
-}
-
-func (m *mockResponseWriter) WriteHeader(statusCode int) {
-	m.status = statusCode
 }
