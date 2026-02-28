@@ -875,17 +875,7 @@ func (s *mcpServer) toolGetBenchmarkData(args json.RawMessage) (string, error) {
 	// Use pre-calculated stats
 	preCalc, err := RetrievePreCalculatedStats(uint(params.ID))
 	if err != nil {
-		// Fallback: compute from raw data if stats file doesn't exist
-		benchmarkData, rawErr := RetrieveBenchmarkData(uint(params.ID))
-		if rawErr != nil {
-			return "", fmt.Errorf("failed to retrieve benchmark data: %w", rawErr)
-		}
-		preCalc = ComputePreCalculatedRuns(benchmarkData)
-		// Store for future requests
-		if storeErr := StorePreCalculatedStats(preCalc, uint(params.ID)); storeErr != nil {
-			fmt.Printf("Warning: failed to store pre-calculated stats for benchmark %d: %v\n", params.ID, storeErr)
-		}
-		runtime.GC()
+		return "", fmt.Errorf("pre-calculated stats not available")
 	}
 
 	summaries := make([]*BenchmarkDataSummary, len(preCalc))
