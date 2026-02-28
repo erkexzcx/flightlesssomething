@@ -494,16 +494,8 @@ async function loadBenchmarkData(id) {
     }
     
     // Load runs in parallel (concurrency based on CPU cores)
+    // Only onRunProcessComplete is used for progress; other callbacks are optional
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
-      onRunDownloadStart: () => {
-        // Multiple runs start concurrently; progress is tracked on completion
-      },
-      onRunDownloadProgress: () => {
-        // progress is -1 (indeterminate) - not used
-      },
-      onRunDownloadComplete: () => {
-        // progress tracked in onRunProcessComplete
-      },
       onRunProcessComplete: (runIndex, completedCount, total) => {
         loadingStatus.value = `Loaded ${completedCount}/${total} runs`
         loadingProgress.value = Math.round((completedCount / total) * 100)

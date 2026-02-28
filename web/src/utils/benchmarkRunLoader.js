@@ -125,6 +125,5 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
   const workers = Array.from({ length: concurrency }, () => worker())
   await Promise.all(workers)
 
-  // Filter out any undefined slots (shouldn't happen, but defensive)
-  return processedRuns.filter(run => run !== undefined)
+  return processedRuns
 }
