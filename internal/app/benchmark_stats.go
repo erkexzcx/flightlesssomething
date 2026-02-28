@@ -2,7 +2,9 @@ package app
 
 import (
 	"math"
+	"runtime"
 	"sort"
+	"sync"
 )
 
 const (
@@ -427,14 +429,42 @@ func buildSeriesData(data []float64) [][2]float64 {
 	return points
 }
 
-// ComputePreCalculatedRuns computes pre-calculated data for all benchmark runs.
+// ComputePreCalculatedRuns computes pre-calculated data for all benchmark runs
+// using parallel workers based on the number of available CPU cores.
 func ComputePreCalculatedRuns(runs []*BenchmarkData) []*PreCalculatedRun {
 	results := make([]*PreCalculatedRun, len(runs))
 
-	for i, run := range runs {
-		results[i] = computePreCalculatedRun(run)
+	if len(runs) <= 1 {
+		for i, run := range runs {
+			results[i] = computePreCalculatedRun(run)
+		}
+		return results
 	}
 
+	numWorkers := runtime.NumCPU()
+	if numWorkers > len(runs) {
+		numWorkers = len(runs)
+	}
+
+	var wg sync.WaitGroup
+	ch := make(chan int, len(runs))
+
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range ch {
+				results[i] = computePreCalculatedRun(runs[i])
+			}
+		}()
+	}
+
+	for i := range runs {
+		ch <- i
+	}
+	close(ch)
+
+	wg.Wait()
 	return results
 }
 

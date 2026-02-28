@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"math"
 	"testing"
 )
@@ -565,6 +566,56 @@ func TestComputePreCalculatedRuns(t *testing.T) {
 		}
 		if result[0].TotalDataPoints != 2 || result[1].TotalDataPoints != 3 {
 			t.Error("data point counts wrong")
+		}
+	})
+
+	t.Run("parallel computation with many runs", func(t *testing.T) {
+		const numRuns = 20
+		runs := make([]*BenchmarkData, numRuns)
+		for i := 0; i < numRuns; i++ {
+			data := make([]float64, 500)
+			for j := range data {
+				data[j] = float64(i*1000+j) + 0.5
+			}
+			runs[i] = &BenchmarkData{
+				Label:         fmt.Sprintf("run-%d", i),
+				DataFPS:       data,
+				DataFrameTime: data,
+				DataCPULoad:   data,
+				DataGPULoad:   data,
+			}
+		}
+
+		result := ComputePreCalculatedRuns(runs)
+		if len(result) != numRuns {
+			t.Fatalf("expected %d results, got %d", numRuns, len(result))
+		}
+
+		// Verify order and correctness of each run
+		for i := 0; i < numRuns; i++ {
+			r := result[i]
+			expectedLabel := fmt.Sprintf("run-%d", i)
+			if r.Label != expectedLabel {
+				t.Errorf("run %d: label = %q, want %q", i, r.Label, expectedLabel)
+			}
+			if r.TotalDataPoints != 500 {
+				t.Errorf("run %d: total data points = %d, want 500", i, r.TotalDataPoints)
+			}
+			for _, key := range []string{"FPS", "FrameTime", "CPULoad", "GPULoad"} {
+				if _, ok := r.Stats[key]; !ok {
+					t.Errorf("run %d: missing Stats[%s]", i, key)
+				}
+				if _, ok := r.StatsMangoHud[key]; !ok {
+					t.Errorf("run %d: missing StatsMangoHud[%s]", i, key)
+				}
+			}
+			// Verify stats values are distinct per run (min should differ)
+			if fpsStats, ok := r.Stats["CPULoad"]; ok {
+				expectedMin := float64(i*1000) + 0.5
+				if !approxEqual(fpsStats.Min, expectedMin, 0.01) {
+					t.Errorf("run %d: CPULoad min = %f, want %f", i, fpsStats.Min, expectedMin)
+				}
+			}
 		}
 	})
 }
