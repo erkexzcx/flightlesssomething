@@ -347,8 +347,7 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark creation
-		username, _ := c.Get("Username")
-		usernameStr, _ := username.(string)
+		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkCreated(uid, usernameStr, benchmark.ID, benchmark.Title, len(benchmarkData))
 
 		c.JSON(http.StatusCreated, benchmark)
@@ -411,19 +410,14 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		if req.Title != "" {
-			benchmark.Title = req.Title
-		}
-		if req.Description != "" {
-			benchmark.Description = req.Description
-		}
-
 		// Track what fields were changed for audit logging
 		var changes []string
 		if req.Title != "" {
+			benchmark.Title = req.Title
 			changes = append(changes, "title")
 		}
 		if req.Description != "" {
+			benchmark.Description = req.Description
 			changes = append(changes, "description")
 		}
 
@@ -481,8 +475,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark update
-		username, _ := c.Get("Username")
-		usernameStr, _ := username.(string)
+		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkUpdated(uid, usernameStr, benchmark.ID, benchmark.Title, changes)
 
 		c.JSON(http.StatusOK, benchmark)
@@ -549,8 +542,7 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark deletion
-		username, _ := c.Get("Username")
-		usernameStr, _ := username.(string)
+		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkDeleted(uid, usernameStr, benchmark.ID, title)
 
 		c.JSON(http.StatusOK, gin.H{"message": "benchmark deleted"})
@@ -698,8 +690,7 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log run deletion
-		username, _ := c.Get("Username")
-		usernameStr, _ := username.(string)
+		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkRunDeleted(uid, usernameStr, benchmark.ID, benchmark.Title, idx, runLabel)
 
 		// Trigger GC to reclaim memory from loaded benchmark data
@@ -831,8 +822,7 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log runs added
-		username, _ := c.Get("Username")
-		usernameStr, _ := username.(string)
+		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkRunsAdded(uid, usernameStr, benchmark.ID, benchmark.Title, len(newBenchmarkData), len(existingData))
 
 		// Trigger GC to reclaim memory from loaded benchmark data

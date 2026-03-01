@@ -123,8 +123,7 @@ func HandleDeleteUser(db *DBInstance) gin.HandlerFunc {
 		// Log the action
 		if adminUserID, exists := c.Get("UserID"); exists {
 			if uid, ok := adminUserID.(uint); ok {
-				adminName, _ := c.Get("Username")
-				adminNameStr, _ := adminName.(string)
+				adminNameStr := GetUsernameFromContext(c)
 				LogUserDeleted(uid, adminNameStr, user.ID, username)
 			}
 		}
@@ -167,8 +166,7 @@ func HandleDeleteUserBenchmarks(db *DBInstance) gin.HandlerFunc {
 		// Log the action
 		if adminUserID, exists := c.Get("UserID"); exists {
 			if uid, ok := adminUserID.(uint); ok {
-				adminName, _ := c.Get("Username")
-				adminNameStr, _ := adminName.(string)
+				adminNameStr := GetUsernameFromContext(c)
 				LogUserBenchmarksDeleted(uid, adminNameStr, user.ID, user.Username, len(benchmarks))
 			}
 		}
@@ -214,8 +212,7 @@ func HandleBanUser(db *DBInstance) gin.HandlerFunc {
 		// Log the action
 		if adminUserID, exists := c.Get("UserID"); exists {
 			if uid, ok := adminUserID.(uint); ok {
-				adminName, _ := c.Get("Username")
-				adminNameStr, _ := adminName.(string)
+				adminNameStr := GetUsernameFromContext(c)
 				if req.Banned {
 					LogUserBanned(uid, adminNameStr, user.ID, user.Username)
 				} else {
@@ -265,8 +262,7 @@ func HandleToggleUserAdmin(db *DBInstance) gin.HandlerFunc {
 		// Log the action
 		if adminUserID, exists := c.Get("UserID"); exists {
 			if uid, ok := adminUserID.(uint); ok {
-				adminName, _ := c.Get("Username")
-				adminNameStr, _ := adminName.(string)
+				adminNameStr := GetUsernameFromContext(c)
 				if req.IsAdmin {
 					LogUserAdminGranted(uid, adminNameStr, user.ID, user.Username)
 				} else {

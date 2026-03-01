@@ -39,6 +39,16 @@ type AuditLogEntry struct {
 	Details     map[string]interface{} `json:"details,omitempty"`
 }
 
+// GetUsernameFromContext extracts the username from a gin context, returning "unknown" if not available.
+func GetUsernameFromContext(c interface{ Get(any) (any, bool) }) string {
+	if val, exists := c.Get("Username"); exists {
+		if s, ok := val.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
 // InitAuditLog initializes the audit log directory and file path.
 // The logs directory is created alongside (as a sibling of) the data directory.
 // For example, if dataDir is /data, logs go to /logs/audit.json.
