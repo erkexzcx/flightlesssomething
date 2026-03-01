@@ -85,7 +85,6 @@ Admin endpoints require both an authenticated session and the `IsAdmin` flag. Th
 | `DELETE` | `/api/admin/users/:id/benchmarks` | Delete all benchmarks for a user. |
 | `PUT` | `/api/admin/users/:id/ban` | Ban or unban a user. |
 | `PUT` | `/api/admin/users/:id/admin` | Grant or revoke admin privileges. |
-| `GET` | `/api/admin/logs` | View audit logs (filtered, paginated). |
 
 ### MCP Transport
 
@@ -280,20 +279,6 @@ Grant or revoke admin privileges. Cannot revoke your own admin privileges.
 { "is_admin": true }
 ```
 
-### `GET /api/admin/logs`
-
-List audit logs with optional filters.
-
-**Query parameters:**
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `page` | int | `1` | Page number. |
-| `per_page` | int | `50` | Results per page (1–100). |
-| `user_id` | int | — | Filter by user who performed the action. |
-| `action` | string | — | Filter by action (partial match). |
-| `target_type` | string | — | Filter by target type (e.g. `user`, `benchmark`). |
-
 ---
 
 ## MCP Server
@@ -361,7 +346,6 @@ The `initialize` response includes contextual information in its `instructions` 
 | Tool | Description | Read-only |
 |---|---|---|
 | `list_users` | List all users with pagination and search. | Yes |
-| `list_audit_logs` | List audit logs with filters (user, action, target type). | Yes |
 | `delete_user` | Delete a user account. Cannot delete your own account. | No |
 | `delete_user_benchmarks` | Delete all benchmarks belonging to a user. | No |
 | `ban_user` | Ban or unban a user. Cannot ban your own account. | No |
@@ -459,16 +443,6 @@ No parameters.
 | `page` | int | No | Page number (default: 1). |
 | `per_page` | int | No | Results per page, 1–100 (default: 10). |
 | `search` | string | No | Search by username or Discord ID. |
-
-#### `list_audit_logs`
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `page` | int | No | Page number (default: 1). |
-| `per_page` | int | No | Results per page, 1–100 (default: 50). |
-| `user_id` | int | No | Filter by user who performed the action. |
-| `action` | string | No | Filter by action (partial match). |
-| `target_type` | string | No | Filter by target type (e.g. `user`, `benchmark`). |
 
 #### `delete_user`
 

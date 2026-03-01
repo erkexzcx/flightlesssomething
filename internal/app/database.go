@@ -91,7 +91,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 
 	// Auto-migrate the schema BEFORE running data migrations
 	// This ensures columns exist before migration code tries to use them
-	if err := db.AutoMigrate(&User{}, &Benchmark{}, &AuditLog{}, &APIToken{}, &SchemaVersion{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Benchmark{}, &APIToken{}, &SchemaVersion{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 

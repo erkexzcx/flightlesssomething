@@ -276,23 +276,8 @@ else
     exit 1
 fi
 
-# Test 12: List audit logs (admin only)
-log_info "Test 12: List audit logs"
-RESPONSE=$(curl -s -b "$SESSION_COOKIE" "${BASE_URL}/api/admin/logs")
-if echo "$RESPONSE" | jq -e '.logs | length > 0' > /dev/null 2>&1; then
-    LOG_COUNT=$(echo "$RESPONSE" | jq '.logs | length')
-    log_info "✓ List audit logs passed ($LOG_COUNT logs)"
-    # Check first log
-    FIRST_LOG=$(echo "$RESPONSE" | jq '.logs[0]')
-    ACTION=$(echo "$FIRST_LOG" | jq -r '.Action')
-    log_info "  Most recent action: $ACTION"
-else
-    log_error "✗ List audit logs failed: $RESPONSE"
-    exit 1
-fi
-
-# Test 13: Create API token
-log_info "Test 13: Create API token"
+# Test 12: Create API token
+log_info "Test 12: Create API token"
 RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X POST \
     -H "Content-Type: application/json" \
     -d '{"name":"Backend Test Token"}' \
@@ -306,8 +291,8 @@ else
     exit 1
 fi
 
-# Test 14: Use API token
-log_info "Test 14: Use API token"
+# Test 13: Use API token
+log_info "Test 13: Use API token"
 RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" \
     "${BASE_URL}/api/benchmarks")
 if echo "$RESPONSE" | jq -e '.benchmarks' > /dev/null 2>&1; then
@@ -317,8 +302,8 @@ else
     exit 1
 fi
 
-# Test 15: List API tokens
-log_info "Test 15: List API tokens"
+# Test 14: List API tokens
+log_info "Test 14: List API tokens"
 RESPONSE=$(curl -s -b "$SESSION_COOKIE" "${BASE_URL}/api/tokens")
 if echo "$RESPONSE" | jq -e '. | length > 0' > /dev/null 2>&1; then
     TOKEN_COUNT=$(echo "$RESPONSE" | jq '. | length')
@@ -328,8 +313,8 @@ else
     exit 1
 fi
 
-# Test 16: Delete API token
-log_info "Test 16: Delete API token"
+# Test 15: Delete API token
+log_info "Test 15: Delete API token"
 TOKEN_ID=$(echo "$RESPONSE" | jq -r '.[0].ID')
 DELETE_RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X DELETE \
     "${BASE_URL}/api/tokens/${TOKEN_ID}")
@@ -340,8 +325,8 @@ else
     exit 1
 fi
 
-# Test 17: Delete benchmark
-log_info "Test 17: Delete benchmark"
+# Test 16: Delete benchmark
+log_info "Test 16: Delete benchmark"
 RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X DELETE \
     "${BASE_URL}/api/benchmarks/${BENCHMARK_ID}")
 if echo "$RESPONSE" | jq -e '.message == "benchmark deleted"' > /dev/null 2>&1; then
@@ -351,8 +336,8 @@ else
     exit 1
 fi
 
-# Test 18: Verify deletion
-log_info "Test 18: Verify benchmark deletion"
+# Test 17: Verify deletion
+log_info "Test 17: Verify benchmark deletion"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     "${BASE_URL}/api/benchmarks/${BENCHMARK_ID}")
 if [ "$HTTP_CODE" -eq 404 ]; then
@@ -362,8 +347,8 @@ else
     exit 1
 fi
 
-# Test 19: Logout
-log_info "Test 19: Logout"
+# Test 18: Logout
+log_info "Test 18: Logout"
 RESPONSE=$(curl -s -b "$SESSION_COOKIE" -c "$SESSION_COOKIE" -X POST \
     "${BASE_URL}/auth/logout")
 if echo "$RESPONSE" | jq -e '.message == "logout successful"' > /dev/null 2>&1; then
@@ -373,8 +358,8 @@ else
     exit 1
 fi
 
-# Test 20: Verify logout
-log_info "Test 20: Verify logout"
+# Test 19: Verify logout
+log_info "Test 19: Verify logout"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$SESSION_COOKIE" \
     "${BASE_URL}/api/auth/me")
 if [ "$HTTP_CODE" -eq 401 ]; then
@@ -388,5 +373,5 @@ rm -f "$SESSION_COOKIE"
 
 log_info ""
 log_info "=========================================="
-log_info "All 20 backend tests passed successfully!"
+log_info "All 19 backend tests passed successfully!"
 log_info "=========================================="

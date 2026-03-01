@@ -57,7 +57,7 @@ Every API handler follows a consistent pattern:
 1. **Validate input** — check required fields, length limits, numeric bounds
 2. **Check authentication/authorization** — session or Bearer token, admin flag
 3. **Execute operation** — database query, file I/O, or both
-4. **Audit log** — record the action (non-blocking; failures are logged but don't fail the request)
+4. **Audit log** — record the action to file-based JSON log (non-blocking; failures are logged to stdout but don't fail the request)
 5. **Return JSON response**
 
 ### Pagination
@@ -197,7 +197,7 @@ Hard limits prevent any single upload from consuming excessive resources:
 
 ### Database
 
-SQLite with GORM auto-migration. The database file (`flightlesssomething.db`) stores user accounts, benchmark metadata, API tokens, and audit logs. Schema version is tracked in a `schema_versions` table (current version: 3).
+SQLite with GORM auto-migration. The database file (`flightlesssomething.db`) stores user accounts, benchmark metadata, and API tokens. Schema version is tracked in a `schema_versions` table (current version: 3). Audit logs are written to a JSON log file (`logs/audit.json`) next to the data directory.
 
 ### Benchmark Files
 

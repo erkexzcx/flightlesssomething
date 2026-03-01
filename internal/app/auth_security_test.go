@@ -294,7 +294,6 @@ func TestNonAdminCannotAccessAdminRoutes(t *testing.T) {
 	admin.DELETE("/users/:id", HandleDeleteUser(db))
 	admin.PUT("/users/:id/ban", HandleBanUser(db))
 	admin.PUT("/users/:id/admin", HandleToggleUserAdmin(db))
-	admin.GET("/logs", HandleListAuditLogs(db))
 
 	user := createTestUser(db, "regularuser", false)
 	token := &APIToken{UserID: user.ID, Token: "regular-user-token-abcdef1234567890", Name: "User Token"}
@@ -309,7 +308,6 @@ func TestNonAdminCannotAccessAdminRoutes(t *testing.T) {
 		{"DELETE", "/api/admin/users/1", ""},
 		{"PUT", "/api/admin/users/1/ban", `{"banned":true}`},
 		{"PUT", "/api/admin/users/1/admin", `{"is_admin":true}`},
-		{"GET", "/api/admin/logs", ""},
 	}
 
 	for _, route := range routes {
@@ -590,7 +588,7 @@ func TestMCPNonAdminCannotAccessAdminTools(t *testing.T) {
 	token := &APIToken{UserID: user.ID, Token: "nonadmin-tools-token-abcdef123456", Name: "Non-Admin Token"}
 	db.DB.Create(token)
 
-	adminTools := []string{"list_users", "list_audit_logs", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
+	adminTools := []string{"list_users", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
 	for _, tool := range adminTools {
 		t.Run(tool, func(t *testing.T) {
 			body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":{"user_id":1}}}`, tool)
@@ -646,7 +644,7 @@ func TestMCPToolsListFilteredByAuthLevel(t *testing.T) {
 	adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef123456", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
-	adminOnlyTools := []string{"list_users", "list_audit_logs", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
+	adminOnlyTools := []string{"list_users", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
 
 	t.Run("anonymous_sees_only_public_tools", func(t *testing.T) {
 		body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`

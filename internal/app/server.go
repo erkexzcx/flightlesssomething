@@ -27,6 +27,11 @@ func Start(config *Config, version string) error {
 		return fmt.Errorf("failed to initialize benchmarks directory: %w", err)
 	}
 
+	// Initialize audit log directory
+	if err := InitAuditLog(config.DataDir); err != nil {
+		return fmt.Errorf("failed to initialize audit log directory: %w", err)
+	}
+
 	// Initialize database
 	db, err := InitDB(config.DataDir)
 	if err != nil {
@@ -107,7 +112,6 @@ func Start(config *Config, version string) error {
 	admin.DELETE("/users/:id/benchmarks", HandleDeleteUserBenchmarks(db))
 	admin.PUT("/users/:id/ban", HandleBanUser(db))
 	admin.PUT("/users/:id/admin", HandleToggleUserAdmin(db))
-	admin.GET("/logs", HandleListAuditLogs(db))
 
 	// MCP (Model Context Protocol) server
 	r.POST("/mcp", HandleMCP(db, version))

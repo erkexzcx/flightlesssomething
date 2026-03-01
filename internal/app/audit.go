@@ -1,162 +1,133 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/http"
-	"strconv"
-
-	"github.com/gin-gonic/gin"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
 )
 
-// CreateAuditLog creates a new audit log entry
-func CreateAuditLog(db *DBInstance, userID uint, action, description, targetType string, targetID uint) error {
-	log := AuditLog{
+var (
+	auditLogDir  string
+	auditLogPath string
+	auditLogMu   sync.Mutex
+)
+
+// AuditLogEntry represents a single audit log entry written to the JSON log file
+type AuditLogEntry struct {
+	Timestamp   string `json:"timestamp"`
+	UserID      uint   `json:"user_id"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
+	TargetType  string `json:"target_type"`
+	TargetID    uint   `json:"target_id"`
+}
+
+// InitAuditLog initializes the audit log directory and file path
+func InitAuditLog(dataDir string) error {
+	auditLogDir = filepath.Join(dataDir, "logs")
+	auditLogPath = filepath.Join(auditLogDir, "audit.json")
+	return os.MkdirAll(auditLogDir, 0o750)
+}
+
+// writeAuditLog appends a JSON log entry to the audit log file
+func writeAuditLog(userID uint, action, description, targetType string, targetID uint) {
+	entry := AuditLogEntry{
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		UserID:      userID,
 		Action:      action,
 		Description: description,
 		TargetType:  targetType,
 		TargetID:    targetID,
 	}
-	return db.DB.Create(&log).Error
-}
 
-// HandleListAuditLogs returns a paginated list of audit logs (admin only)
-func HandleListAuditLogs(db *DBInstance) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
-		if err != nil || page < 1 {
-			page = 1
+	data, err := json.Marshal(entry)
+	if err != nil {
+		fmt.Printf("Warning: failed to marshal audit log entry: %v\n", err)
+		return
+	}
+	data = append(data, '\n')
+
+	auditLogMu.Lock()
+	defer auditLogMu.Unlock()
+
+	f, err := os.OpenFile(auditLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640)
+	if err != nil {
+		fmt.Printf("Warning: failed to open audit log file: %v\n", err)
+		return
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			fmt.Printf("Warning: failed to close audit log file: %v\n", cerr)
 		}
-		perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "50"))
-		if err != nil || perPage < 1 || perPage > 100 {
-			perPage = 50
-		}
+	}()
 
-		// Build query with optional filters
-		query := db.DB.Model(&AuditLog{}).Preload("User")
-
-		// Filter by user ID
-		if userIDStr := c.Query("user_id"); userIDStr != "" {
-			if userID, err := strconv.ParseUint(userIDStr, 10, 32); err == nil {
-				query = query.Where("user_id = ?", userID)
-			}
-		}
-
-		// Filter by action
-		if action := c.Query("action"); action != "" {
-			query = query.Where("action LIKE ?", "%"+action+"%")
-		}
-
-		// Filter by target type
-		if targetType := c.Query("target_type"); targetType != "" {
-			query = query.Where("target_type = ?", targetType)
-		}
-
-		// Get total count with filters applied
-		var total int64
-		if err := query.Count(&total).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		// Get audit logs
-		var logs []AuditLog
-		offset := (page - 1) * perPage
-		if err := query.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&logs).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		// Calculate total pages
-		totalPages := int((total + int64(perPage) - 1) / int64(perPage))
-
-		c.JSON(http.StatusOK, gin.H{
-			"logs":        logs,
-			"page":        page,
-			"per_page":    perPage,
-			"total":       total,
-			"total_pages": totalPages,
-		})
+	if _, err := f.Write(data); err != nil {
+		fmt.Printf("Warning: failed to write audit log entry: %v\n", err)
 	}
 }
 
 // LogBenchmarkCreated logs when a benchmark is created
-func LogBenchmarkCreated(db *DBInstance, userID, benchmarkID uint, title string) {
-	if err := CreateAuditLog(db, userID, "Benchmark Created",
+func LogBenchmarkCreated(userID, benchmarkID uint, title string) {
+	writeAuditLog(userID, "Benchmark Created",
 		fmt.Sprintf("Created benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"benchmark", benchmarkID)
 }
 
 // LogBenchmarkUpdated logs when a benchmark is updated
-func LogBenchmarkUpdated(db *DBInstance, userID, benchmarkID uint, title string) {
-	if err := CreateAuditLog(db, userID, "Benchmark Updated",
+func LogBenchmarkUpdated(userID, benchmarkID uint, title string) {
+	writeAuditLog(userID, "Benchmark Updated",
 		fmt.Sprintf("Updated benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"benchmark", benchmarkID)
 }
 
 // LogBenchmarkDeleted logs when a benchmark is deleted
-func LogBenchmarkDeleted(db *DBInstance, userID, benchmarkID uint, title string) {
-	if err := CreateAuditLog(db, userID, "Benchmark Deleted",
+func LogBenchmarkDeleted(userID, benchmarkID uint, title string) {
+	writeAuditLog(userID, "Benchmark Deleted",
 		fmt.Sprintf("Deleted benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"benchmark", benchmarkID)
 }
 
 // LogUserAdminGranted logs when a user is granted admin privileges
-func LogUserAdminGranted(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "Admin Granted",
+func LogUserAdminGranted(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "Admin Granted",
 		fmt.Sprintf("Granted admin privileges to user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }
 
 // LogUserAdminRevoked logs when admin privileges are revoked from a user
-func LogUserAdminRevoked(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "Admin Revoked",
+func LogUserAdminRevoked(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "Admin Revoked",
 		fmt.Sprintf("Revoked admin privileges from user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }
 
 // LogUserBanned logs when a user is banned
-func LogUserBanned(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "User Banned",
+func LogUserBanned(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "User Banned",
 		fmt.Sprintf("Banned user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }
 
 // LogUserUnbanned logs when a user is unbanned
-func LogUserUnbanned(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "User Unbanned",
+func LogUserUnbanned(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "User Unbanned",
 		fmt.Sprintf("Unbanned user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }
 
 // LogUserDeleted logs when a user is deleted
-func LogUserDeleted(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "User Deleted",
+func LogUserDeleted(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "User Deleted",
 		fmt.Sprintf("Deleted user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }
 
 // LogUserBenchmarksDeleted logs when all benchmarks for a user are deleted
-func LogUserBenchmarksDeleted(db *DBInstance, adminUserID, targetUserID uint, targetUsername string) {
-	if err := CreateAuditLog(db, adminUserID, "User Benchmarks Deleted",
+func LogUserBenchmarksDeleted(adminUserID, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, "User Benchmarks Deleted",
 		fmt.Sprintf("Deleted all benchmarks for user: %s", targetUsername),
-		"user", targetUserID); err != nil {
-		fmt.Printf("Warning: failed to create audit log: %v\n", err)
-	}
+		"user", targetUserID)
 }

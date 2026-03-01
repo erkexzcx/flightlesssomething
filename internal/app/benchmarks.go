@@ -347,7 +347,7 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark creation
-		LogBenchmarkCreated(db, uid, benchmark.ID, benchmark.Title)
+		LogBenchmarkCreated(uid, benchmark.ID, benchmark.Title)
 
 		c.JSON(http.StatusCreated, benchmark)
 	}
@@ -469,7 +469,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark update
-		LogBenchmarkUpdated(db, uid, benchmark.ID, benchmark.Title)
+		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
 
 		c.JSON(http.StatusOK, benchmark)
 	}
@@ -535,7 +535,7 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark deletion
-		LogBenchmarkDeleted(db, uid, benchmark.ID, title)
+		LogBenchmarkDeleted(uid, benchmark.ID, title)
 
 		c.JSON(http.StatusOK, gin.H{"message": "benchmark deleted"})
 	}
@@ -679,7 +679,7 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark update
-		LogBenchmarkUpdated(db, uid, benchmark.ID, benchmark.Title)
+		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
 
 		// Trigger GC to reclaim memory from loaded benchmark data
 		runtime.GC()
@@ -810,7 +810,7 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark update
-		LogBenchmarkUpdated(db, uid, benchmark.ID, benchmark.Title)
+		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
 
 		// Trigger GC to reclaim memory from loaded benchmark data
 		runtime.GC()

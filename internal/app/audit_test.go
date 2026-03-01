@@ -1,218 +1,135 @@
 package app
 
 import (
+	"bufio"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
+	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
-func TestCreateAuditLog(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
+func TestWriteAuditLog(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := InitAuditLog(tmpDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
 
-	user := createTestUser(db, "audituser", false)
+	t.Run("creates audit log file and writes entry", func(t *testing.T) {
+		LogBenchmarkCreated(1, 42, "Test Benchmark")
 
-	t.Run("creates audit log entry", func(t *testing.T) {
-		err := CreateAuditLog(db, user.ID, "CREATE", "Created a test benchmark", "benchmark", 1)
+		// Verify file exists
+		logPath := filepath.Join(tmpDir, "logs", "audit.json")
+		if _, err := os.Stat(logPath); os.IsNotExist(err) {
+			t.Fatal("Expected audit log file to be created")
+		}
+
+		// Read and verify contents
+		f, err := os.Open(logPath)
 		if err != nil {
-			t.Errorf("Failed to create audit log: %v", err)
+			t.Fatalf("Failed to open audit log file: %v", err)
+		}
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		if !scanner.Scan() {
+			t.Fatal("Expected at least one line in audit log file")
 		}
 
-		// Verify the log was created
-		var log AuditLog
-		result := db.DB.First(&log)
-		if result.Error != nil {
-			t.Errorf("Failed to retrieve audit log: %v", result.Error)
+		var entry AuditLogEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("Failed to unmarshal audit log entry: %v", err)
 		}
 
-		if log.UserID != user.ID {
-			t.Errorf("Expected UserID %d, got %d", user.ID, log.UserID)
+		if entry.UserID != 1 {
+			t.Errorf("Expected UserID 1, got %d", entry.UserID)
 		}
-		if log.Action != "CREATE" {
-			t.Errorf("Expected Action 'CREATE', got %s", log.Action)
+		if entry.Action != "Benchmark Created" {
+			t.Errorf("Expected Action 'Benchmark Created', got %s", entry.Action)
 		}
-		if log.Description != "Created a test benchmark" {
-			t.Errorf("Expected specific description, got %s", log.Description)
+		if entry.TargetType != "benchmark" {
+			t.Errorf("Expected TargetType 'benchmark', got %s", entry.TargetType)
 		}
-		if log.TargetType != "benchmark" {
-			t.Errorf("Expected TargetType 'benchmark', got %s", log.TargetType)
+		if entry.TargetID != 42 {
+			t.Errorf("Expected TargetID 42, got %d", entry.TargetID)
 		}
-		if log.TargetID != 1 {
-			t.Errorf("Expected TargetID 1, got %d", log.TargetID)
+		if entry.Timestamp == "" {
+			t.Error("Expected Timestamp to be set")
 		}
 	})
 
+	t.Run("appends multiple entries", func(t *testing.T) {
+		LogBenchmarkUpdated(2, 42, "Updated Benchmark")
+		LogBenchmarkDeleted(3, 42, "Deleted Benchmark")
+
+		logPath := filepath.Join(tmpDir, "logs", "audit.json")
+		f, err := os.Open(logPath)
+		if err != nil {
+			t.Fatalf("Failed to open audit log file: %v", err)
+		}
+		defer f.Close()
+
+		lineCount := 0
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			lineCount++
+			var entry AuditLogEntry
+			if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+				t.Fatalf("Failed to unmarshal line %d: %v", lineCount, err)
+			}
+		}
+
+		// 1 from first subtest + 2 from this subtest
+		if lineCount != 3 {
+			t.Errorf("Expected 3 log entries, got %d", lineCount)
+		}
+	})
 }
 
-func TestHandleListAuditLogs(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-
-	adminUser := createTestUser(db, "adminaudit", true)
-	regularUser := createTestUser(db, "regularaudit", false)
-
-	// Create some audit logs
-	if err := CreateAuditLog(db, regularUser.ID, "CREATE", "Created benchmark 1", "benchmark", 1); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
-	}
-	if err := CreateAuditLog(db, regularUser.ID, "UPDATE", "Updated benchmark 1", "benchmark", 1); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
-	}
-	if err := CreateAuditLog(db, adminUser.ID, "DELETE", "Deleted benchmark 2", "benchmark", 2); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
+func TestAllLogFunctions(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := InitAuditLog(tmpDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	router := setupTestRouter()
+	// Call all log functions
+	LogBenchmarkCreated(1, 1, "bench")
+	LogBenchmarkUpdated(1, 1, "bench")
+	LogBenchmarkDeleted(1, 1, "bench")
+	LogUserAdminGranted(1, 2, "user2")
+	LogUserAdminRevoked(1, 2, "user2")
+	LogUserBanned(1, 2, "user2")
+	LogUserUnbanned(1, 2, "user2")
+	LogUserDeleted(1, 2, "user2")
+	LogUserBenchmarksDeleted(1, 2, "user2")
 
-	// Setup admin route
-	router.GET("/api/audit-logs", func(c *gin.Context) {
-		c.Set("UserID", adminUser.ID)
-		c.Set("Username", adminUser.Username)
-		c.Set("IsAdmin", adminUser.IsAdmin)
-		c.Next()
-	}, HandleListAuditLogs(db))
+	logPath := filepath.Join(tmpDir, "logs", "audit.json")
+	f, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("Failed to open audit log file: %v", err)
+	}
+	defer f.Close()
 
-	t.Run("admin can list audit logs", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	expectedActions := []string{
+		"Benchmark Created", "Benchmark Updated", "Benchmark Deleted",
+		"Admin Granted", "Admin Revoked",
+		"User Banned", "User Unbanned",
+		"User Deleted", "User Benchmarks Deleted",
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	scanner := bufio.NewScanner(f)
+	i := 0
+	for scanner.Scan() {
+		var entry AuditLogEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("Failed to unmarshal entry %d: %v", i, err)
 		}
+		if i < len(expectedActions) && entry.Action != expectedActions[i] {
+			t.Errorf("Entry %d: expected action %q, got %q", i, expectedActions[i], entry.Action)
+		}
+		i++
+	}
 
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		if len(logs) < 3 {
-			t.Errorf("Expected at least 3 logs, got %d", len(logs))
-		}
-	})
-
-	t.Run("filters by user_id", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs?user_id="+strconv.FormatUint(uint64(regularUser.ID), 10), nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		// All logs should be from regularUser
-		for _, logEntry := range logs {
-			log, ok := logEntry.(map[string]interface{})
-			if !ok {
-				t.Fatal("Expected log entry to be map")
-			}
-			userIDFloat, ok := log["UserID"].(float64)
-			if !ok {
-				t.Fatal("Expected UserID to be float64")
-			}
-			userID := uint(userIDFloat)
-			if userID != regularUser.ID {
-				t.Errorf("Expected UserID %d, got %d", regularUser.ID, userID)
-			}
-		}
-	})
-
-	t.Run("filters by action", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs?action=CREATE", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		// All logs should have CREATE action
-		for _, logEntry := range logs {
-			log, ok := logEntry.(map[string]interface{})
-			if !ok {
-				t.Fatal("Expected log entry to be map")
-			}
-			action, ok := log["Action"].(string)
-			if !ok {
-				t.Fatal("Expected Action to be string")
-			}
-			if action != "CREATE" {
-				t.Errorf("Expected Action 'CREATE', got %s", action)
-			}
-		}
-	})
-
-	t.Run("pagination works", func(t *testing.T) {
-		// Create more logs for pagination test
-		for i := 0; i < 60; i++ {
-			if err := CreateAuditLog(db, regularUser.ID, "TEST", "Test log "+strconv.Itoa(i), "test", uint(i)); err != nil {
-				t.Fatalf("Failed to create audit log: %v", err)
-			}
-		}
-
-		// Request first page
-		req, err := http.NewRequest("GET", "/api/audit-logs?page=1&per_page=10", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		if len(logs) != 10 {
-			t.Errorf("Expected 10 logs on first page, got %d", len(logs))
-		}
-
-		totalFloat, ok := response["total"].(float64)
-		if !ok {
-			t.Fatal("Expected total to be float64")
-		}
-		total := int64(totalFloat)
-		if total < 60 {
-			t.Errorf("Expected at least 60 total logs, got %d", total)
-		}
-	})
+	if i != len(expectedActions) {
+		t.Errorf("Expected %d entries, got %d", len(expectedActions), i)
+	}
 }

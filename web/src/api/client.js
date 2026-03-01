@@ -198,23 +198,6 @@ export const api = {
         body: JSON.stringify({ is_admin: isAdmin }),
       })
     },
-
-    async listLogs(page = 1, perPage = 50, filters = {}) {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: perPage.toString(),
-      })
-      if (filters.action) {
-        params.append('action', filters.action)
-      }
-      if (filters.targetType) {
-        params.append('target_type', filters.targetType)
-      }
-      if (filters.userId) {
-        params.append('user_id', filters.userId.toString())
-      }
-      return fetchJSON(`/api/admin/logs?${params}`)
-    },
   },
 
   // API Token endpoints

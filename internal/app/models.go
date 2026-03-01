@@ -66,25 +66,6 @@ type BenchmarkMetadata struct {
 	RunLabels []string
 }
 
-// AuditLog represents an audit log entry for tracking user actions
-type AuditLog struct {
-	gorm.Model
-	UserID      uint   // User who performed the action
-	Action      string `gorm:"size:100"`  // Short action title
-	Description string `gorm:"size:1000"` // Detailed description
-	TargetType  string `gorm:"size:50"`   // Type of target (user, benchmark, etc.)
-	TargetID    uint   // ID of the target (user ID, benchmark ID, etc.)
-
-	CreatedAtHumanized string `gorm:"-"` // Human readable "X h/m/s ago" version of CreatedAt
-	User               User   `gorm:"foreignKey:UserID;"`
-}
-
-// AfterFind is a GORM hook that is called after a record is found
-func (a *AuditLog) AfterFind(tx *gorm.DB) (err error) {
-	a.CreatedAtHumanized = humanize.Time(a.CreatedAt)
-	return nil
-}
-
 // BenchmarkData represents the actual benchmark data stored separately
 type BenchmarkData struct {
 	Label string
