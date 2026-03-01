@@ -80,7 +80,7 @@ runs:
         CONTAINER_NAME="flightlesssomething-${ENVIRONMENT}"
 
         # Create directory on remote server
-        ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data"
+        ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ~/${APP_DIR}/data ~/${APP_DIR}/logs"
 
         # Transfer Docker image
         scp -P ${SSH_PORT} ${IMAGE_ARCHIVE} ${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/
@@ -103,6 +103,7 @@ runs:
             --network ${DOCKER_NETWORK} \
             --restart unless-stopped \
             -v ~/${APP_DIR}/data:/data \
+            -v ~/${APP_DIR}/logs:/logs \
             -e FS_BIND=0.0.0.0:5000 \
             -e FS_DATA_DIR=/data \
             -e FS_SESSION_SECRET=${SESSION_SECRET} \
