@@ -53,6 +53,11 @@
                     <i class="fa-solid fa-key"></i> API Tokens & MCP
                   </router-link>
                 </li>
+                <li>
+                  <router-link to="/debugcalc" class="dropdown-item">
+                    <i class="fa-solid fa-calculator"></i> Verify Calc
+                  </router-link>
+                </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                   <a class="dropdown-item" href="#" @click.prevent="handleLogout">
