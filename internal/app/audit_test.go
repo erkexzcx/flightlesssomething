@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,7 +33,7 @@ func TestWriteAuditLog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to open audit log file: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		scanner := bufio.NewScanner(f)
 		if !scanner.Scan() {
@@ -70,7 +71,7 @@ func TestWriteAuditLog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to open audit log file: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		lineCount := 0
 		scanner := bufio.NewScanner(f)
@@ -111,7 +112,7 @@ func TestAllLogFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open audit log file: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	expectedActions := []string{
 		"Benchmark Created", "Benchmark Updated", "Benchmark Deleted",
@@ -147,18 +148,18 @@ func TestAuditLogRotation(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "logs", "audit.json")
 
 	// Write enough data to exceed the rotation threshold
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o640)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create audit log file: %v", err)
 	}
 	bigLine := strings.Repeat("x", 1024) + "\n"
 	for written := 0; written < auditLogMaxSize+1; written += len(bigLine) {
-		if _, err := f.WriteString(bigLine); err != nil {
-			t.Fatalf("Failed to write test data: %v", err)
+		if _, writeErr := f.WriteString(bigLine); writeErr != nil {
+			t.Fatalf("Failed to write test data: %v", writeErr)
 		}
 	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("Failed to close test file: %v", err)
+	if closeErr := f.Close(); closeErr != nil {
+		t.Fatalf("Failed to close test file: %v", closeErr)
 	}
 
 	// Writing a new entry should trigger rotation
@@ -178,16 +179,16 @@ func TestAuditLogRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open rotated file: %v", err)
 	}
-	defer gzFile.Close()
+	defer func() { _ = gzFile.Close() }()
 	gz, err := gzip.NewReader(gzFile)
 	if err != nil {
 		t.Fatalf("Failed to create gzip reader: %v", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	// Read some content to verify it's valid
 	buf := make([]byte, 1024)
-	if _, err := gz.Read(buf); err != nil && err != io.EOF {
+	if _, err := gz.Read(buf); err != nil && !errors.Is(err, io.EOF) {
 		t.Fatalf("Failed to read from rotated gzip file: %v", err)
 	}
 
@@ -196,7 +197,7 @@ func TestAuditLogRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open current log file: %v", err)
 	}
-	defer currentF.Close()
+	defer func() { _ = currentF.Close() }()
 
 	lineCount := 0
 	scanner := bufio.NewScanner(currentF)

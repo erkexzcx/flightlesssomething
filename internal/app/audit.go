@@ -55,7 +55,7 @@ func rotateAuditLog() {
 		return
 	}
 
-	dst, err := os.OpenFile(rotatedPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o640)
+	dst, err := os.OpenFile(rotatedPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		if cerr := src.Close(); cerr != nil {
 			fmt.Printf("Warning: failed to close audit log source: %v\n", cerr)
@@ -148,11 +148,11 @@ func writeAuditLog(userID uint, action, description, targetType string, targetID
 	defer auditLogMu.Unlock()
 
 	// Check if rotation is needed
-	if info, err := os.Stat(auditLogPath); err == nil && info.Size() >= auditLogMaxSize {
+	if info, statErr := os.Stat(auditLogPath); statErr == nil && info.Size() >= auditLogMaxSize {
 		rotateAuditLog()
 	}
 
-	f, err := os.OpenFile(auditLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640)
+	f, err := os.OpenFile(auditLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		fmt.Printf("Warning: failed to open audit log file: %v\n", err)
 		return
