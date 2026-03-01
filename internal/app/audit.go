@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,14 +26,27 @@ var (
 	auditLogMu   sync.Mutex
 )
 
-// AuditLogEntry represents a single audit log entry written to the JSON log file
+// AuditLogEntry represents a single audit log entry written to the JSON log file.
+// Fields are structured for log shipper compatibility (e.g. Loki, Elasticsearch, Splunk).
 type AuditLogEntry struct {
-	Timestamp   string `json:"timestamp"`
-	UserID      uint   `json:"user_id"`
-	Action      string `json:"action"`
-	Description string `json:"description"`
-	TargetType  string `json:"target_type"`
-	TargetID    uint   `json:"target_id"`
+	Timestamp   string                 `json:"timestamp"`
+	UserID      uint                   `json:"user_id"`
+	Username    string                 `json:"username"`
+	Action      string                 `json:"action"`
+	Description string                 `json:"description"`
+	TargetType  string                 `json:"target_type"`
+	TargetID    uint                   `json:"target_id"`
+	Details     map[string]interface{} `json:"details,omitempty"`
+}
+
+// GetUsernameFromContext extracts the username from a gin context, returning "unknown" if not available.
+func GetUsernameFromContext(c interface{ Get(any) (any, bool) }) string {
+	if val, exists := c.Get("Username"); exists {
+		if s, ok := val.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "unknown"
 }
 
 // InitAuditLog initializes the audit log directory and file path.
@@ -130,14 +144,16 @@ func cleanupRotatedAuditLogs() {
 }
 
 // writeAuditLog appends a JSON log entry to the audit log file, rotating if needed
-func writeAuditLog(userID uint, action, description, targetType string, targetID uint) {
+func writeAuditLog(userID uint, username, action, description, targetType string, targetID uint, details map[string]interface{}) {
 	entry := AuditLogEntry{
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		UserID:      userID,
+		Username:    username,
 		Action:      action,
 		Description: description,
 		TargetType:  targetType,
 		TargetID:    targetID,
+		Details:     details,
 	}
 
 	data, err := json.Marshal(entry)
@@ -172,64 +188,107 @@ func writeAuditLog(userID uint, action, description, targetType string, targetID
 }
 
 // LogBenchmarkCreated logs when a benchmark is created
-func LogBenchmarkCreated(userID, benchmarkID uint, title string) {
-	writeAuditLog(userID, "Benchmark Created",
-		fmt.Sprintf("Created benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID)
+func LogBenchmarkCreated(userID uint, username string, benchmarkID uint, title string, runCount int) {
+	writeAuditLog(userID, username, "benchmark_created",
+		fmt.Sprintf("User %s (ID %d) created benchmark #%d: %s with %d run(s)", username, userID, benchmarkID, title, runCount),
+		"benchmark", benchmarkID, map[string]interface{}{
+			"benchmark_title": title,
+			"run_count":       runCount,
+		})
 }
 
-// LogBenchmarkUpdated logs when a benchmark is updated
-func LogBenchmarkUpdated(userID, benchmarkID uint, title string) {
-	writeAuditLog(userID, "Benchmark Updated",
-		fmt.Sprintf("Updated benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID)
+// LogBenchmarkUpdated logs when a benchmark's metadata is updated (title, description, labels)
+func LogBenchmarkUpdated(userID uint, username string, benchmarkID uint, title string, changes []string) {
+	writeAuditLog(userID, username, "benchmark_updated",
+		fmt.Sprintf("User %s (ID %d) updated benchmark #%d: %s (changed: %s)", username, userID, benchmarkID, title, strings.Join(changes, ", ")),
+		"benchmark", benchmarkID, map[string]interface{}{
+			"benchmark_title": title,
+			"changed_fields":  changes,
+		})
+}
+
+// LogBenchmarkRunsAdded logs when new runs are added to an existing benchmark
+func LogBenchmarkRunsAdded(userID uint, username string, benchmarkID uint, title string, runsAdded, totalRuns int) {
+	writeAuditLog(userID, username, "benchmark_runs_added",
+		fmt.Sprintf("User %s (ID %d) added %d run(s) to benchmark #%d: %s (total runs: %d)", username, userID, runsAdded, benchmarkID, title, totalRuns),
+		"benchmark", benchmarkID, map[string]interface{}{
+			"benchmark_title": title,
+			"runs_added":      runsAdded,
+			"total_runs":      totalRuns,
+		})
+}
+
+// LogBenchmarkRunDeleted logs when a specific run is deleted from a benchmark
+func LogBenchmarkRunDeleted(userID uint, username string, benchmarkID uint, title string, runIndex int, runLabel string) {
+	writeAuditLog(userID, username, "benchmark_run_deleted",
+		fmt.Sprintf("User %s (ID %d) deleted run %d (%s) from benchmark #%d: %s", username, userID, runIndex, runLabel, benchmarkID, title),
+		"benchmark", benchmarkID, map[string]interface{}{
+			"benchmark_title": title,
+			"run_index":       runIndex,
+			"run_label":       runLabel,
+		})
 }
 
 // LogBenchmarkDeleted logs when a benchmark is deleted
-func LogBenchmarkDeleted(userID, benchmarkID uint, title string) {
-	writeAuditLog(userID, "Benchmark Deleted",
-		fmt.Sprintf("Deleted benchmark #%d: %s", benchmarkID, title),
-		"benchmark", benchmarkID)
+func LogBenchmarkDeleted(userID uint, username string, benchmarkID uint, title string) {
+	writeAuditLog(userID, username, "benchmark_deleted",
+		fmt.Sprintf("User %s (ID %d) deleted benchmark #%d: %s", username, userID, benchmarkID, title),
+		"benchmark", benchmarkID, map[string]interface{}{
+			"benchmark_title": title,
+		})
 }
 
 // LogUserAdminGranted logs when a user is granted admin privileges
-func LogUserAdminGranted(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "Admin Granted",
-		fmt.Sprintf("Granted admin privileges to user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserAdminGranted(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, adminUsername, "user_admin_granted",
+		fmt.Sprintf("Admin %s (ID %d) granted admin privileges to user %s (ID %d)", adminUsername, adminUserID, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+		})
 }
 
 // LogUserAdminRevoked logs when admin privileges are revoked from a user
-func LogUserAdminRevoked(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "Admin Revoked",
-		fmt.Sprintf("Revoked admin privileges from user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserAdminRevoked(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, adminUsername, "user_admin_revoked",
+		fmt.Sprintf("Admin %s (ID %d) revoked admin privileges from user %s (ID %d)", adminUsername, adminUserID, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+		})
 }
 
 // LogUserBanned logs when a user is banned
-func LogUserBanned(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "User Banned",
-		fmt.Sprintf("Banned user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserBanned(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, adminUsername, "user_banned",
+		fmt.Sprintf("Admin %s (ID %d) banned user %s (ID %d)", adminUsername, adminUserID, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+		})
 }
 
 // LogUserUnbanned logs when a user is unbanned
-func LogUserUnbanned(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "User Unbanned",
-		fmt.Sprintf("Unbanned user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserUnbanned(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, adminUsername, "user_unbanned",
+		fmt.Sprintf("Admin %s (ID %d) unbanned user %s (ID %d)", adminUsername, adminUserID, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+		})
 }
 
 // LogUserDeleted logs when a user is deleted
-func LogUserDeleted(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "User Deleted",
-		fmt.Sprintf("Deleted user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserDeleted(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string) {
+	writeAuditLog(adminUserID, adminUsername, "user_deleted",
+		fmt.Sprintf("Admin %s (ID %d) deleted user %s (ID %d)", adminUsername, adminUserID, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+		})
 }
 
 // LogUserBenchmarksDeleted logs when all benchmarks for a user are deleted
-func LogUserBenchmarksDeleted(adminUserID, targetUserID uint, targetUsername string) {
-	writeAuditLog(adminUserID, "User Benchmarks Deleted",
-		fmt.Sprintf("Deleted all benchmarks for user: %s", targetUsername),
-		"user", targetUserID)
+func LogUserBenchmarksDeleted(adminUserID uint, adminUsername string, targetUserID uint, targetUsername string, benchmarkCount int) {
+	writeAuditLog(adminUserID, adminUsername, "user_benchmarks_deleted",
+		fmt.Sprintf("Admin %s (ID %d) deleted all %d benchmark(s) for user %s (ID %d)", adminUsername, adminUserID, benchmarkCount, targetUsername, targetUserID),
+		"user", targetUserID, map[string]interface{}{
+			"target_username": targetUsername,
+			"benchmark_count": benchmarkCount,
+		})
 }
