@@ -228,7 +228,7 @@ func TestMCPToolsList(t *testing.T) {
 			"update_benchmark",
 			"delete_benchmark", "delete_benchmark_run",
 			"list_api_tokens", "create_api_token", "delete_api_token",
-			"list_users", "list_audit_logs", "delete_user",
+			"list_users", "delete_user",
 			"delete_user_benchmarks", "ban_user", "toggle_user_admin",
 		}
 		if len(names) != len(allTools) {
@@ -856,57 +856,6 @@ func TestMCPListUsersAsAdmin(t *testing.T) {
 	}
 	if !strings.Contains(result.Content[0].Text, "regularuser1") {
 		t.Error("Expected regular user in result")
-	}
-}
-
-func TestMCPListAuditLogsRequiresAdmin(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	router := setupMCPTestRouter(db)
-
-	user := createTestUser(db, "mcpnonadmin2", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin2-token-abcdef1234567", Name: "Non-Admin Token"}
-	db.DB.Create(apiToken)
-
-	body := `{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"list_audit_logs","arguments":{}}}`
-	w := mcpRequest(t, router, body, apiToken.Token)
-
-	_, result := parseMCPToolResult(t, w)
-	if !result.IsError {
-		t.Error("Expected error for non-admin list_audit_logs")
-	}
-	if !strings.Contains(result.Content[0].Text, "admin privileges required") {
-		t.Error("Expected admin privileges error")
-	}
-}
-
-func TestMCPListAuditLogsAsAdmin(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-	router := setupMCPTestRouter(db)
-
-	admin := createTestUser(db, "mcpadmin2", true)
-	apiToken := &APIToken{UserID: admin.ID, Token: "admin2-token-abcdef1234567890", Name: "Admin Token"}
-	db.DB.Create(apiToken)
-
-	// Create a benchmark to generate an audit log entry
-	b := &Benchmark{Title: "Audit Test Bench", UserID: admin.ID}
-	db.DB.Create(b)
-	LogBenchmarkCreated(db, admin.ID, b.ID, b.Title)
-
-	body := `{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"list_audit_logs","arguments":{"page":1,"per_page":10}}}`
-	w := mcpRequest(t, router, body, apiToken.Token)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d", w.Code)
-	}
-
-	_, result := parseMCPToolResult(t, w)
-	if result.IsError {
-		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
-	}
-	if !strings.Contains(result.Content[0].Text, "Benchmark Created") {
-		t.Error("Expected audit log entry in result")
 	}
 }
 

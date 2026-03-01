@@ -23,11 +23,6 @@
               <i class="fa-solid fa-users"></i> Users
             </router-link>
           </li>
-          <li v-if="authStore.isAdmin" class="nav-item">
-            <router-link to="/admin/logs" class="nav-link" :class="{ active: $route.path === '/admin/logs' }">
-              <i class="fa-solid fa-clipboard-list"></i> Logs
-            </router-link>
-          </li>
         </ul>
 
         <ul class="navbar-nav">

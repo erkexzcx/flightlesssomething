@@ -1,218 +1,310 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
-func TestCreateAuditLog(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
+func TestWriteAuditLog(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
 
-	user := createTestUser(db, "audituser", false)
+	logsDir := filepath.Join(tmpDir, "logs")
 
-	t.Run("creates audit log entry", func(t *testing.T) {
-		err := CreateAuditLog(db, user.ID, "CREATE", "Created a test benchmark", "benchmark", 1)
+	t.Run("creates audit log file and writes entry", func(t *testing.T) {
+		LogBenchmarkCreated(1, 42, "Test Benchmark")
+
+		// Verify file exists
+		logPath := filepath.Join(logsDir, "audit.json")
+		if _, err := os.Stat(logPath); os.IsNotExist(err) {
+			t.Fatal("Expected audit log file to be created")
+		}
+
+		// Read and verify contents
+		content, err := os.ReadFile(logPath)
 		if err != nil {
-			t.Errorf("Failed to create audit log: %v", err)
+			t.Fatalf("Failed to read audit log file: %v", err)
 		}
 
-		// Verify the log was created
-		var log AuditLog
-		result := db.DB.First(&log)
-		if result.Error != nil {
-			t.Errorf("Failed to retrieve audit log: %v", result.Error)
+		scanner := bufio.NewScanner(bytes.NewReader(content))
+		if !scanner.Scan() {
+			t.Fatal("Expected at least one line in audit log file")
 		}
 
-		if log.UserID != user.ID {
-			t.Errorf("Expected UserID %d, got %d", user.ID, log.UserID)
+		var entry AuditLogEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("Failed to unmarshal audit log entry: %v", err)
 		}
-		if log.Action != "CREATE" {
-			t.Errorf("Expected Action 'CREATE', got %s", log.Action)
+
+		if entry.UserID != 1 {
+			t.Errorf("Expected UserID 1, got %d", entry.UserID)
 		}
-		if log.Description != "Created a test benchmark" {
-			t.Errorf("Expected specific description, got %s", log.Description)
+		if entry.Action != "Benchmark Created" {
+			t.Errorf("Expected Action 'Benchmark Created', got %s", entry.Action)
 		}
-		if log.TargetType != "benchmark" {
-			t.Errorf("Expected TargetType 'benchmark', got %s", log.TargetType)
+		if entry.TargetType != "benchmark" {
+			t.Errorf("Expected TargetType 'benchmark', got %s", entry.TargetType)
 		}
-		if log.TargetID != 1 {
-			t.Errorf("Expected TargetID 1, got %d", log.TargetID)
+		if entry.TargetID != 42 {
+			t.Errorf("Expected TargetID 42, got %d", entry.TargetID)
+		}
+		if entry.Timestamp == "" {
+			t.Error("Expected Timestamp to be set")
 		}
 	})
 
+	t.Run("appends multiple entries", func(t *testing.T) {
+		LogBenchmarkUpdated(2, 42, "Updated Benchmark")
+		LogBenchmarkDeleted(3, 42, "Deleted Benchmark")
+
+		logPath := filepath.Join(logsDir, "audit.json")
+		content, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatalf("Failed to read audit log file: %v", err)
+		}
+
+		lineCount := 0
+		scanner := bufio.NewScanner(bytes.NewReader(content))
+		for scanner.Scan() {
+			lineCount++
+			var entry AuditLogEntry
+			if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+				t.Fatalf("Failed to unmarshal line %d: %v", lineCount, err)
+			}
+		}
+
+		// 1 from first subtest + 2 from this subtest
+		if lineCount != 3 {
+			t.Errorf("Expected 3 log entries, got %d", lineCount)
+		}
+	})
 }
 
-func TestHandleListAuditLogs(t *testing.T) {
-	db := setupTestDB(t)
-	defer cleanupTestDB(t, db)
-
-	adminUser := createTestUser(db, "adminaudit", true)
-	regularUser := createTestUser(db, "regularaudit", false)
-
-	// Create some audit logs
-	if err := CreateAuditLog(db, regularUser.ID, "CREATE", "Created benchmark 1", "benchmark", 1); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
+func TestInitAuditLogCreatesAlongsideDataDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
 	}
-	if err := CreateAuditLog(db, regularUser.ID, "UPDATE", "Updated benchmark 1", "benchmark", 1); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
-	}
-	if err := CreateAuditLog(db, adminUser.ID, "DELETE", "Deleted benchmark 2", "benchmark", 2); err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	router := setupTestRouter()
+	// Verify the logs directory is alongside (sibling of) the data directory
+	expectedLogsDir := filepath.Join(tmpDir, "logs")
+	if auditLogsDir != expectedLogsDir {
+		t.Errorf("Expected auditLogsDir %q, got %q", expectedLogsDir, auditLogsDir)
+	}
+	expectedLogPath := filepath.Join(tmpDir, "logs", "audit.json")
+	if auditLogPath != expectedLogPath {
+		t.Errorf("Expected auditLogPath %q, got %q", expectedLogPath, auditLogPath)
+	}
 
-	// Setup admin route
-	router.GET("/api/audit-logs", func(c *gin.Context) {
-		c.Set("UserID", adminUser.ID)
-		c.Set("Username", adminUser.Username)
-		c.Set("IsAdmin", adminUser.IsAdmin)
-		c.Next()
-	}, HandleListAuditLogs(db))
+	// Verify logs directory was actually created
+	info, err := os.Stat(expectedLogsDir)
+	if err != nil {
+		t.Fatalf("Logs directory was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("Expected logs path to be a directory")
+	}
 
-	t.Run("admin can list audit logs", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	// Verify logs dir is NOT inside data dir
+	rel, relErr := filepath.Rel(dataDir, auditLogsDir)
+	if relErr != nil {
+		t.Fatalf("Failed to compute relative path: %v", relErr)
+	}
+	if !strings.HasPrefix(rel, "..") {
+		t.Errorf("Logs dir %q should not be inside data dir %q (rel=%q)", auditLogsDir, dataDir, rel)
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
-		}
+	// Write a log entry and verify the file appears in the expected location
+	LogBenchmarkCreated(1, 1, "test")
+	if _, err := os.Stat(expectedLogPath); os.IsNotExist(err) {
+		t.Error("Audit log file was not created alongside data directory")
+	}
+}
 
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
+func TestAllLogFunctions(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
 
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		if len(logs) < 3 {
-			t.Errorf("Expected at least 3 logs, got %d", len(logs))
-		}
-	})
+	// Call all log functions
+	LogBenchmarkCreated(1, 1, "bench")
+	LogBenchmarkUpdated(1, 1, "bench")
+	LogBenchmarkDeleted(1, 1, "bench")
+	LogUserAdminGranted(1, 2, "user2")
+	LogUserAdminRevoked(1, 2, "user2")
+	LogUserBanned(1, 2, "user2")
+	LogUserUnbanned(1, 2, "user2")
+	LogUserDeleted(1, 2, "user2")
+	LogUserBenchmarksDeleted(1, 2, "user2")
 
-	t.Run("filters by user_id", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs?user_id="+strconv.FormatUint(uint64(regularUser.ID), 10), nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	logPath := filepath.Join(tmpDir, "logs", "audit.json")
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read audit log file: %v", err)
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+	expectedActions := []string{
+		"Benchmark Created", "Benchmark Updated", "Benchmark Deleted",
+		"Admin Granted", "Admin Revoked",
+		"User Banned", "User Unbanned",
+		"User Deleted", "User Benchmarks Deleted",
+	}
 
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
+	scanner := bufio.NewScanner(bytes.NewReader(content))
+	i := 0
+	for scanner.Scan() {
+		var entry AuditLogEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("Failed to unmarshal entry %d: %v", i, err)
 		}
+		if i < len(expectedActions) && entry.Action != expectedActions[i] {
+			t.Errorf("Entry %d: expected action %q, got %q", i, expectedActions[i], entry.Action)
+		}
+		i++
+	}
 
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		// All logs should be from regularUser
-		for _, logEntry := range logs {
-			log, ok := logEntry.(map[string]interface{})
-			if !ok {
-				t.Fatal("Expected log entry to be map")
-			}
-			userIDFloat, ok := log["UserID"].(float64)
-			if !ok {
-				t.Fatal("Expected UserID to be float64")
-			}
-			userID := uint(userIDFloat)
-			if userID != regularUser.ID {
-				t.Errorf("Expected UserID %d, got %d", regularUser.ID, userID)
-			}
-		}
-	})
+	if i != len(expectedActions) {
+		t.Errorf("Expected %d entries, got %d", len(expectedActions), i)
+	}
+}
 
-	t.Run("filters by action", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/api/audit-logs?action=CREATE", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+func TestAuditLogRotation(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+	logsDir := filepath.Join(tmpDir, "logs")
+	logPath := filepath.Join(logsDir, "audit.json")
 
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
+	// Write enough data to exceed the rotation threshold
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("Failed to create audit log file: %v", err)
+	}
+	bigLine := strings.Repeat("x", 1024) + "\n"
+	for written := 0; written < auditLogMaxSize+1; written += len(bigLine) {
+		if _, writeErr := f.WriteString(bigLine); writeErr != nil {
+			t.Fatalf("Failed to write test data: %v", writeErr)
 		}
+	}
+	if closeErr := f.Close(); closeErr != nil {
+		t.Fatalf("Failed to close test file: %v", closeErr)
+	}
 
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		// All logs should have CREATE action
-		for _, logEntry := range logs {
-			log, ok := logEntry.(map[string]interface{})
-			if !ok {
-				t.Fatal("Expected log entry to be map")
-			}
-			action, ok := log["Action"].(string)
-			if !ok {
-				t.Fatal("Expected Action to be string")
-			}
-			if action != "CREATE" {
-				t.Errorf("Expected Action 'CREATE', got %s", action)
-			}
-		}
-	})
+	// Writing a new entry should trigger rotation
+	LogBenchmarkCreated(1, 1, "trigger rotation")
 
-	t.Run("pagination works", func(t *testing.T) {
-		// Create more logs for pagination test
-		for i := 0; i < 60; i++ {
-			if err := CreateAuditLog(db, regularUser.ID, "TEST", "Test log "+strconv.Itoa(i), "test", uint(i)); err != nil {
-				t.Fatalf("Failed to create audit log: %v", err)
-			}
-		}
+	// Verify rotated file exists
+	matches, err := filepath.Glob(filepath.Join(logsDir, "audit-*.json.gz"))
+	if err != nil {
+		t.Fatalf("Failed to glob rotated files: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("Expected 1 rotated file, got %d", len(matches))
+	}
 
-		// Request first page
-		req, err := http.NewRequest("GET", "/api/audit-logs?page=1&per_page=10", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	// Verify the rotated file is valid gzip
+	gzData, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("Failed to read rotated file: %v", err)
+	}
+	gz, err := gzip.NewReader(bytes.NewReader(gzData))
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	buf := make([]byte, 1024)
+	if _, readErr := gz.Read(buf); readErr != nil && !errors.Is(readErr, io.EOF) {
+		t.Fatalf("Failed to read from rotated gzip file: %v", readErr)
+	}
+	if closeErr := gz.Close(); closeErr != nil {
+		t.Fatalf("Failed to close gzip reader: %v", closeErr)
+	}
 
-		var response map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
+	// Verify the current log file only has the new entry
+	currentContent, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read current log file: %v", err)
+	}
 
-		logs, ok := response["logs"].([]interface{})
-		if !ok {
-			t.Fatal("Expected logs array in response")
-		}
-		if len(logs) != 10 {
-			t.Errorf("Expected 10 logs on first page, got %d", len(logs))
-		}
+	lineCount := 0
+	scanner := bufio.NewScanner(bytes.NewReader(currentContent))
+	for scanner.Scan() {
+		lineCount++
+	}
+	if lineCount != 1 {
+		t.Errorf("Expected 1 line in current log after rotation, got %d", lineCount)
+	}
+}
 
-		totalFloat, ok := response["total"].(float64)
-		if !ok {
-			t.Fatal("Expected total to be float64")
+func TestAuditLogRotationCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
+
+	logsDir := filepath.Join(tmpDir, "logs")
+
+	// Create more than auditLogMaxFiles rotated files
+	for i := 0; i < auditLogMaxFiles+3; i++ {
+		name := filepath.Join(logsDir, fmt.Sprintf("audit-20250101-%06d.json.gz", i))
+		if err := os.WriteFile(name, []byte("test"), 0o600); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
 		}
-		total := int64(totalFloat)
-		if total < 60 {
-			t.Errorf("Expected at least 60 total logs, got %d", total)
-		}
-	})
+	}
+
+	// Verify we have more than the max
+	matches, err := filepath.Glob(filepath.Join(logsDir, "audit-*.json.gz"))
+	if err != nil {
+		t.Fatalf("Failed to glob rotated files: %v", err)
+	}
+	if len(matches) != auditLogMaxFiles+3 {
+		t.Fatalf("Expected %d files before cleanup, got %d", auditLogMaxFiles+3, len(matches))
+	}
+
+	// Run cleanup
+	auditLogMu.Lock()
+	cleanupRotatedAuditLogs()
+	auditLogMu.Unlock()
+
+	// Verify we're down to the max
+	matches, err = filepath.Glob(filepath.Join(logsDir, "audit-*.json.gz"))
+	if err != nil {
+		t.Fatalf("Failed to glob rotated files after cleanup: %v", err)
+	}
+	if len(matches) != auditLogMaxFiles {
+		t.Errorf("Expected %d files after cleanup, got %d", auditLogMaxFiles, len(matches))
+	}
 }

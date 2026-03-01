@@ -354,24 +354,6 @@ func (s *mcpServer) defineTools() []mcpTool {
 			accessLevel: toolAccessAdmin,
 		},
 		{
-			Name:        "list_audit_logs",
-			Title:       "Audit Logs",
-			Description: "List audit logs with pagination and optional filters. Admin only. Requires authentication via API token with admin privileges.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"page":        map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
-					"per_page":    map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 50)"},
-					"user_id":     map[string]interface{}{"type": "integer", "description": "Filter by user ID who performed the action"},
-					"action":      map[string]interface{}{"type": "string", "description": "Filter by action (partial match)"},
-					"target_type": map[string]interface{}{"type": "string", "description": "Filter by target type (e.g. 'user', 'benchmark')"},
-				},
-			},
-			Icons:       faIcon("clipboard-list"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAdmin,
-		},
-		{
 			Name:        "delete_user",
 			Title:       "Delete User",
 			Description: "Delete a user account. Admin only. Cannot delete your own account. Optionally delete all user data (benchmarks). Requires authentication via API token with admin privileges.",
@@ -640,8 +622,6 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolDeleteAPIToken(params.Arguments, userID)
 	case "list_users":
 		result, toolErr = s.toolListUsers(params.Arguments)
-	case "list_audit_logs":
-		result, toolErr = s.toolListAuditLogs(params.Arguments)
 	case "delete_user":
 		result, toolErr = s.toolDeleteUser(params.Arguments, userID)
 	case "delete_user_benchmarks":
@@ -1049,7 +1029,7 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdm
 		return "", fmt.Errorf("failed to load benchmark: %w", err)
 	}
 
-	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
+	LogBenchmarkUpdated(userID, benchmark.ID, benchmark.Title)
 
 	data, err := json.Marshal(benchmark)
 	if err != nil {
@@ -1100,7 +1080,7 @@ func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, isAdm
 		return "", fmt.Errorf("failed to delete benchmark: %w", err)
 	}
 
-	LogBenchmarkDeleted(s.db, userID, benchmark.ID, title)
+	LogBenchmarkDeleted(userID, benchmark.ID, title)
 
 	result := map[string]interface{}{
 		"message": "benchmark deleted",
@@ -1174,7 +1154,7 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 		return "", fmt.Errorf("failed to update benchmark: %w", err)
 	}
 
-	LogBenchmarkUpdated(s.db, userID, benchmark.ID, benchmark.Title)
+	LogBenchmarkUpdated(userID, benchmark.ID, benchmark.Title)
 
 	runtime.GC()
 
@@ -1327,66 +1307,6 @@ func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
 	return string(data), nil
 }
 
-func (s *mcpServer) toolListAuditLogs(args json.RawMessage) (string, error) {
-	var params struct {
-		Page       int    `json:"page"`
-		PerPage    int    `json:"per_page"`
-		UserID     int    `json:"user_id"`
-		Action     string `json:"action"`
-		TargetType string `json:"target_type"`
-	}
-	if args != nil {
-		if err := json.Unmarshal(args, &params); err != nil {
-			return "", fmt.Errorf("invalid arguments: %w", err)
-		}
-	}
-
-	if params.Page < 1 {
-		params.Page = 1
-	}
-	if params.PerPage < 1 || params.PerPage > 100 {
-		params.PerPage = 50
-	}
-
-	query := s.db.DB.Model(&AuditLog{}).Preload("User")
-
-	if params.UserID > 0 {
-		query = query.Where("user_id = ?", params.UserID)
-	}
-	if params.Action != "" {
-		query = query.Where("action LIKE ?", "%"+params.Action+"%")
-	}
-	if params.TargetType != "" {
-		query = query.Where("target_type = ?", params.TargetType)
-	}
-
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
-	}
-
-	var logs []AuditLog
-	offset := (params.Page - 1) * params.PerPage
-	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&logs).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
-	}
-
-	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
-
-	result := map[string]interface{}{
-		"logs":        logs,
-		"page":        params.Page,
-		"per_page":    params.PerPage,
-		"total":       total,
-		"total_pages": totalPages,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
 func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (string, error) {
 	var params struct {
 		UserID     int  `json:"user_id"`
@@ -1427,7 +1347,7 @@ func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (stri
 		return "", fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	LogUserDeleted(s.db, adminUserID, user.ID, username)
+	LogUserDeleted(adminUserID, user.ID, username)
 
 	result := map[string]interface{}{
 		"message":  "user deleted",
@@ -1472,7 +1392,7 @@ func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID u
 		return "", fmt.Errorf("failed to delete benchmarks: %w", err)
 	}
 
-	LogUserBenchmarksDeleted(s.db, adminUserID, user.ID, user.Username)
+	LogUserBenchmarksDeleted(adminUserID, user.ID, user.Username)
 
 	result := map[string]interface{}{
 		"message":  "all user benchmarks deleted",
@@ -1514,9 +1434,9 @@ func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint) (string,
 	}
 
 	if params.Banned {
-		LogUserBanned(s.db, adminUserID, user.ID, user.Username)
+		LogUserBanned(adminUserID, user.ID, user.Username)
 	} else {
-		LogUserUnbanned(s.db, adminUserID, user.ID, user.Username)
+		LogUserUnbanned(adminUserID, user.ID, user.Username)
 	}
 
 	data, err := json.Marshal(user)
@@ -1554,9 +1474,9 @@ func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint) 
 	}
 
 	if params.IsAdmin {
-		LogUserAdminGranted(s.db, adminUserID, user.ID, user.Username)
+		LogUserAdminGranted(adminUserID, user.ID, user.Username)
 	} else {
-		LogUserAdminRevoked(s.db, adminUserID, user.ID, user.Username)
+		LogUserAdminRevoked(adminUserID, user.ID, user.Username)
 	}
 
 	data, err := json.Marshal(user)

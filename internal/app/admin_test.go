@@ -85,137 +85,13 @@ func TestEnsureSystemAdmin(t *testing.T) {
 	})
 }
 
-func TestAuditLogCreation(t *testing.T) {
-	// Create a temporary database
-	tmpDir := t.TempDir()
-	db, err := InitDB(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	// Create a test user
-	user := User{
-		DiscordID: "test123",
-		Username:  "testuser",
-		IsAdmin:   false,
-	}
-	if err := db.DB.Create(&user).Error; err != nil {
-		t.Fatalf("Failed to create test user: %v", err)
-	}
-
-	t.Run("creates audit log entry", func(t *testing.T) {
-		err := CreateAuditLog(db, user.ID, "Test Action", "Test description", "user", 1)
-		if err != nil {
-			t.Fatalf("Failed to create audit log: %v", err)
-		}
-
-		// Verify the log was created
-		var log AuditLog
-		if err := db.DB.Where("user_id = ?", user.ID).First(&log).Error; err != nil {
-			t.Fatalf("Failed to find audit log: %v", err)
-		}
-
-		if log.Action != "Test Action" {
-			t.Errorf("Expected action 'Test Action', got '%s'", log.Action)
-		}
-
-		if log.Description != "Test description" {
-			t.Errorf("Expected description 'Test description', got '%s'", log.Description)
-		}
-	})
-
-	t.Run("logs benchmark creation", func(t *testing.T) {
-		// Create a test benchmark
-		benchmark := Benchmark{
-			UserID:      user.ID,
-			Title:       "Test Benchmark",
-			Description: "Test description",
-		}
-		if err := db.DB.Create(&benchmark).Error; err != nil {
-			t.Fatalf("Failed to create test benchmark: %v", err)
-		}
-
-		LogBenchmarkCreated(db, user.ID, benchmark.ID, benchmark.Title)
-
-		// Verify the log was created
-		var log AuditLog
-		if err := db.DB.Where("user_id = ? AND target_type = ? AND target_id = ?", user.ID, "benchmark", benchmark.ID).First(&log).Error; err != nil {
-			t.Fatalf("Failed to find audit log: %v", err)
-		}
-
-		if log.Action != "Benchmark Created" {
-			t.Errorf("Expected action 'Benchmark Created', got '%s'", log.Action)
-		}
-	})
-}
-
-func TestAuditLogModel(t *testing.T) {
-	// Create a temporary database
-	tmpDir := t.TempDir()
-	db, err := InitDB(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	// Create a test user
-	user := User{
-		DiscordID: "test456",
-		Username:  "testuser2",
-		IsAdmin:   false,
-	}
-	if err := db.DB.Create(&user).Error; err != nil {
-		t.Fatalf("Failed to create test user: %v", err)
-	}
-
-	// Create an audit log
-	log := AuditLog{
-		UserID:      user.ID,
-		Action:      "Test Action",
-		Description: "Test description",
-		TargetType:  "user",
-		TargetID:    user.ID,
-	}
-	if err := db.DB.Create(&log).Error; err != nil {
-		t.Fatalf("Failed to create audit log: %v", err)
-	}
-
-	// Retrieve the log with user preloaded
-	var retrievedLog AuditLog
-	if err := db.DB.Preload("User").First(&retrievedLog, log.ID).Error; err != nil {
-		t.Fatalf("Failed to retrieve audit log: %v", err)
-	}
-
-	if retrievedLog.User.Username != user.Username {
-		t.Errorf("Expected user username '%s', got '%s'", user.Username, retrievedLog.User.Username)
-	}
-
-	if retrievedLog.CreatedAtHumanized == "" {
-		t.Error("Expected CreatedAtHumanized to be set by AfterFind hook")
-	}
-}
-
 func TestDatabaseMigration(t *testing.T) {
 	// Create a temporary database
 	tmpDir := t.TempDir()
-	db, err := InitDB(tmpDir)
+	_, err := InitDB(tmpDir)
 	if err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
-
-	// Verify AuditLog table exists by creating a record
-	log := AuditLog{
-		UserID:      1,
-		Action:      "Test",
-		Description: "Test",
-		TargetType:  "test",
-		TargetID:    1,
-	}
-	if err := db.DB.Create(&log).Error; err != nil {
-		t.Fatalf("Failed to create audit log - table may not exist: %v", err)
-	}
-
-	// Clean up
-	db.DB.Delete(&log)
 }
 
 func TestSelfProtectionDeleteUser(t *testing.T) {

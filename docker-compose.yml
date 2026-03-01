@@ -7,6 +7,7 @@ services:
       - "5000:5000"
     volumes:
       - ./data:/data
+      - ./logs:/logs
     environment:
       - FS_BIND=0.0.0.0:5000
       - FS_DATA_DIR=/data
