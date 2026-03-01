@@ -197,7 +197,7 @@ Hard limits prevent any single upload from consuming excessive resources:
 
 ### Database
 
-SQLite with GORM auto-migration. The database file (`flightlesssomething.db`) stores user accounts, benchmark metadata, and API tokens. Schema version is tracked in a `schema_versions` table (current version: 4). Audit logs are written to a JSON log file (`logs/audit.json`) alongside the data directory, with automatic rotation (gzip-compressed) at 10 MB and retention of the 10 most recent rotated files.
+SQLite with GORM auto-migration. The database file (`flightlesssomething.db`) stores user accounts, benchmark metadata, and API tokens. Schema version is tracked in a `schema_versions` table (current version: 5). Audit logs are written to a JSON log file (`logs/audit.json`) alongside the data directory, with automatic rotation (gzip-compressed) at 10 MB and retention of the 10 most recent rotated files.
 
 ### Benchmark Files
 
@@ -219,6 +219,7 @@ Migrations run automatically on startup:
 - **v1 → v2**: Added `RunNames` and `Specifications` searchable fields to benchmarks
 - **v2 → v3**: Migrated storage format from V1 (single array) to V2 (per-run streaming) and regenerated metadata files
 - **v3 → v4**: Pre-calculated statistics for all benchmarks (`.stats` files) for instant loading
+- **v4 → v5**: Dropped `audit_logs` table (audit logs moved to file-based JSON logging)
 
 Legacy V1 data files are detected by reading the file header. If the header decode fails, the server falls back to legacy loading (full dataset in memory).
 
