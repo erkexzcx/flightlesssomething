@@ -44,4 +44,3 @@ Thumbs.db
 # Web UI (built files are tracked, but node_modules is not)
 web/node_modules/
 web/dist/
-
