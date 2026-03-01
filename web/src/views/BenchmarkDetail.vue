@@ -547,13 +547,18 @@ async function handleDeleteRun() {
     updating.value = true
     showDeleteRunModal.value = false
     
-    await api.benchmarks.deleteRun(benchmark.value.ID, runToDelete.value)
+    const deletedIndex = runToDelete.value
+    await api.benchmarks.deleteRun(benchmark.value.ID, deletedIndex)
     
-    // Reload benchmark metadata to get updated run_count
+    // Remove the deleted run locally instead of reloading all data
+    if (benchmarkData.value) {
+      benchmarkData.value.splice(deletedIndex, 1)
+    }
+    editLabels.value.splice(deletedIndex, 1)
+    
+    // Update metadata
     benchmark.value = await api.benchmarks.get(benchmark.value.ID)
-    
-    // Reload the benchmark data to reflect the deletion
-    await loadBenchmarkData(benchmark.value.ID)
+    totalRuns.value = benchmark.value.run_count || 0
     
     // Reset state
     runToDelete.value = null
