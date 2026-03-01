@@ -10,7 +10,6 @@ import (
 )
 
 var (
-	auditLogDir  string
 	auditLogPath string
 	auditLogMu   sync.Mutex
 )
@@ -27,9 +26,9 @@ type AuditLogEntry struct {
 
 // InitAuditLog initializes the audit log directory and file path
 func InitAuditLog(dataDir string) error {
-	auditLogDir = filepath.Join(dataDir, "logs")
-	auditLogPath = filepath.Join(auditLogDir, "audit.json")
-	return os.MkdirAll(auditLogDir, 0o750)
+	logsDir := filepath.Join(dataDir, "logs")
+	auditLogPath = filepath.Join(logsDir, "audit.json")
+	return os.MkdirAll(logsDir, 0o750)
 }
 
 // writeAuditLog appends a JSON log entry to the audit log file
