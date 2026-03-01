@@ -138,21 +138,6 @@ func InitDB(dataDir string) (*DBInstance, error) {
 				return nil, fmt.Errorf("failed to set schema version to 4: %w", err)
 			}
 			log.Println("Successfully migrated to version 4")
-			version = 4 // Update local version for next migration step
-		}
-
-		if version == 4 {
-			log.Println("Dropping audit_logs table (audit logs moved to file-based logging)...")
-			if db.Migrator().HasTable("audit_logs") {
-				if err := db.Migrator().DropTable("audit_logs"); err != nil {
-					return nil, fmt.Errorf("failed to drop audit_logs table: %w", err)
-				}
-				log.Println("Dropped audit_logs table")
-			}
-			if err := setSchemaVersion(db, 5); err != nil {
-				return nil, fmt.Errorf("failed to set schema version to 5: %w", err)
-			}
-			log.Println("Successfully migrated to version 5")
 		}
 	}
 

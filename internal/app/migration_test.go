@@ -405,62 +405,6 @@ func TestInitDBWithMigration(t *testing.T) {
 		}
 	})
 	
-	t.Run("v4 to v5 drops audit_logs table", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		dbPath := filepath.Join(tmpDir, "flightlesssomething.db")
-		rawDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-
-		// Set up a v4 database with an audit_logs table
-		if migrateErr := rawDB.AutoMigrate(&User{}, &Benchmark{}, &APIToken{}, &SchemaVersion{}); migrateErr != nil {
-			t.Fatalf("Failed to migrate schema: %v", migrateErr)
-		}
-		// Create audit_logs table manually (simulating old schema)
-		if execErr := rawDB.Exec("CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY, user_id INTEGER, action TEXT, description TEXT, target_type TEXT, target_id INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)").Error; execErr != nil {
-			t.Fatalf("Failed to create audit_logs table: %v", execErr)
-		}
-		if versionErr := setSchemaVersion(rawDB, 4); versionErr != nil {
-			t.Fatalf("Failed to set schema version: %v", versionErr)
-		}
-
-		// Verify audit_logs table exists
-		if !rawDB.Migrator().HasTable("audit_logs") {
-			t.Fatal("audit_logs table should exist before migration")
-		}
-
-		// Close the raw DB connection
-		sqlDB, dbErr := rawDB.DB()
-		if dbErr != nil {
-			t.Fatalf("Failed to get sql.DB: %v", dbErr)
-		}
-		if closeErr := sqlDB.Close(); closeErr != nil {
-			t.Fatalf("Failed to close database: %v", closeErr)
-		}
-
-		// Run InitDB which should trigger v4→v5 migration
-		db, initErr := InitDB(tmpDir)
-		if initErr != nil {
-			t.Fatalf("Failed to initialize database: %v", initErr)
-		}
-		defer cleanupTestDB(t, db)
-
-		// Verify audit_logs table was dropped
-		if db.DB.Migrator().HasTable("audit_logs") {
-			t.Error("audit_logs table should have been dropped after v4→v5 migration")
-		}
-
-		// Verify schema version is now 5
-		var version SchemaVersion
-		if queryErr := db.DB.Order("version DESC").First(&version).Error; queryErr != nil {
-			t.Fatalf("Failed to read schema version: %v", queryErr)
-		}
-		if version.Version != 5 {
-			t.Errorf("Expected schema version 5, got %d", version.Version)
-		}
-	})
-
 	t.Run("preserves timestamps during migration", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dbPath := filepath.Join(tmpDir, "flightlesssomething.db")

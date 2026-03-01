@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -15,27 +16,32 @@ import (
 
 func TestWriteAuditLog(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := InitAuditLog(tmpDir); err != nil {
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
+
+	logsDir := filepath.Join(tmpDir, "logs")
 
 	t.Run("creates audit log file and writes entry", func(t *testing.T) {
 		LogBenchmarkCreated(1, 42, "Test Benchmark")
 
 		// Verify file exists
-		logPath := filepath.Join(tmpDir, "logs", "audit.json")
+		logPath := filepath.Join(logsDir, "audit.json")
 		if _, err := os.Stat(logPath); os.IsNotExist(err) {
 			t.Fatal("Expected audit log file to be created")
 		}
 
 		// Read and verify contents
-		f, err := os.Open(logPath)
+		content, err := os.ReadFile(logPath)
 		if err != nil {
-			t.Fatalf("Failed to open audit log file: %v", err)
+			t.Fatalf("Failed to read audit log file: %v", err)
 		}
-		defer func() { _ = f.Close() }()
 
-		scanner := bufio.NewScanner(f)
+		scanner := bufio.NewScanner(bytes.NewReader(content))
 		if !scanner.Scan() {
 			t.Fatal("Expected at least one line in audit log file")
 		}
@@ -66,15 +72,14 @@ func TestWriteAuditLog(t *testing.T) {
 		LogBenchmarkUpdated(2, 42, "Updated Benchmark")
 		LogBenchmarkDeleted(3, 42, "Deleted Benchmark")
 
-		logPath := filepath.Join(tmpDir, "logs", "audit.json")
-		f, err := os.Open(logPath)
+		logPath := filepath.Join(logsDir, "audit.json")
+		content, err := os.ReadFile(logPath)
 		if err != nil {
-			t.Fatalf("Failed to open audit log file: %v", err)
+			t.Fatalf("Failed to read audit log file: %v", err)
 		}
-		defer func() { _ = f.Close() }()
 
 		lineCount := 0
-		scanner := bufio.NewScanner(f)
+		scanner := bufio.NewScanner(bytes.NewReader(content))
 		for scanner.Scan() {
 			lineCount++
 			var entry AuditLogEntry
@@ -92,7 +97,11 @@ func TestWriteAuditLog(t *testing.T) {
 
 func TestAllLogFunctions(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := InitAuditLog(tmpDir); err != nil {
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
@@ -108,11 +117,10 @@ func TestAllLogFunctions(t *testing.T) {
 	LogUserBenchmarksDeleted(1, 2, "user2")
 
 	logPath := filepath.Join(tmpDir, "logs", "audit.json")
-	f, err := os.Open(logPath)
+	content, err := os.ReadFile(logPath)
 	if err != nil {
-		t.Fatalf("Failed to open audit log file: %v", err)
+		t.Fatalf("Failed to read audit log file: %v", err)
 	}
-	defer func() { _ = f.Close() }()
 
 	expectedActions := []string{
 		"Benchmark Created", "Benchmark Updated", "Benchmark Deleted",
@@ -121,7 +129,7 @@ func TestAllLogFunctions(t *testing.T) {
 		"User Deleted", "User Benchmarks Deleted",
 	}
 
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(bytes.NewReader(content))
 	i := 0
 	for scanner.Scan() {
 		var entry AuditLogEntry
@@ -141,11 +149,16 @@ func TestAllLogFunctions(t *testing.T) {
 
 func TestAuditLogRotation(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := InitAuditLog(tmpDir); err != nil {
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	logPath := filepath.Join(tmpDir, "logs", "audit.json")
+	logsDir := filepath.Join(tmpDir, "logs")
+	logPath := filepath.Join(logsDir, "audit.json")
 
 	// Write enough data to exceed the rotation threshold
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o600)
@@ -166,7 +179,7 @@ func TestAuditLogRotation(t *testing.T) {
 	LogBenchmarkCreated(1, 1, "trigger rotation")
 
 	// Verify rotated file exists
-	matches, err := filepath.Glob(filepath.Join(tmpDir, "logs", "audit-*.json.gz"))
+	matches, err := filepath.Glob(filepath.Join(logsDir, "audit-*.json.gz"))
 	if err != nil {
 		t.Fatalf("Failed to glob rotated files: %v", err)
 	}
@@ -175,32 +188,30 @@ func TestAuditLogRotation(t *testing.T) {
 	}
 
 	// Verify the rotated file is valid gzip
-	gzFile, err := os.Open(matches[0])
+	gzData, err := os.ReadFile(matches[0])
 	if err != nil {
-		t.Fatalf("Failed to open rotated file: %v", err)
+		t.Fatalf("Failed to read rotated file: %v", err)
 	}
-	defer func() { _ = gzFile.Close() }()
-	gz, err := gzip.NewReader(gzFile)
+	gz, err := gzip.NewReader(bytes.NewReader(gzData))
 	if err != nil {
 		t.Fatalf("Failed to create gzip reader: %v", err)
 	}
-	defer func() { _ = gz.Close() }()
-
-	// Read some content to verify it's valid
 	buf := make([]byte, 1024)
-	if _, err := gz.Read(buf); err != nil && !errors.Is(err, io.EOF) {
-		t.Fatalf("Failed to read from rotated gzip file: %v", err)
+	if _, readErr := gz.Read(buf); readErr != nil && !errors.Is(readErr, io.EOF) {
+		t.Fatalf("Failed to read from rotated gzip file: %v", readErr)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("Failed to close gzip reader: %v", err)
 	}
 
 	// Verify the current log file only has the new entry
-	currentF, err := os.Open(logPath)
+	currentContent, err := os.ReadFile(logPath)
 	if err != nil {
-		t.Fatalf("Failed to open current log file: %v", err)
+		t.Fatalf("Failed to read current log file: %v", err)
 	}
-	defer func() { _ = currentF.Close() }()
 
 	lineCount := 0
-	scanner := bufio.NewScanner(currentF)
+	scanner := bufio.NewScanner(bytes.NewReader(currentContent))
 	for scanner.Scan() {
 		lineCount++
 	}
@@ -211,7 +222,11 @@ func TestAuditLogRotation(t *testing.T) {
 
 func TestAuditLogRotationCleanup(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := InitAuditLog(tmpDir); err != nil {
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
@@ -220,7 +235,7 @@ func TestAuditLogRotationCleanup(t *testing.T) {
 	// Create more than auditLogMaxFiles rotated files
 	for i := 0; i < auditLogMaxFiles+3; i++ {
 		name := filepath.Join(logsDir, fmt.Sprintf("audit-20250101-%06d.json.gz", i))
-		if err := os.WriteFile(name, []byte("test"), 0o640); err != nil {
+		if err := os.WriteFile(name, []byte("test"), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 	}

@@ -35,9 +35,10 @@ type AuditLogEntry struct {
 	TargetID    uint   `json:"target_id"`
 }
 
-// InitAuditLog initializes the audit log directory and file path
+// InitAuditLog initializes the audit log directory and file path.
+// The logs directory is created alongside (as a sibling of) the data directory.
 func InitAuditLog(dataDir string) error {
-	auditLogsDir = filepath.Join(dataDir, "logs")
+	auditLogsDir = filepath.Join(filepath.Dir(dataDir), "logs")
 	auditLogPath = filepath.Join(auditLogsDir, "audit.json")
 	return os.MkdirAll(auditLogsDir, 0o750)
 }

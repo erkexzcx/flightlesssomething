@@ -22,9 +22,8 @@ const (
 	// - 2: Added RunNames and Specifications fields to Benchmark for enhanced search
 	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format) + regenerate metadata with JSON size
 	// - 4: Pre-calculate statistics for all benchmarks (.stats files) for instant loading
-	// - 5: Removed audit_logs table (audit logs moved to file-based JSON logging)
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 5
+	currentSchemaVersion = 4
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )
