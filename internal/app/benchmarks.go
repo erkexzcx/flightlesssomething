@@ -347,7 +347,9 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark creation
-		LogBenchmarkCreated(uid, benchmark.ID, benchmark.Title)
+		username, _ := c.Get("Username")
+		usernameStr, _ := username.(string)
+		LogBenchmarkCreated(uid, usernameStr, benchmark.ID, benchmark.Title, len(benchmarkData))
 
 		c.JSON(http.StatusCreated, benchmark)
 	}
@@ -416,8 +418,18 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			benchmark.Description = req.Description
 		}
 
+		// Track what fields were changed for audit logging
+		var changes []string
+		if req.Title != "" {
+			changes = append(changes, "title")
+		}
+		if req.Description != "" {
+			changes = append(changes, "description")
+		}
+
 		// Update labels if provided
 		if len(req.Labels) > 0 {
+			changes = append(changes, "labels")
 			benchmarkID, err := strconv.ParseUint(id, 10, 32)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
@@ -469,7 +481,9 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark update
-		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
+		username, _ := c.Get("Username")
+		usernameStr, _ := username.(string)
+		LogBenchmarkUpdated(uid, usernameStr, benchmark.ID, benchmark.Title, changes)
 
 		c.JSON(http.StatusOK, benchmark)
 	}
@@ -535,7 +549,9 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 		}
 
 		// Log benchmark deletion
-		LogBenchmarkDeleted(uid, benchmark.ID, title)
+		username, _ := c.Get("Username")
+		usernameStr, _ := username.(string)
+		LogBenchmarkDeleted(uid, usernameStr, benchmark.ID, title)
 
 		c.JSON(http.StatusOK, gin.H{"message": "benchmark deleted"})
 	}
@@ -652,6 +668,9 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Capture run label before deletion for audit log
+		runLabel := benchmarkData[idx].Label
+
 		// Remove the run at the specified index
 		benchmarkData = append(benchmarkData[:idx], benchmarkData[idx+1:]...)
 
@@ -678,8 +697,10 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Log benchmark update
-		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
+		// Log run deletion
+		username, _ := c.Get("Username")
+		usernameStr, _ := username.(string)
+		LogBenchmarkRunDeleted(uid, usernameStr, benchmark.ID, benchmark.Title, idx, runLabel)
 
 		// Trigger GC to reclaim memory from loaded benchmark data
 		runtime.GC()
@@ -809,8 +830,10 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Log benchmark update
-		LogBenchmarkUpdated(uid, benchmark.ID, benchmark.Title)
+		// Log runs added
+		username, _ := c.Get("Username")
+		usernameStr, _ := username.(string)
+		LogBenchmarkRunsAdded(uid, usernameStr, benchmark.ID, benchmark.Title, len(newBenchmarkData), len(existingData))
 
 		// Trigger GC to reclaim memory from loaded benchmark data
 		runtime.GC()

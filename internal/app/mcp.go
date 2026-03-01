@@ -518,7 +518,7 @@ func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrp
 Server base URL: ` + baseURL
 
 	// Add authenticated user context or anonymous mode notice
-	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
+	userID, _, isAdmin, authenticated := s.authenticateFromHeader(c)
 	if authenticated {
 		var user User
 		if err := s.db.DB.First(&user, userID).Error; err == nil {
@@ -546,7 +546,7 @@ Server base URL: ` + baseURL
 }
 
 func (s *mcpServer) handleToolsList(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	_, isAdmin, authenticated := s.authenticateFromHeader(c)
+	_, _, isAdmin, authenticated := s.authenticateFromHeader(c)
 
 	filtered := make([]mcpTool, 0, len(s.tools))
 	for _, tool := range s.tools {
@@ -581,7 +581,7 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	}
 
 	// Determine authentication state
-	userID, isAdmin, authenticated := s.authenticateFromHeader(c)
+	userID, username, isAdmin, authenticated := s.authenticateFromHeader(c)
 
 	// Check access level from tool definition (defense-in-depth: enforced even if tools/list was bypassed)
 	toolLevel := s.getToolAccessLevel(params.Name)
@@ -609,11 +609,11 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	case "get_benchmark_run":
 		result, toolErr = s.toolGetBenchmarkRun(params.Arguments)
 	case "update_benchmark":
-		result, toolErr = s.toolUpdateBenchmark(params.Arguments, userID, isAdmin)
+		result, toolErr = s.toolUpdateBenchmark(params.Arguments, userID, username, isAdmin)
 	case "delete_benchmark":
-		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, isAdmin)
+		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, username, isAdmin)
 	case "delete_benchmark_run":
-		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, isAdmin)
+		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, username, isAdmin)
 	case "list_api_tokens":
 		result, toolErr = s.toolListAPITokens(userID)
 	case "create_api_token":
@@ -623,13 +623,13 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	case "list_users":
 		result, toolErr = s.toolListUsers(params.Arguments)
 	case "delete_user":
-		result, toolErr = s.toolDeleteUser(params.Arguments, userID)
+		result, toolErr = s.toolDeleteUser(params.Arguments, userID, username)
 	case "delete_user_benchmarks":
-		result, toolErr = s.toolDeleteUserBenchmarks(params.Arguments, userID)
+		result, toolErr = s.toolDeleteUserBenchmarks(params.Arguments, userID, username)
 	case "ban_user":
-		result, toolErr = s.toolBanUser(params.Arguments, userID)
+		result, toolErr = s.toolBanUser(params.Arguments, userID, username)
 	case "toggle_user_admin":
-		result, toolErr = s.toolToggleUserAdmin(params.Arguments, userID)
+		result, toolErr = s.toolToggleUserAdmin(params.Arguments, userID, username)
 	default:
 		return jsonrpcResponse{
 			JSONRPC: "2.0",
@@ -652,28 +652,28 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 }
 
 // authenticateFromHeader checks the Authorization header for an API token
-// Returns (userID, isAdmin, authenticated)
-func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, bool, bool) {
+// Returns (userID, username, isAdmin, authenticated)
+func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, bool) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		return 0, false, false
+		return 0, "", false, false
 	}
 
 	const prefix = "Bearer "
 	if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
-		return 0, false, false
+		return 0, "", false, false
 	}
 
 	token := authHeader[len(prefix):]
 
 	var apiToken APIToken
 	if err := s.db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
-		return 0, false, false
+		return 0, "", false, false
 	}
 
 	// Check if user is banned
 	if apiToken.User.IsBanned {
-		return 0, false, false
+		return 0, "", false, false
 	}
 
 	// Update last used timestamp
@@ -682,7 +682,7 @@ func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, bool, bool) {
 	s.db.DB.Save(&apiToken)
 	s.db.DB.Model(&User{}).Where("id = ?", apiToken.UserID).Update("last_api_activity_at", now)
 
-	return apiToken.UserID, apiToken.User.IsAdmin, true
+	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true
 }
 
 func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
@@ -943,7 +943,7 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 	return string(data), nil
 }
 
-func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, username string, isAdmin bool) (string, error) {
 	var params struct {
 		ID          int               `json:"id"`
 		Title       string            `json:"title"`
@@ -978,22 +978,28 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdm
 		return "", fmt.Errorf("not authorized")
 	}
 
+	// Track what fields were changed for audit logging
+	var changes []string
+
 	// Validate title length
 	if params.Title != "" {
 		if len(params.Title) > 100 {
 			return "", fmt.Errorf("title must be at most 100 characters")
 		}
 		benchmark.Title = params.Title
+		changes = append(changes, "title")
 	}
 	if params.Description != "" {
 		if len(params.Description) > 5000 {
 			return "", fmt.Errorf("description must be at most 5000 characters")
 		}
 		benchmark.Description = params.Description
+		changes = append(changes, "description")
 	}
 
 	// Update labels if provided
 	if len(params.Labels) > 0 {
+		changes = append(changes, "labels")
 		benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
 		if err != nil {
 			return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
@@ -1029,7 +1035,7 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdm
 		return "", fmt.Errorf("failed to load benchmark: %w", err)
 	}
 
-	LogBenchmarkUpdated(userID, benchmark.ID, benchmark.Title)
+	LogBenchmarkUpdated(userID, username, benchmark.ID, benchmark.Title, changes)
 
 	data, err := json.Marshal(benchmark)
 	if err != nil {
@@ -1038,7 +1044,7 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, isAdm
 	return string(data), nil
 }
 
-func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, username string, isAdmin bool) (string, error) {
 	var params struct {
 		ID int `json:"id"`
 	}
@@ -1080,7 +1086,7 @@ func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, isAdm
 		return "", fmt.Errorf("failed to delete benchmark: %w", err)
 	}
 
-	LogBenchmarkDeleted(userID, benchmark.ID, title)
+	LogBenchmarkDeleted(userID, username, benchmark.ID, title)
 
 	result := map[string]interface{}{
 		"message": "benchmark deleted",
@@ -1094,7 +1100,7 @@ func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, isAdm
 	return string(data), nil
 }
 
-func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, isAdmin bool) (string, error) {
+func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, username string, isAdmin bool) (string, error) {
 	var params struct {
 		ID       int `json:"id"`
 		RunIndex int `json:"run_index"`
@@ -1140,6 +1146,9 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 		return "", fmt.Errorf("cannot delete the last run - delete the entire benchmark instead")
 	}
 
+	// Capture run label before deletion for audit log
+	runLabel := benchmarkData[params.RunIndex].Label
+
 	benchmarkData = append(benchmarkData[:params.RunIndex], benchmarkData[params.RunIndex+1:]...)
 
 	if err := StoreBenchmarkData(benchmarkData, uint(params.ID)); err != nil {
@@ -1154,7 +1163,7 @@ func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, is
 		return "", fmt.Errorf("failed to update benchmark: %w", err)
 	}
 
-	LogBenchmarkUpdated(userID, benchmark.ID, benchmark.Title)
+	LogBenchmarkRunDeleted(userID, username, benchmark.ID, benchmark.Title, params.RunIndex, runLabel)
 
 	runtime.GC()
 
@@ -1307,7 +1316,7 @@ func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
 	return string(data), nil
 }
 
-func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (string, error) {
+func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint, adminUsername string) (string, error) {
 	var params struct {
 		UserID     int  `json:"user_id"`
 		DeleteData bool `json:"delete_data"`
@@ -1347,7 +1356,7 @@ func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (stri
 		return "", fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	LogUserDeleted(adminUserID, user.ID, username)
+	LogUserDeleted(adminUserID, adminUsername, user.ID, username)
 
 	result := map[string]interface{}{
 		"message":  "user deleted",
@@ -1361,7 +1370,7 @@ func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint) (stri
 	return string(data), nil
 }
 
-func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID uint) (string, error) {
+func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID uint, adminUsername string) (string, error) {
 	var params struct {
 		UserID int `json:"user_id"`
 	}
@@ -1392,7 +1401,7 @@ func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID u
 		return "", fmt.Errorf("failed to delete benchmarks: %w", err)
 	}
 
-	LogUserBenchmarksDeleted(adminUserID, user.ID, user.Username)
+	LogUserBenchmarksDeleted(adminUserID, adminUsername, user.ID, user.Username, len(benchmarks))
 
 	result := map[string]interface{}{
 		"message":  "all user benchmarks deleted",
@@ -1406,7 +1415,7 @@ func (s *mcpServer) toolDeleteUserBenchmarks(args json.RawMessage, adminUserID u
 	return string(data), nil
 }
 
-func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint) (string, error) {
+func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint, adminUsername string) (string, error) {
 	var params struct {
 		UserID int  `json:"user_id"`
 		Banned bool `json:"banned"`
@@ -1434,9 +1443,9 @@ func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint) (string,
 	}
 
 	if params.Banned {
-		LogUserBanned(adminUserID, user.ID, user.Username)
+		LogUserBanned(adminUserID, adminUsername, user.ID, user.Username)
 	} else {
-		LogUserUnbanned(adminUserID, user.ID, user.Username)
+		LogUserUnbanned(adminUserID, adminUsername, user.ID, user.Username)
 	}
 
 	data, err := json.Marshal(user)
@@ -1446,7 +1455,7 @@ func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint) (string,
 	return string(data), nil
 }
 
-func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint) (string, error) {
+func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint, adminUsername string) (string, error) {
 	var params struct {
 		UserID  int  `json:"user_id"`
 		IsAdmin bool `json:"is_admin"`
@@ -1474,9 +1483,9 @@ func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint) 
 	}
 
 	if params.IsAdmin {
-		LogUserAdminGranted(adminUserID, user.ID, user.Username)
+		LogUserAdminGranted(adminUserID, adminUsername, user.ID, user.Username)
 	} else {
-		LogUserAdminRevoked(adminUserID, user.ID, user.Username)
+		LogUserAdminRevoked(adminUserID, adminUsername, user.ID, user.Username)
 	}
 
 	data, err := json.Marshal(user)
