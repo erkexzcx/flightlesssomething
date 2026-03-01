@@ -245,8 +245,8 @@ func TestAuditLogRotation(t *testing.T) {
 	if _, readErr := gz.Read(buf); readErr != nil && !errors.Is(readErr, io.EOF) {
 		t.Fatalf("Failed to read from rotated gzip file: %v", readErr)
 	}
-	if err := gz.Close(); err != nil {
-		t.Fatalf("Failed to close gzip reader: %v", err)
+	if closeErr := gz.Close(); closeErr != nil {
+		t.Fatalf("Failed to close gzip reader: %v", closeErr)
 	}
 
 	// Verify the current log file only has the new entry
