@@ -36,9 +36,10 @@ type AuditLogEntry struct {
 }
 
 // InitAuditLog initializes the audit log directory and file path.
-// The logs directory is created alongside (as a sibling of) the data directory.
+// The logs directory is created inside the data directory so it persists
+// through Docker volume mounts (e.g. /data/logs/audit.json).
 func InitAuditLog(dataDir string) error {
-	auditLogsDir = filepath.Join(filepath.Dir(dataDir), "logs")
+	auditLogsDir = filepath.Join(dataDir, "logs")
 	auditLogPath = filepath.Join(auditLogsDir, "audit.json")
 	return os.MkdirAll(auditLogsDir, 0o750)
 }

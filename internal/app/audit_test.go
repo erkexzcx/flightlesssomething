@@ -24,7 +24,7 @@ func TestWriteAuditLog(t *testing.T) {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	logsDir := filepath.Join(tmpDir, "logs")
+	logsDir := filepath.Join(dataDir, "logs")
 
 	t.Run("creates audit log file and writes entry", func(t *testing.T) {
 		LogBenchmarkCreated(1, 42, "Test Benchmark")
@@ -95,6 +95,42 @@ func TestWriteAuditLog(t *testing.T) {
 	})
 }
 
+func TestInitAuditLogCreatesInsideDataDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		t.Fatalf("Failed to create data dir: %v", err)
+	}
+	if err := InitAuditLog(dataDir); err != nil {
+		t.Fatalf("Failed to initialize audit log: %v", err)
+	}
+
+	// Verify the logs directory is inside the data directory
+	expectedLogsDir := filepath.Join(dataDir, "logs")
+	if auditLogsDir != expectedLogsDir {
+		t.Errorf("Expected auditLogsDir %q, got %q", expectedLogsDir, auditLogsDir)
+	}
+	expectedLogPath := filepath.Join(dataDir, "logs", "audit.json")
+	if auditLogPath != expectedLogPath {
+		t.Errorf("Expected auditLogPath %q, got %q", expectedLogPath, auditLogPath)
+	}
+
+	// Verify logs directory was actually created
+	info, err := os.Stat(expectedLogsDir)
+	if err != nil {
+		t.Fatalf("Logs directory was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("Expected logs path to be a directory")
+	}
+
+	// Write a log entry and verify the file appears in the expected location
+	LogBenchmarkCreated(1, 1, "test")
+	if _, err := os.Stat(expectedLogPath); os.IsNotExist(err) {
+		t.Error("Audit log file was not created inside data directory")
+	}
+}
+
 func TestAllLogFunctions(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, "data")
@@ -116,7 +152,7 @@ func TestAllLogFunctions(t *testing.T) {
 	LogUserDeleted(1, 2, "user2")
 	LogUserBenchmarksDeleted(1, 2, "user2")
 
-	logPath := filepath.Join(tmpDir, "logs", "audit.json")
+	logPath := filepath.Join(dataDir, "logs", "audit.json")
 	content, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("Failed to read audit log file: %v", err)
@@ -157,7 +193,7 @@ func TestAuditLogRotation(t *testing.T) {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	logsDir := filepath.Join(tmpDir, "logs")
+	logsDir := filepath.Join(dataDir, "logs")
 	logPath := filepath.Join(logsDir, "audit.json")
 
 	// Write enough data to exceed the rotation threshold
@@ -230,7 +266,7 @@ func TestAuditLogRotationCleanup(t *testing.T) {
 		t.Fatalf("Failed to initialize audit log: %v", err)
 	}
 
-	logsDir := filepath.Join(tmpDir, "logs")
+	logsDir := filepath.Join(dataDir, "logs")
 
 	// Create more than auditLogMaxFiles rotated files
 	for i := 0; i < auditLogMaxFiles+3; i++ {
