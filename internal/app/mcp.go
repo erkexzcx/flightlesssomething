@@ -489,6 +489,24 @@ func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
 	}
 }
 
+// MCPCors returns a middleware that adds CORS headers for the MCP endpoint.
+// This is required for browser-based MCP clients (e.g. MCP Inspector) that
+// send preflight OPTIONS requests from a different origin.
+func MCPCors() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // HandleMCPGet handles GET requests for server-sent events (SSE stream)
 func HandleMCPGet(c *gin.Context) {
 	// For stateless implementation, GET is not used for SSE
