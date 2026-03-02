@@ -73,6 +73,7 @@ const (
 type mcpToolAnnotations struct {
 	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
 	DestructiveHint *bool `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool `json:"idempotentHint,omitempty"`
 	OpenWorldHint   *bool `json:"openWorldHint,omitempty"`
 }
 
@@ -261,7 +262,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				},
 			},
 			Icons:       faIcon("pen"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), IdempotentHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAuth,
 		},
 		{
@@ -397,7 +398,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				},
 			},
 			Icons:       faIcon("ban"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), IdempotentHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 		{
@@ -413,7 +414,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				},
 			},
 			Icons:       faIcon("shield-halved"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
+			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), IdempotentHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 			accessLevel: toolAccessAdmin,
 		},
 	}

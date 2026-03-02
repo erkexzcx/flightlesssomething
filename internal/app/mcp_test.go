@@ -246,6 +246,87 @@ func TestMCPToolsList(t *testing.T) {
 	})
 }
 
+func TestMCPToolAnnotations(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	server := newMCPServer(db, "test")
+
+	// Build a map of tool name -> tool for easy lookup
+	toolMap := make(map[string]mcpTool)
+	for _, tool := range server.tools {
+		toolMap[tool.Name] = tool
+	}
+
+	boolVal := func(b *bool) bool {
+		if b == nil {
+			return false
+		}
+		return *b
+	}
+
+	type expectedAnnotations struct {
+		readOnly    bool
+		destructive bool
+		idempotent  bool
+		openWorld   bool
+	}
+
+	tests := map[string]expectedAnnotations{
+		// Read-only public tools
+		"list_benchmarks":   {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+		"get_benchmark":     {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+		"get_benchmark_data": {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+		"get_benchmark_run": {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+
+		// Auth tools - write operations
+		"update_benchmark":    {readOnly: false, destructive: false, idempotent: true, openWorld: false},
+		"delete_benchmark":    {readOnly: false, destructive: true, idempotent: false, openWorld: false},
+		"delete_benchmark_run": {readOnly: false, destructive: true, idempotent: false, openWorld: false},
+
+		// Auth tools - API tokens
+		"list_api_tokens":  {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+		"create_api_token": {readOnly: false, destructive: false, idempotent: false, openWorld: false},
+		"delete_api_token": {readOnly: false, destructive: true, idempotent: false, openWorld: false},
+
+		// Admin tools
+		"list_users":             {readOnly: true, destructive: false, idempotent: false, openWorld: false},
+		"delete_user":            {readOnly: false, destructive: true, idempotent: false, openWorld: false},
+		"delete_user_benchmarks": {readOnly: false, destructive: true, idempotent: false, openWorld: false},
+		"ban_user":               {readOnly: false, destructive: false, idempotent: true, openWorld: false},
+		"toggle_user_admin":      {readOnly: false, destructive: false, idempotent: true, openWorld: false},
+	}
+
+	// Verify all tools are covered
+	if len(tests) != len(server.tools) {
+		t.Errorf("Test covers %d tools but server defines %d tools", len(tests), len(server.tools))
+	}
+
+	for name, expected := range tests {
+		t.Run(name, func(t *testing.T) {
+			tool, ok := toolMap[name]
+			if !ok {
+				t.Fatalf("Tool %s not found in server tools", name)
+			}
+			if tool.Annotations == nil {
+				t.Fatal("Annotations must not be nil")
+			}
+			if boolVal(tool.Annotations.ReadOnlyHint) != expected.readOnly {
+				t.Errorf("ReadOnlyHint: got %v, want %v", boolVal(tool.Annotations.ReadOnlyHint), expected.readOnly)
+			}
+			if boolVal(tool.Annotations.DestructiveHint) != expected.destructive {
+				t.Errorf("DestructiveHint: got %v, want %v", boolVal(tool.Annotations.DestructiveHint), expected.destructive)
+			}
+			if boolVal(tool.Annotations.IdempotentHint) != expected.idempotent {
+				t.Errorf("IdempotentHint: got %v, want %v", boolVal(tool.Annotations.IdempotentHint), expected.idempotent)
+			}
+			if boolVal(tool.Annotations.OpenWorldHint) != expected.openWorld {
+				t.Errorf("OpenWorldHint: got %v, want %v", boolVal(tool.Annotations.OpenWorldHint), expected.openWorld)
+			}
+		})
+	}
+}
+
 func TestMCPNotification(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
