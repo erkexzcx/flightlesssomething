@@ -327,6 +327,32 @@ func TestMCPToolAnnotations(t *testing.T) {
 	}
 }
 
+func TestMCPToolIcons(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	server := newMCPServer(db, "test")
+
+	for _, tool := range server.tools {
+		t.Run(tool.Name, func(t *testing.T) {
+			if len(tool.Icons) == 0 {
+				t.Fatal("Tool must have at least one icon")
+			}
+			for i, icon := range tool.Icons {
+				if icon.Src == "" {
+					t.Errorf("Icon[%d].Src must not be empty", i)
+				}
+				if icon.MIMEType == "" {
+					t.Errorf("Icon[%d].MIMEType should be set", i)
+				}
+				if len(icon.Sizes) == 0 {
+					t.Errorf("Icon[%d].Sizes should be set", i)
+				}
+			}
+		})
+	}
+}
+
 func TestMCPNotification(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
