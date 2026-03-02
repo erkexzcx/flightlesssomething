@@ -78,8 +78,10 @@ type mcpToolAnnotations struct {
 }
 
 type mcpIcon struct {
-	Src      string `json:"src"`
-	MIMEType string `json:"mimeType,omitempty"`
+	Src      string   `json:"src"`
+	MIMEType string   `json:"mimeType,omitempty"`
+	Sizes    []string `json:"sizes,omitempty"`
+	Theme    string   `json:"theme,omitempty"`
 }
 
 type mcpTool struct {
@@ -175,6 +177,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		return []mcpIcon{{
 			Src:      "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.7.2/svgs/solid/" + name + ".svg",
 			MIMEType: "image/svg+xml",
+			Sizes:    []string{"any"},
 		}}
 	}
 
