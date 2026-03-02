@@ -492,6 +492,8 @@ func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
 // MCPCors returns a middleware that adds CORS headers for the MCP endpoint.
 // This is required for browser-based MCP clients (e.g. MCP Inspector) that
 // send preflight OPTIONS requests from a different origin.
+// Wildcard origin is acceptable because MCP endpoints use Bearer token
+// authentication, and browser-based clients run on arbitrary localhost ports.
 func MCPCors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")

@@ -116,7 +116,7 @@ func Start(config *Config, version string) error {
 	// MCP (Model Context Protocol) server
 	mcp := r.Group("/mcp")
 	mcp.Use(MCPCors())
-	mcp.OPTIONS("", func(c *gin.Context) {})
+	mcp.OPTIONS("", func(c *gin.Context) {}) // Required for gin to route OPTIONS to the middleware
 	mcp.POST("", HandleMCP(db, version))
 	mcp.GET("", HandleMCPGet)
 	mcp.DELETE("", HandleMCPDelete)
