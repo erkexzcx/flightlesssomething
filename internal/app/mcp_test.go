@@ -19,7 +19,12 @@ func setupMCPTestRouter(db *DBInstance) *gin.Engine {
 	r := gin.New()
 	store := cookie.NewStore([]byte("test-secret"))
 	r.Use(sessions.Sessions("test_session", store))
-	r.POST("/mcp", HandleMCP(db, "test"))
+	mcp := r.Group("/mcp")
+	mcp.Use(MCPCors())
+	mcp.OPTIONS("", func(c *gin.Context) {})
+	mcp.POST("", HandleMCP(db, "test"))
+	mcp.GET("", HandleMCPGet)
+	mcp.DELETE("", HandleMCPDelete)
 	return r
 }
 
@@ -1397,4 +1402,71 @@ func TestMCPDeleteBenchmarkRunWithData(t *testing.T) {
 	if !strings.Contains(result.Content[0].Text, "run deleted successfully") {
 		t.Error("Expected run deletion confirmation")
 	}
+}
+
+func TestMCPCorsHeaders(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	t.Run("OPTIONS preflight returns 204 with CORS headers", func(t *testing.T) {
+		req, err := http.NewRequest("OPTIONS", "/mcp", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		req.Header.Set("Origin", "http://localhost:6274")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected 204, got %d", w.Code)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("Expected Access-Control-Allow-Origin '*', got '%s'", got)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE, OPTIONS" {
+			t.Errorf("Expected Access-Control-Allow-Methods 'GET, POST, DELETE, OPTIONS', got '%s'", got)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization" {
+			t.Errorf("Expected Access-Control-Allow-Headers 'Content-Type, Authorization', got '%s'", got)
+		}
+	})
+
+	t.Run("POST response includes CORS headers", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+		w := mcpRequest(t, router, body, "")
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d", w.Code)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("Expected Access-Control-Allow-Origin '*', got '%s'", got)
+		}
+	})
+
+	t.Run("GET response includes CORS headers", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/mcp", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("Expected Access-Control-Allow-Origin '*', got '%s'", got)
+		}
+	})
+
+	t.Run("DELETE response includes CORS headers", func(t *testing.T) {
+		req, err := http.NewRequest("DELETE", "/mcp", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("Expected Access-Control-Allow-Origin '*', got '%s'", got)
+		}
+	})
 }
