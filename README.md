@@ -23,12 +23,8 @@ Head over to **[flightlesssomething.ambrosia.one/api-tokens](https://flightlesss
 
 ### Docker Compose (recommended)
 
-1. Copy the example environment file and fill in your values:
-   ```bash
-   cp .env.example .env
-   ```
-2. Edit `.env` with your Discord OAuth credentials, session secret, and admin credentials.
-3. Start the service:
+1. Edit `docker-compose.yml` and fill in your Discord OAuth credentials, session secret, and admin credentials.
+2. Start the service:
    ```bash
    docker compose up -d
    ```
