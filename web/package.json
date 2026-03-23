@@ -20,7 +20,7 @@
     "dayjs": "^1.11.20",
     "dompurify": "^3.3.2",
     "highcharts": "^11.4.8",
-    "marked": "^17.0.4",
+    "marked": "^17.0.5",
     "pinia": "^2.3.0",
     "vue": "^3.5.30",
     "vue-router": "^4.6.4"
