@@ -21,7 +21,7 @@ You audit all Go source files in this repository, with primary focus on:
 
 - **Memory Allocations**: Unnecessary allocations, missing pre-allocation of slices/maps with known capacity, growing slices dynamically when size is predictable, string concatenation in loops (use `strings.Builder`)
 - **Streaming vs Buffering**: Loading entire datasets into memory when streaming is possible, missing chunked writes to HTTP responses, buffering large files instead of streaming
-- **Garbage Collection Pressure**: Missing periodic `runtime.GC()` in loops processing large datasets (this project explicitly uses GC triggers — see `gcFrequencyStreaming` and `gcFrequencyExport` patterns), excessive short-lived allocations, pointer-heavy data structures
+- **Garbage Collection Pressure**: Missing periodic `runtime.GC()` in loops processing large datasets (this project explicitly uses GC triggers — see `gcFrequencyExport` pattern in `benchmark_data.go`), excessive short-lived allocations, pointer-heavy data structures
 - **File I/O**: Missing buffered readers/writers, reading entire files when partial reads suffice, missing deferred close on file handles, unnecessary re-reads of data
 - **Database Queries**: Missing pagination, SELECT * when specific columns suffice, N+1 query patterns, missing indexes for filtered/sorted fields, loading related records unnecessarily
 - **Compression**: Inefficient use of zstd encoder/decoder (missing reuse, wrong compression levels), re-compressing already-compressed data

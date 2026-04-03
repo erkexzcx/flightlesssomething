@@ -33,7 +33,7 @@ The application compiles into a **single Go binary** with the Vue.js frontend em
                         │  └── benchmarks/             │
                         │      ├── {id}.bin            │
                         │      ├── {id}.meta           │
-                        │      └── ...                 │
+                        │      └── {id}.stats          │
                         └──────────────────────────────┘
 ```
 
@@ -84,6 +84,8 @@ A background goroutine cleans up expired entries every 5 minutes. The implementa
 
 The application exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) endpoint at `/mcp` using JSON-RPC 2.0. This allows AI assistants to interact with the application programmatically. Tools provide read-only benchmark access, metadata editing, and admin operations. Benchmark data upload, download, deletion, and API token management are intentionally excluded as they are unsuitable for MCP. All tools support an optional `jq` parameter for server-side result filtering and transformation.
 
+The `/mcp` endpoint uses `MCPCors()` middleware with wildcard origin (`*`) to allow browser-based MCP clients such as MCP Inspector to connect directly.
+
 ## Frontend
 
 ### Technology Stack
@@ -97,24 +99,35 @@ The application exposes a [Model Context Protocol](https://modelcontextprotocol.
 | Charts | [Highcharts](https://www.highcharts.com/) | Interactive benchmark visualization |
 | Styling | Bootstrap 5 + Font Awesome | No custom CSS framework |
 | Security | [DOMPurify](https://github.com/cure53/DOMPurify) + [Marked](https://marked.js.org/) | Safe Markdown rendering in descriptions |
+| Date formatting | [Day.js](https://day.js.org/) | Lightweight date/time utilities for relative timestamps |
 
 ### Chunk Splitting
 
 Vite is configured with manual chunk splitting to optimize loading:
 
-- **`vendor`** chunk — Vue, Vue Router, Pinia (framework code, cached long-term)
+- **`vendor`** chunk — Vue, Vue Router, Pinia, Day.js (framework code, cached long-term)
 - **`charts`** chunk — Highcharts (large library, loaded only when viewing benchmarks)
 
-### Web Workers
+### Benchmark Data Loading
 
-CPU-intensive operations run in Web Workers to keep the UI responsive:
+The backend pre-calculates all statistics and LTTB-downsampled series during upload and stores them in `.stats` files. The frontend performs no computation — it simply maps the backend response into the chart-ready format.
 
-- **`jsonParser.worker.js`** — parses large JSON responses in a background thread, preventing the main thread from freezing on benchmarks with hundreds of thousands of data points
-- **`statsCalculator.worker.js`** — calculates statistics (percentiles, min/max, averages, standard deviation) in parallel, supporting both linear-interpolation and MangoHud-threshold calculation methods
+**Loading pipeline (`web/src/utils/benchmarkRunLoader.js`):**
 
-### Incremental Data Loading
+- Fetches runs incrementally via `/api/benchmarks/:id/runs/:runIndex`
+- Uses a worker pool pattern with parallel HTTP requests (not Web Workers) — concurrency is `Math.min(navigator.hardwareConcurrency, 6)`
+- Each response is a `PreCalculatedRun` object containing stats, LTTB-downsampled series, and density histogram data
 
-Benchmark data is fetched one run at a time via `/api/benchmarks/:id/runs/:runIndex`. Each run is processed immediately — downsampled and statistics calculated — then raw data is discarded. This prevents Vue's reactivity system from tracking massive arrays, keeping memory usage proportional to the downsampled display data rather than the full dataset.
+**Format mapping (`web/src/utils/benchmarkDataProcessor.js`):**
+
+- Lightweight mapping only — transforms the `PreCalculatedRun` response structure into the format expected by Highcharts
+- No statistical computation on the frontend
+
+**Client-side verification (`web/src/utils/statsCalculations.js`):**
+
+- Contains percentile calculation functions (linear interpolation and MangoHud threshold methods)
+- Used exclusively by the DebugCalc page for comparing client-side vs. backend results
+- Not used during normal benchmark data loading
 
 ### API Client
 
@@ -165,9 +178,12 @@ Benchmark data is stored as zstd-compressed gob with a per-run encoding scheme:
     └── ...
 ```
 
-This enables **streaming reads** — the server decodes and writes one run at a time, without loading the entire benchmark into memory. During streaming:
+This enables **streaming reads** — the server decodes one run at a time, without loading the entire benchmark into memory.
 
-- **JSON export** (`StreamBenchmarkDataAsJSON`) triggers `runtime.GC()` every 10 runs
+`HandleGetBenchmarkData` serves pre-calculated statistics from the `.stats` file rather than streaming `.bin` data. The `.bin` file is still read when pre-calculated stats are unavailable (e.g. during migration).
+
+During ZIP export:
+
 - **ZIP export** (`ExportBenchmarkDataAsZip`) triggers `runtime.GC()` every 5 runs
 
 The companion `.meta` file stores run count and labels as gob, enabling quick metadata access without decompressing the data file.
@@ -179,7 +195,7 @@ zstd compression is configured with:
 - **Encoder**: `SpeedDefault` level, 2 concurrent threads, 256 KB write buffer
 - **Decoder**: 2 concurrent threads
 
-This balances compression ratio, speed, and memory usage. Limiting concurrency to 2 threads avoids overwhelming low-CPU servers.
+This balances compression ratio, speed, and memory usage. Limiting concurrency to 2 threads avoids overwhelming low-CPU servers. Both `.bin` and `.stats` files use these same encoder settings.
 
 ### Data Limits
 
@@ -206,10 +222,11 @@ Benchmark data is stored on the filesystem, not in the database:
 ```
 {dataDir}/benchmarks/
   ├── {id}.bin     zstd-compressed gob (V2 streaming format)
-  └── {id}.meta    gob-encoded metadata (run count + labels)
+  ├── {id}.meta    gob-encoded metadata (run count + labels)
+  └── {id}.stats   zstd-compressed gob (pre-calculated statistics + downsampled series)
 ```
 
-Each `.bin` file contains a header followed by individually encoded runs. Each `.meta` file provides quick access to run count and labels without decompressing the data.
+Each `.bin` file contains a header followed by individually encoded runs. Each `.meta` file provides quick access to run count and labels without decompressing the data. Each `.stats` file contains a `[]*PreCalculatedRun` slice with per-metric statistics (for both linear interpolation and MangoHud threshold methods), LTTB-downsampled series (max 2000 points), and density histogram data — written during upload so the API can serve benchmark data with zero computation at read time.
 
 ### Schema Migrations
 

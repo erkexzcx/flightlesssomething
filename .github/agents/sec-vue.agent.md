@@ -18,7 +18,6 @@ Your review domain is all files under `web/src/`:
 - Router and navigation guards (`router/`)
 - Pinia stores (`stores/`)
 - Utility modules (`utils/`)
-- Web Workers (`workers/`)
 
 ## What You Check
 
@@ -28,7 +27,6 @@ Your review domain is all files under `web/src/`:
 4. **Router security**: Missing or bypassable navigation guards, open redirects via unvalidated URL parameters, sensitive routes without auth checks
 5. **Dependency misuse**: Markdown rendering without sanitization (Marked without DOMPurify), unsafe use of third-party libraries, prototype pollution vectors
 6. **State management**: Sensitive data persisted in stores beyond its needed lifetime, auth tokens or session data exposed to non-privileged components
-7. **Worker security**: Unsafe `postMessage` usage, insufficient origin validation
 
 ## Constraints
 
