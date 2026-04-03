@@ -31,18 +31,20 @@ The application compiles into a **single Go binary** with the Vue.js frontend em
 
 - **Framework:** Vue 3 with Composition API
 - **State management:** Pinia (stores in `web/src/stores/`)
-- **Routing:** Vue Router with lazy loading
+- **Routing:** Vue Router with eagerly imported views
 - **Build tool:** Vite (dev server on port 3000, proxies API to port 5000)
 - **Styling:** Bootstrap 5 + Font Awesome
 - **Charts:** Highcharts for benchmark visualization
 - **Security:** DOMPurify for HTML sanitization, Marked for Markdown rendering
-- **Web Workers:** Background threads for JSON parsing and stats calculation to avoid UI freezing
+- **Data loading:** `benchmarkRunLoader.js` parallel HTTP fetch for run data; `benchmarkDataProcessor.js` for lightweight format mapping; `statsCalculations.js` for percentile utilities (used by DebugCalc page)
 
 ### Data Storage
 
 - **Database:** SQLite file at `{dataDir}/flightlesssomething.db`
-- **Benchmark data files:** `{dataDir}/benchmarks/{benchmarkID}/data.bin` (zstd-compressed gob, V2 format with per-run streaming)
-- **Metadata files:** `{dataDir}/benchmarks/{benchmarkID}/data.meta` (JSON with run count and labels)
+- **Benchmark data files:** `{dataDir}/benchmarks/{id}.bin` (zstd-compressed gob, V2 streaming format)
+- **Metadata files:** `{dataDir}/benchmarks/{id}.meta` (gob-encoded run count and labels)
+- **Statistics files:** `{dataDir}/benchmarks/{id}.stats` (zstd-compressed gob, pre-calculated statistics)
+- **Audit log:** `{parentOfDataDir}/logs/audit.json` (JSON lines, gzip-rotated at 10 MB, retains 10 rotated files)
 
 ---
 
@@ -54,21 +56,23 @@ flightlesssomething/
 ├── internal/app/                   # All backend application logic
 │   ├── admin.go                    # Admin user management handlers (list/delete/ban/admin-toggle)
 │   ├── api_tokens.go               # API token CRUD + RequireAuthOrToken middleware
-│   ├── audit.go                    # Audit log creation and listing with filters
+│   ├── audit.go                    # File-based audit logging (JSON log with rotation)
 │   ├── auth.go                     # Discord OAuth flow, admin login, session middleware
-│   ├── benchmark_data.go           # CSV parsing, binary storage (V2), streaming JSON/ZIP export
+│   ├── benchmark_data.go           # CSV parsing, binary storage (V2), ZIP export, stats pre-calculation
+│   ├── benchmark_stats.go          # Pre-calculated statistics types and computation
 │   ├── benchmarks.go               # Benchmark CRUD handlers (create/read/update/delete/search)
 │   ├── config.go                   # Configuration parsing (flags + env vars)
 │   ├── database.go                 # GORM/SQLite initialization, admin user seeding
+│   ├── debugcalc.go                # Debug calculation endpoint handler
 │   ├── mcp.go                      # MCP server (JSON-RPC 2.0) with 10 tools + jq filtering
 │   ├── migration.go                # Database schema versioning and migrations
-│   ├── models.go                   # GORM models: User, Benchmark, APIToken, AuditLog
+│   ├── models.go                   # GORM models: User, Benchmark, APIToken
 │   ├── ratelimiter.go              # In-memory sliding window rate limiter
 │   ├── server.go                   # HTTP server setup, all route definitions
 │   ├── storage_migration.go        # Benchmark data file format V1→V2 migration
 │   ├── test_helpers.go             # Shared test utilities (setupTestDB, cleanupTestDB)
 │   ├── web.go                      # Embedded SPA serving with fallback routing
-│   └── *_test.go                   # Comprehensive test files (18 test files)
+│   └── *_test.go                   # Comprehensive test files (20 test files)
 ├── testdata/                       # Real benchmark CSV files for parsing tests
 │   ├── afterburner/                # Afterburner HML format samples
 │   └── mangohud/                   # MangoHud CSV format samples
@@ -78,15 +82,14 @@ flightlesssomething/
 │   │   ├── components/             # Reusable components (Navbar, BenchmarkCharts)
 │   │   ├── router/index.js         # Route definitions with navigation guards
 │   │   ├── stores/                 # Pinia stores (auth, app state)
-│   │   ├── utils/                  # Pure utility functions (stats, date formatting, validation)
-│   │   ├── views/                  # Page-level components (8 views)
-│   │   └── workers/                # Web Workers for CPU-intensive operations
+│   │   ├── utils/                  # Pure utility functions (benchmarkDataProcessor.js, benchmarkRunLoader.js, dateFormatter.js, filenameValidator.js, statsCalculations.js)
+│   │   └── views/                  # Page-level components (Benchmarks, BenchmarkCreate, BenchmarkDetail, Login, APITokens, Users, DebugCalc)
 │   ├── tests/                      # Frontend tests (Playwright E2E + unit tests)
 │   ├── eslint.config.js            # ESLint flat config with Vue rules
 │   ├── playwright.config.js        # Playwright E2E configuration
 │   └── vite.config.js              # Vite build config with API proxy and chunk splitting
-├── backend_test.sh                 # 20-scenario backend integration test script (bash + curl + jq)
-├── .golangci.yml                   # Go linter config (21 linters enabled, strict rules)
+├── backend_test.sh                 # 19-scenario backend integration test script (bash + curl + jq)
+├── .golangci.yml                   # Go linter config (19 linters enabled, strict rules)
 ├── Makefile                        # Build targets: build, build-web, build-server, clean, test
 ├── Dockerfile                      # Multi-stage: Node build → Go build → Alpine runtime
 ├── docker-compose.yml              # Local development setup
@@ -113,7 +116,7 @@ flightlesssomething/
 ### Benchmark
 | Field | Type | Notes |
 |-------|------|-------|
-| ID | uint (PK) | Also used as filesystem directory name |
+| ID | uint (PK) | Also used as filename prefix for data files (.bin/.meta/.stats) |
 | UserID | uint (FK) | Owner |
 | Title | string | Max 100 chars |
 | Description | string | Max 5,000 chars, Markdown supported |
@@ -129,15 +132,19 @@ flightlesssomething/
 | Name | string | Max 100 chars |
 | LastUsedAt | *time.Time | Updated on each API call |
 
-### AuditLog
+### AuditLogEntry (file-based, not a database model)
 | Field | Type | Notes |
 |-------|------|-------|
-| ID | uint (PK) | Auto-increment |
+| Timestamp | string | ISO 8601 UTC |
 | UserID | uint | Who performed the action |
-| Action | string | Max 100 chars (e.g. "benchmark_created") |
-| Description | string | Max 1,000 chars |
-| TargetType | string | Max 50 chars (e.g. "benchmark", "user") |
+| Username | string | Display name at time of action |
+| Action | string | e.g. "benchmark_created" |
+| Description | string | Human-readable description |
+| TargetType | string | e.g. "benchmark", "user" |
 | TargetID | uint | ID of the affected entity |
+| Details | map[string]interface{} | Optional additional structured data |
+
+Audit log location: `{parentOfDataDir}/logs/audit.json` (sibling of data dir). Rotated with gzip compression at 10 MB; retains 10 most recent rotated files.
 
 ---
 
@@ -151,10 +158,11 @@ flightlesssomething/
 | GET | `/auth/login/callback` | HandleLoginCallback | Discord OAuth callback |
 | GET | `/api/benchmarks` | HandleListBenchmarks | List/search benchmarks (paginated) |
 | GET | `/api/benchmarks/:id` | HandleGetBenchmark | Get benchmark metadata |
-| GET | `/api/benchmarks/:id/data` | HandleGetBenchmarkData | Stream benchmark statistics as JSON |
+| GET | `/api/benchmarks/:id/data` | HandleGetBenchmarkData | Serve pre-calculated benchmark statistics as JSON |
 | GET | `/api/benchmarks/:id/runs/:runIndex` | HandleGetBenchmarkRun | Get single run statistics |
 | GET | `/api/benchmarks/:id/download` | HandleDownloadBenchmarkData | Download benchmark as ZIP of CSVs |
 | GET | `/api/auth/me` | HandleGetCurrentUser | Current user info (or 401) |
+| POST | `/api/debugcalc` | HandleDebugCalc | Verify backend calculations (FPS/frametime statistics) |
 
 ### Authenticated (Session or Bearer Token)
 | Method | Path | Handler | Purpose |
@@ -178,9 +186,10 @@ flightlesssomething/
 | DELETE | `/api/admin/users/:id/benchmarks` | HandleDeleteUserBenchmarks | Delete user's benchmarks |
 | PUT | `/api/admin/users/:id/ban` | HandleBanUser | Ban/unban user |
 | PUT | `/api/admin/users/:id/admin` | HandleToggleUserAdmin | Grant/revoke admin |
-| GET | `/api/admin/logs` | HandleListAuditLogs | View audit logs (filtered) |
 
 ### MCP
+The `/mcp` route group applies `MCPCors()` middleware (wildcard origin CORS headers). An `OPTIONS /mcp` handler is registered to satisfy CORS preflight requests.
+
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
 | POST | `/mcp` | HandleMCP | JSON-RPC 2.0 MCP protocol |
@@ -236,11 +245,13 @@ FPS, Frametime, CPU Load, GPU Load, CPU Temp, CPU Power, GPU Temp, GPU Core Cloc
 - Max API tokens per user: **10**
 
 ### Storage Format (V2)
-Benchmark data is stored as zstd-compressed gob encoding with a header containing the format version and run count, followed by individually encoded runs. This enables streaming reads without loading all data into memory. A companion `.meta` JSON file stores run count and labels for quick metadata access.
+Benchmark data is stored as zstd-compressed gob encoding with a header containing the format version and run count, followed by individually encoded runs. This enables streaming reads without loading all data into memory. A companion `.meta` gob-encoded file stores run count and labels for quick metadata access. A `.stats` file stores zstd-compressed gob-encoded pre-calculated statistics (`[]*PreCalculatedRun`), including LTTB-downsampled series (max 2000 points) and density histograms for both linear interpolation and MangoHud methods.
 
-### Streaming Architecture
-- `StreamBenchmarkDataAsJSON` – Writes one run at a time to the HTTP response, triggering GC every 10 runs
-- `ExportBenchmarkDataAsZip` – Streams each run as a separate CSV into a ZIP archive, triggering GC every 5 runs
+### Data Serving Architecture
+- Stats are pre-calculated during benchmark upload/migration and stored in `.stats` files
+- `HandleGetBenchmarkData` and `HandleGetBenchmarkRun` serve pre-calculated stats directly from `.stats` files
+- MCP server converts pre-calculated stats to MCP format on demand
+- `ExportBenchmarkDataAsZip` still streams: each run as a separate CSV in a ZIP archive, triggering GC every 5 runs (`gcFrequencyExport = 5`)
 - Memory-efficient two-pass CSV parsing: first pass counts lines, second pass pre-allocates exact capacity
 
 ---
@@ -265,7 +276,7 @@ Benchmark data is stored as zstd-compressed gob encoding with a header containin
 
 ### Session Configuration
 - HttpOnly cookies, SameSite=Lax
-- Configurable Secure flag via `FS_SESSION_SECURE` env var
+- Secure flag auto-detected from Discord redirect URL scheme (HTTPS = secure)
 - Session stores: UserID, Username, IsAdmin
 
 ---
@@ -276,7 +287,7 @@ Benchmark data is stored as zstd-compressed gob encoding with a header containin
 
 This project has comprehensive testing at every level. **Everything must be tested.** Any code change must have corresponding test coverage.
 
-#### 1. Go Unit Tests (`internal/app/*_test.go` – 18 test files)
+#### 1. Go Unit Tests (`internal/app/*_test.go` – 20 test files)
 - **Framework:** Go standard `testing` package
 - **Pattern:** Table-driven tests with nested `t.Run()` subtests
 - **Database:** Isolated temp SQLite databases via `setupTestDB()` + `t.TempDir()`
@@ -290,15 +301,17 @@ Test files and what they cover:
 |------|--------------|
 | `admin_test.go` | Admin handlers: list/delete/ban/admin-toggle users, self-protection |
 | `api_tokens_test.go` | Token CRUD, auth middleware, token limits |
-| `audit_test.go` | Audit log creation, filtering, pagination |
+| `audit_test.go` | File-based audit log writes, rotation, error handling |
 | `auth_test.go` | OAuth flow, sessions, cookie security flags |
+| `auth_security_test.go` | Auth security: session fixation, cookie flags, state validation |
 | `benchmark_data_test.go` | File storage/retrieval, metadata, V1/V2 backward compat |
 | `benchmark_export_test.go` | CSV export, ZIP creation, filename sanitization |
 | `benchmark_error_test.go` | Multipart upload error handling, error messages |
 | `benchmark_line_limit_test.go` | Per-run and total line limits validation |
 | `benchmark_memory_test.go` | Memory usage with 100 runs × 10k data points |
 | `benchmark_roundtrip_test.go` | Export → re-import CSV roundtrip data integrity |
-| `benchmark_streaming_test.go` | Streaming 1M points with minimal memory overhead |
+| `benchmark_stats_test.go` | Pre-calculated statistics: percentile methods, density, FPS-from-frametime |
+| `benchmark_upload_memory_test.go` | Memory efficiency during benchmark upload processing |
 | `benchmarks_test.go` | List/get/delete benchmarks, search, run management |
 | `config_test.go` | Config flag parsing |
 | `mcp_test.go` | All 10 MCP tools: requests, responses, auth, errors, jq filtering |
@@ -308,14 +321,14 @@ Test files and what they cover:
 | `testdata_parsing_test.go` | Real Afterburner/MangoHud file parsing + roundtrip |
 
 #### 2. Go Linting (`.golangci.yml`)
-- **21 linters enabled:** errcheck, govet, ineffassign, staticcheck, unused, misspell, unconvert, unparam, bodyclose, noctx, gosec, gocritic, revive, prealloc, copyloopvar, nilerr, errorlint, goprintffuncname, nolintlint, and more
+- **19 linters enabled:** errcheck, govet, ineffassign, staticcheck, unused, misspell, unconvert, unparam, bodyclose, noctx, gosec, gocritic, revive, prealloc, copyloopvar, nilerr, errorlint, goprintffuncname, nolintlint
 - **Strict mode:** All gocritic checks enabled (diagnostic, style, performance, experimental, opinionated)
 - **Test file relaxations:** gosec, gocritic, noctx, bodyclose disabled in `*_test.go`
 - **Run:** `golangci-lint run --timeout=5m`
 
-#### 3. Backend Integration Tests (`backend_test.sh` – 20 scenarios)
+#### 3. Backend Integration Tests (`backend_test.sh` – 19 scenarios)
 - **Framework:** Bash script using curl + jq
-- **Scenarios:** Full API workflow: health → admin login → CRUD benchmarks → search → download → audit logs → API tokens → delete → logout → verify
+- **Scenarios:** Full API workflow: health → admin login → CRUD benchmarks → search → download → API tokens → delete → logout → verify
 - **Run:** `./backend_test.sh` (requires built server binary, set `PREBUILT_SERVER=./server`)
 - **Environment:** Starts server with test credentials, uses temp data directory
 
@@ -327,9 +340,9 @@ Test files and what they cover:
 
 #### 5. Frontend Unit Tests (`web/tests/*.test.js`)
 - **Framework:** Native Node.js (no Jest/Vitest – custom assertions)
-- **Files:** `benchmarkDataProcessor.test.js`, `dateFormatter.test.js`, `filenameValidator.test.js`
-- **Run:** `node web/tests/<file>.test.js`
-- **Coverage:** Stats calculations (percentiles, FPS from frametime), date formatting (relative dates, edge cases), filename validation (date pattern detection)
+- **Files:** `benchmarkDataProcessor.test.js`, `benchmarkRunLoader.test.js`, `dateFormatter.test.js`, `filenameValidator.test.js`
+- **Run:** `node web/tests/<file>.test.js` (Note: `npm run test:unit` only runs `dateFormatter.test.js` and `filenameValidator.test.js`; run others manually)
+- **Coverage:** Benchmark data format mapping, run loader logic, date formatting (relative dates, edge cases), filename validation (date pattern detection)
 
 #### 6. Frontend Linting (`web/eslint.config.js`)
 - **Framework:** ESLint with flat config
@@ -387,7 +400,6 @@ All settings can be provided as CLI flags or environment variables (prefix `FS_`
 | `-bind` | `FS_BIND` | `0.0.0.0:5000` | No | Server address |
 | `-data-dir` | `FS_DATA_DIR` | `/data` | No | Data storage directory |
 | `-session-secret` | `FS_SESSION_SECRET` | – | Yes | Cookie encryption key |
-| `-session-secure` | `FS_SESSION_SECURE` | `true` | No | HTTPS-only cookies |
 | `-discord-client-id` | `FS_DISCORD_CLIENT_ID` | – | Yes | Discord OAuth app ID |
 | `-discord-client-secret` | `FS_DISCORD_CLIENT_SECRET` | – | Yes | Discord OAuth secret |
 | `-discord-redirect-url` | `FS_DISCORD_REDIRECT_URL` | – | Yes | OAuth callback URL |
@@ -409,7 +421,7 @@ Every pull request **must** satisfy ALL of the following requirements:
 - **Go unit tests:** `go test -v -race ./...` must pass
 - **Frontend lint:** `cd web && npm run lint` must pass
 - **Build:** `make build` must succeed
-- **Backend integration tests:** `./backend_test.sh` must pass all 20 scenarios
+- **Backend integration tests:** `./backend_test.sh` must pass all 19 scenarios
 - **E2E tests:** Playwright tests must pass
 - PRs that touch Go code must run ALL Go-related checks (lint + unit tests + build + integration tests). PRs that touch frontend code must run all frontend checks (lint + E2E + unit tests). Ensure all code compiles, lints, and tests pass before requesting review.
 
@@ -449,7 +461,7 @@ Every pull request **must** satisfy ALL of the following requirements:
 - Memory efficiency takes priority over CPU efficiency
 - Use streaming instead of loading entire datasets into memory where possible
 - Pre-allocate slices with known capacity instead of growing dynamically
-- Trigger garbage collection in loops processing large datasets (see `gcFrequencyStreaming` and `gcFrequencyExport` patterns in `benchmark_data.go`)
+- Trigger garbage collection in loops processing large datasets (see `gcFrequencyExport` pattern in `benchmark_data.go`)
 - Use deferred cleanup for all file handles and resources
 - Rate limit user-facing write operations
 - Check file sizes and data line counts before processing
@@ -481,8 +493,8 @@ Every pull request **must** satisfy ALL of the following requirements:
 - **API calls:** Always go through `web/src/api/client.js` – never use `fetch` directly in components
 - **State management:** Pinia stores for auth and app-wide state. Local `ref()`/`reactive()` for component state.
 - **Error handling:** API client throws `APIError` with structured error information. Components catch and display errors.
-- **Heavy computation:** Offload to Web Workers (`workers/`) to keep UI responsive
-- **Routing:** Lazy-loaded views via Vue Router. Navigation guard prevents authenticated users from seeing login page.
+- **Data loading:** Benchmark runs are fetched in parallel via `benchmarkRunLoader.js`. Pre-calculated stats are served directly from `.stats` files by the backend.
+- **Routing:** Eagerly imported views via Vue Router. Navigation guard prevents authenticated users from seeing login page.
 - **Styling:** Bootstrap 5 utility classes. No custom CSS framework.
 
 ### Testing Patterns
@@ -504,8 +516,8 @@ Every pull request **must** satisfy ALL of the following requirements:
 
 ### Database Migrations
 - Schema version tracked in `schema_versions` table
-- Current version: 3
-- Migrations: v0→v1 (remove ai_summary), v1→v2 (add search fields), v2→v3 (storage format V2 + metadata)
+- Current version: 5
+- Migrations: v0→v1 (remove ai_summary), v1→v2 (add search fields), v2→v3 (storage format V2 + metadata), v3→v4 (pre-calculated statistics .stats files), v4→v5 (dropped audit_logs table, moved to file-based logging)
 - Detect old database formats and migrate automatically
 
 ### Benchmark Data Format V2

@@ -48,12 +48,14 @@ The MCP server (`POST /mcp`) uses the same Bearer token mechanism. The token is 
 | `GET` | `/health` | Health check. Returns `{"status":"ok","version":"…"}`. |
 | `GET` | `/auth/login` | Initiates Discord OAuth flow. |
 | `GET` | `/auth/login/callback` | Discord OAuth callback. |
+| `POST` | `/auth/admin/login` | Admin username/password login (rate-limited). |
 | `GET` | `/api/benchmarks` | List/search benchmarks (paginated). |
 | `GET` | `/api/benchmarks/:id` | Get benchmark metadata. |
-| `GET` | `/api/benchmarks/:id/data` | Stream benchmark statistics as JSON. |
-| `GET` | `/api/benchmarks/:id/runs/:runIndex` | Get a single run's data. |
+| `GET` | `/api/benchmarks/:id/data` | Get pre-calculated statistics for all runs. |
+| `GET` | `/api/benchmarks/:id/runs/:runIndex` | Get pre-calculated statistics for a single run. |
 | `GET` | `/api/benchmarks/:id/download` | Download benchmark as a ZIP of CSVs. |
 | `GET` | `/api/auth/me` | Returns current user info or `401` if not authenticated. |
+| `POST` | `/api/debugcalc` | Compute statistics from raw FPS/frametime data (for verification). |
 
 ### Authenticated (session cookie or Bearer token)
 
@@ -61,8 +63,7 @@ These endpoints use the `RequireAuthOrToken` middleware — either a valid sessi
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/auth/admin/login` | Admin username/password login. |
-| `POST` | `/auth/logout` | End session. |
+| `POST` | `/auth/logout` | End session (no-op if not authenticated). |
 | `POST` | `/api/benchmarks` | Create a benchmark (multipart form with CSV files). |
 | `PUT` | `/api/benchmarks/:id` | Update title, description, or run labels. |
 | `DELETE` | `/api/benchmarks/:id` | Delete a benchmark and its data files. |
@@ -91,8 +92,19 @@ Admin endpoints require both an authenticated session and the `IsAdmin` flag. Th
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/mcp` | JSON-RPC 2.0 MCP endpoint. |
-| `GET` | `/mcp` | Returns `405` — SSE is not supported. |
-| `DELETE` | `/mcp` | Session termination (stateless, always succeeds). |
+| `GET` | `/mcp` | Returns `405 Method Not Allowed` — SSE is not supported. |
+| `DELETE` | `/mcp` | Session termination. Returns `200 OK` with `{"message": "session terminated"}`. |
+| `OPTIONS` | `/mcp` | CORS preflight. Returns `204 No Content`. |
+
+The MCP endpoint includes CORS middleware that sets the following headers on every response:
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+```
+
+This enables browser-based MCP clients (such as the MCP Inspector) running on arbitrary localhost ports to connect without cross-origin errors. Bearer token authentication provides the security boundary.
 
 ---
 
@@ -134,13 +146,33 @@ Get a single benchmark's metadata including run count and labels.
 
 ### `GET /api/benchmarks/:id/data`
 
-Streams the benchmark's performance data as JSON. The response is written incrementally (one run at a time) to keep memory usage low.
+Get pre-calculated statistics for all runs in a benchmark. Statistics are read from pre-computed `.stats` files (zstd-compressed gob) — no raw data is transferred to the client.
 
-**Response:** `200 OK` — JSON array of run objects, each containing performance metric arrays.
+**Response:** `200 OK` — JSON array of `PreCalculatedRun` objects.
+
+Each object contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | string | Run label. |
+| `specOS` | string | Operating system. |
+| `specCPU` | string | CPU model. |
+| `specGPU` | string | GPU model. |
+| `specRAM` | string | RAM amount. |
+| `specLinuxKernel` | string | Linux kernel version (omitted if empty). |
+| `specLinuxScheduler` | string | CPU scheduler (omitted if empty). |
+| `totalDataPoints` | int | Total number of data points in the run. |
+| `series` | object | Downsampled time-series per metric (LTTB, max 2,000 points): `{"fps": [[index, value], ...], ...}`. |
+| `stats` | object | Per-metric `MetricStats` computed with linear interpolation. |
+| `statsMangoHud` | object | Per-metric `MetricStats` computed with MangoHud threshold method. |
+
+Each `MetricStats` object contains: `min`, `max`, `avg`, `median`, `p01`, `p05`, `p10`, `p25`, `p75`, `p90`, `p95`, `p97`, `p99`, `iqr`, `stddev`, `variance`, `count` (int), and `density` (`[[roundedValue, count], ...]` histogram filtered to p01–p97 range).
+
+Metric keys: `fps`, `frametime`, `cpu_load`, `gpu_load`, `cpu_temp`, `cpu_power`, `gpu_temp`, `gpu_core_clock`, `gpu_mem_clock`, `gpu_vram_used`, `gpu_power`, `ram_used`, `swap_used`.
 
 ### `GET /api/benchmarks/:id/runs/:runIndex`
 
-Get data for a single run within a benchmark.
+Get pre-calculated statistics for a single run within a benchmark.
 
 **Path parameters:**
 
@@ -148,6 +180,8 @@ Get data for a single run within a benchmark.
 |---|---|---|
 | `id` | int | Benchmark ID. |
 | `runIndex` | int | Zero-based run index. |
+
+**Response:** `200 OK` — A single `PreCalculatedRun` object (same structure as one element from `GET /api/benchmarks/:id/data`).
 
 ### `GET /api/benchmarks/:id/download`
 
@@ -210,6 +244,38 @@ The total data lines across existing + new runs must not exceed 1,000,000.
 ### `DELETE /api/benchmarks/:id/runs/:run_index`
 
 Delete a specific run from a benchmark. Cannot delete the last remaining run. Only the owner or an admin can delete.
+
+### `POST /api/debugcalc`
+
+Compute statistics from raw FPS and/or frametime data. This public endpoint is used by the `/debugcalc` page to compare frontend and backend calculation results.
+
+**Request body (JSON):**
+
+```json
+{
+  "fps": [60.0, 59.5, 61.2, ...],
+  "frameTime": [16.67, 16.81, 16.34, ...]
+}
+```
+
+At least one of `fps` or `frameTime` must be provided. If `frameTime` is provided it is always used to derive FPS statistics (the correct method). Both arrays are optional float64 arrays.
+
+**Response:** `200 OK`
+
+```json
+{
+  "linear": {
+    "fps": { "min": ..., "max": ..., "avg": ..., "median": ..., "p01": ..., ... },
+    "frameTime": { ... }
+  },
+  "mangohud": {
+    "fps": { ... },
+    "frameTime": { ... }
+  }
+}
+```
+
+Each stats object is a `MetricStats` (same structure as returned by benchmark data endpoints). The `linear` key uses linear interpolation for percentiles; `mangohud` uses the MangoHud threshold method.
 
 ### `GET /api/tokens`
 
@@ -327,7 +393,7 @@ The `initialize` response includes contextual information in its `instructions` 
 |---|---|---|
 | `list_benchmarks` | Search and list benchmarks with pagination, search, sorting, and username filtering. | Yes |
 | `get_benchmark` | Get detailed benchmark metadata (title, description, user, run count, labels). | Yes |
-| `get_benchmark_data` | Get benchmark metadata and computed statistics for all runs in a single call (min, max, avg, median, P1, P5, P10, P25, P75, P90, P95, P97, P99, IQR, std dev, variance). Optionally include downsampled raw data (up to 5,000 points). | Yes |
+| `get_benchmark_data` | Get benchmark metadata and computed statistics for all runs in a single call (min, max, avg, median, P1, P5, P10, P25, P75, P90, P95, P97, P99, IQR, std dev, variance, count). Optionally include downsampled raw data (up to 5,000 points). | Yes |
 | `get_benchmark_run` | Get computed statistics for a single run. | Yes |
 
 #### Authenticated (Bearer token required)
@@ -405,8 +471,12 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. All 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | int | Yes | Benchmark ID. |
-| `max_points` | int | No | Include downsampled raw data (0 = stats only, 1–5,000 for time series). |
+| `max_points` | int | No | Include downsampled raw data points per metric (0 = stats only, 1–5,000). When provided, each `MetricSummary` includes a `data` array of downsampled float64 values. |
 | `jq` | string | No | jq expression to filter/transform the result. |
+
+The MCP response wraps each run as a `BenchmarkDataSummary` with `label`, `spec_os`, `spec_cpu`, `spec_gpu`, `spec_ram`, `spec_linux_kernel`, `spec_linux_scheduler`, `total_data_points`, `downsampled_to` (when applicable), and `metrics` (map of metric key to `MetricSummary`).
+
+Each `MetricSummary` contains: `min`, `max`, `avg`, `median`, `p01`, `p05`, `p10`, `p25`, `p75`, `p90`, `p95`, `p97`, `p99`, `iqr`, `std_dev`, `variance`, `count`, and optionally `data` (downsampled float64 array, only present when `max_points > 0`). Note: the `density` histogram is available in the REST API (`GET /api/benchmarks/:id/data`) but is not included in the MCP `MetricSummary`.
 
 #### `get_benchmark_run`
 
@@ -414,8 +484,10 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. All 
 |---|---|---|---|
 | `id` | int | Yes | Benchmark ID. |
 | `run_index` | int | Yes | Zero-based run index. |
-| `max_points` | int | No | Include downsampled raw data (0 = stats only, 1–5,000 for time series). |
+| `max_points` | int | No | Include downsampled raw data points per metric (0 = stats only, 1–5,000). |
 | `jq` | string | No | jq expression to filter/transform the result. |
+
+Returns a single `BenchmarkDataSummary` (same structure as one element from `get_benchmark_data`).
 
 #### `update_benchmark`
 
