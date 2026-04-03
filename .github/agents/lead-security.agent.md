@@ -33,6 +33,14 @@ A key responsibility is ensuring REST API and MCP endpoint authentication is con
 - Public REST endpoints must match public MCP tools
 - Differences between REST and MCP auth = accidental security bug
 
+## Parallel Subagent Execution
+
+Subagents can be invoked in parallel — multiple `runSubagent` calls made simultaneously will execute concurrently and return independent results. **Always parallelize independent reviews** to save time and keep findings unbiased:
+
+- **Full-stack reviews**: Invoke Go Sec and Vue Sec in parallel (their scopes don't overlap)
+- **Comprehensive audits**: Invoke Go Sec, Vue Sec, and Pentester all in parallel — each approaches the code from a different angle without being anchored by another's findings
+- **Sequential only when needed**: If Pentester findings should inform Go Sec's focus areas, sequence them
+
 ## Constraints
 
 - DO NOT write or modify code — you coordinate reviewers and report findings
