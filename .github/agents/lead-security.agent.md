@@ -33,6 +33,25 @@ A key responsibility is ensuring REST API and MCP endpoint authentication is con
 - Public REST endpoints must match public MCP tools
 - Differences between REST and MCP auth = accidental security bug
 
+## Test Coverage for Security Code
+
+Untested security code is a security risk. Flag as **Medium** severity any security-sensitive code that lacks test coverage:
+- Authentication and session handling logic without auth tests
+- Authorization and access control checks without permission tests
+- Input validation and sanitization without boundary/malicious input tests
+- Rate limiting logic without rate limit tests
+- API token handling without token auth tests
+
+Report these alongside other findings — the Dev Lead will route missing test coverage back to developer agents.
+
+## Parallel Subagent Execution
+
+Subagents can be invoked in parallel — multiple `runSubagent` calls made simultaneously will execute concurrently and return independent results. **Always parallelize independent reviews** to save time and keep findings unbiased:
+
+- **Full-stack reviews**: Invoke Go Sec and Vue Sec in parallel (their scopes don't overlap)
+- **Comprehensive audits**: Invoke Go Sec, Vue Sec, and Pentester all in parallel — each approaches the code from a different angle without being anchored by another's findings
+- **Sequential only when needed**: If Pentester findings should inform Go Sec's focus areas, sequence them
+
 ## Constraints
 
 - DO NOT write or modify code — you coordinate reviewers and report findings
