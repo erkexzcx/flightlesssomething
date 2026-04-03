@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/itchyny/gojq"
 )
 
 // JSON-RPC 2.0 types
@@ -169,6 +170,13 @@ func newMCPServer(db *DBInstance, version string) *mcpServer {
 	return s
 }
 
+// jqProperty is the common JSON schema property for the optional jq filter parameter.
+// It is added to every tool's InputSchema.
+var jqProperty = map[string]interface{}{
+	"type":        "string",
+	"description": "Optional jq expression to filter/transform the JSON result server-side. Reduces response size and avoids unnecessary context usage. Example: '.benchmarks[] | {id, title}' or '.runs[0].metrics.fps | {avg, p01, p99}'",
+}
+
 func (s *mcpServer) defineTools() []mcpTool {
 	boolPtr := func(b bool) *bool { return &b }
 
@@ -184,18 +192,19 @@ func (s *mcpServer) defineTools() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "list_benchmarks",
-			Title:       "Browse Benchmarks",
+			Title:       "List Benchmarks",
 			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description (markdown), user, run count, and timestamps. After listing, use get_benchmark_data to retrieve statistics for analysis.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"page":      map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
-					"per_page":  map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
-					"search":    map[string]interface{}{"type": "string", "description": "Search keywords (space-separated, AND logic). Searches title, description, username, run names, and specifications."},
-					"user_id":   map[string]interface{}{"type": "integer", "description": "Filter by user ID"},
-					"username":  map[string]interface{}{"type": "string", "description": "Filter by exact username (case-insensitive). Use this instead of user_id when you know the username but not the ID."},
-					"sort_by":   map[string]interface{}{"type": "string", "enum": []string{"title", "created_at", "updated_at"}, "description": "Sort field (default: created_at)"},
+					"page":       map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
+					"per_page":   map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
+					"search":     map[string]interface{}{"type": "string", "description": "Search keywords (space-separated, AND logic). Searches title, description, username, run names, and specifications."},
+					"user_id":    map[string]interface{}{"type": "integer", "description": "Filter by user ID"},
+					"username":   map[string]interface{}{"type": "string", "description": "Filter by exact username (case-insensitive). Use this instead of user_id when you know the username but not the ID."},
+					"sort_by":    map[string]interface{}{"type": "string", "enum": []string{"title", "created_at", "updated_at"}, "description": "Sort field (default: created_at)"},
 					"sort_order": map[string]interface{}{"type": "string", "enum": []string{"asc", "desc"}, "description": "Sort order (default: desc)"},
+					"jq":         jqProperty,
 				},
 			},
 			Icons:       faIcon("magnifying-glass"),
@@ -204,13 +213,14 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "get_benchmark",
-			Title:       "View Benchmark",
+			Title:       "Get Benchmark Details",
 			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Note: get_benchmark_data also includes this metadata alongside statistics, so prefer get_benchmark_data when you need both metadata and stats.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
 				"properties": map[string]interface{}{
 					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
+					"jq": jqProperty,
 				},
 			},
 			Icons:       faIcon("eye"),
@@ -219,7 +229,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "get_benchmark_data",
-			Title:       "Benchmark Statistics",
+			Title:       "Get Benchmark Statistics",
 			Description: "Get benchmark metadata and computed statistics for all runs in a single call. Returns the benchmark info (title, description, user, timestamps) alongside per-metric stats: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series. This is the primary tool for benchmark analysis — no need to call get_benchmark separately.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
@@ -227,6 +237,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"properties": map[string]interface{}{
 					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
+					"jq":         jqProperty,
 				},
 			},
 			Icons:       faIcon("chart-simple"),
@@ -235,7 +246,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "get_benchmark_run",
-			Title:       "Run Statistics",
+			Title:       "Get Run Statistics",
 			Description: "Get computed statistics for a specific run within a benchmark. Same stats as get_benchmark_data but for a single run. Raw data points omitted by default.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
@@ -244,6 +255,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"id":         map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
 					"run_index":  map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
 					"max_points": map[string]interface{}{"type": "integer", "description": "Include downsampled raw data points (default: 0 = stats only). Set 1-5000 for time series data alongside stats."},
+					"jq":         jqProperty,
 				},
 			},
 			Icons:       faIcon("chart-line"),
@@ -252,7 +264,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "update_benchmark",
-			Title:       "Edit Benchmark",
+			Title:       "Update Benchmark Metadata",
 			Description: "Update benchmark metadata (title, description) and/or run labels. Description supports markdown formatting. Requires authentication via API token. Only the benchmark owner or an admin can update.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
@@ -262,6 +274,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"title":       map[string]interface{}{"type": "string", "description": "New title (max 100 chars)"},
 					"description": map[string]interface{}{"type": "string", "description": "New description in markdown format (max 5000 chars)"},
 					"labels":      map[string]interface{}{"type": "object", "description": "Map of run index (as string) to new label, e.g. {\"0\": \"Run A\", \"1\": \"Run B\"}", "additionalProperties": map[string]interface{}{"type": "string"}},
+					"jq":          jqProperty,
 				},
 			},
 			Icons:       faIcon("pen"),
@@ -269,81 +282,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 			accessLevel: toolAccessAuth,
 		},
 		{
-			Name:        "delete_benchmark",
-			Title:       "Delete Benchmark",
-			Description: "Delete a benchmark and all its data. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id"},
-				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-				},
-			},
-			Icons:       faIcon("trash-can"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "delete_benchmark_run",
-			Title:       "Delete Run",
-			Description: "Delete a specific run from a benchmark. Cannot delete the last remaining run. Requires authentication via API token. Only the benchmark owner or an admin can delete.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"id", "run_index"},
-				"properties": map[string]interface{}{
-					"id":        map[string]interface{}{"type": "integer", "description": "Benchmark ID"},
-					"run_index": map[string]interface{}{"type": "integer", "description": "Run index (0-based)"},
-				},
-			},
-			Icons:       faIcon("circle-minus"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "list_api_tokens",
-			Title:       "My API Tokens",
-			Description: "List all API tokens for the currently authenticated user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-			Icons:       faIcon("key"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(true), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "create_api_token",
-			Title:       "Create API Token",
-			Description: "Create a new API token for the currently authenticated user. Maximum 10 tokens per user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"name"},
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Token name (1-100 chars)"},
-				},
-			},
-			Icons:       faIcon("circle-plus"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
-			Name:        "delete_api_token",
-			Title:       "Delete API Token",
-			Description: "Delete an API token belonging to the currently authenticated user. Requires authentication via API token.",
-			InputSchema: map[string]interface{}{
-				"type":     "object",
-				"required": []string{"token_id"},
-				"properties": map[string]interface{}{
-					"token_id": map[string]interface{}{"type": "integer", "description": "Token ID to delete"},
-				},
-			},
-			Icons:       faIcon("circle-xmark"),
-			Annotations: &mcpToolAnnotations{ReadOnlyHint: boolPtr(false), DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
-			accessLevel: toolAccessAuth,
-		},
-		{
 			Name:        "list_users",
-			Title:       "Manage Users",
+			Title:       "List Users",
 			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -351,6 +291,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 					"page":     map[string]interface{}{"type": "integer", "description": "Page number (default: 1)"},
 					"per_page": map[string]interface{}{"type": "integer", "description": "Results per page, 1-100 (default: 10)"},
 					"search":   map[string]interface{}{"type": "string", "description": "Search by username or Discord ID"},
+					"jq":       jqProperty,
 				},
 			},
 			Icons:       faIcon("users"),
@@ -359,7 +300,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "delete_user",
-			Title:       "Delete User",
+			Title:       "Delete User Account",
 			Description: "Delete a user account. Admin only. Cannot delete your own account. Optionally delete all user data (benchmarks). Requires authentication via API token with admin privileges.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
@@ -367,6 +308,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"properties": map[string]interface{}{
 					"user_id":     map[string]interface{}{"type": "integer", "description": "User ID to delete"},
 					"delete_data": map[string]interface{}{"type": "boolean", "description": "Also delete all benchmark data files (default: false)"},
+					"jq":          jqProperty,
 				},
 			},
 			Icons:       faIcon("user-xmark"),
@@ -375,13 +317,14 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "delete_user_benchmarks",
-			Title:       "Delete User's Benchmarks",
+			Title:       "Delete User Benchmarks",
 			Description: "Delete all benchmarks belonging to a user. Admin only. Requires authentication via API token with admin privileges.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"user_id"},
 				"properties": map[string]interface{}{
 					"user_id": map[string]interface{}{"type": "integer", "description": "User ID whose benchmarks to delete"},
+					"jq":      jqProperty,
 				},
 			},
 			Icons:       faIcon("folder-minus"),
@@ -390,7 +333,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		},
 		{
 			Name:        "ban_user",
-			Title:       "Ban / Unban User",
+			Title:       "Ban or Unban User",
 			Description: "Ban or unban a user. Admin only. Cannot ban your own account. Requires authentication via API token with admin privileges.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
@@ -398,6 +341,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"properties": map[string]interface{}{
 					"user_id": map[string]interface{}{"type": "integer", "description": "User ID to ban/unban"},
 					"banned":  map[string]interface{}{"type": "boolean", "description": "true to ban, false to unban"},
+					"jq":      jqProperty,
 				},
 			},
 			Icons:       faIcon("ban"),
@@ -414,6 +358,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 				"properties": map[string]interface{}{
 					"user_id":  map[string]interface{}{"type": "integer", "description": "User ID to modify"},
 					"is_admin": map[string]interface{}{"type": "boolean", "description": "true to grant admin, false to revoke"},
+					"jq":       jqProperty,
 				},
 			},
 			Icons:       faIcon("shield-halved"),
@@ -534,10 +479,7 @@ func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrp
 	baseURL := scheme + "://" + c.Request.Host
 
 	// Build instructions with context
-	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. To create benchmarks, add runs, or download raw benchmark data, use curl with the REST API instead of MCP tools (these operations involve large CSV files unsuitable for MCP). To get an API token for curl commands, call the list_api_tokens tool and use one of the returned token values. REST API endpoints for benchmark data operations:
-- Create benchmark: curl -X POST ` + baseURL + `/api/benchmarks -H 'Authorization: Bearer <token>' -F 'title=...' -F 'files=@file.csv'
-- Add runs: curl -X POST ` + baseURL + `/api/benchmarks/<id>/runs -H 'Authorization: Bearer <token>' -F 'files=@file.csv'
-- Download benchmark: curl ` + baseURL + `/api/benchmarks/<id>/download -o benchmark.zip
+	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. This MCP server does not support benchmark data upload, download, or deletion operations — these involve large CSV file transfers which are not suitable for the MCP protocol. Use the web UI at ` + baseURL + ` for uploading, downloading, or deleting benchmarks. API tokens can be managed via the web UI at ` + baseURL + `/api-tokens. All tools support an optional "jq" parameter for server-side filtering and transformation of results, reducing response size.
 
 Server base URL: ` + baseURL
 
@@ -634,16 +576,6 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		result, toolErr = s.toolGetBenchmarkRun(params.Arguments)
 	case "update_benchmark":
 		result, toolErr = s.toolUpdateBenchmark(params.Arguments, userID, username, isAdmin)
-	case "delete_benchmark":
-		result, toolErr = s.toolDeleteBenchmark(params.Arguments, userID, username, isAdmin)
-	case "delete_benchmark_run":
-		result, toolErr = s.toolDeleteBenchmarkRun(params.Arguments, userID, username, isAdmin)
-	case "list_api_tokens":
-		result, toolErr = s.toolListAPITokens(userID)
-	case "create_api_token":
-		result, toolErr = s.toolCreateAPIToken(params.Arguments, userID)
-	case "delete_api_token":
-		result, toolErr = s.toolDeleteAPIToken(params.Arguments, userID)
 	case "list_users":
 		result, toolErr = s.toolListUsers(params.Arguments)
 	case "delete_user":
@@ -662,6 +594,12 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 		}
 	}
 
+	if toolErr != nil {
+		return s.toolError(req.ID, toolErr.Error())
+	}
+
+	// Apply jq filter if provided
+	result, toolErr = applyJQFilter(params.Arguments, result)
 	if toolErr != nil {
 		return s.toolError(req.ID, toolErr.Error())
 	}
@@ -729,6 +667,64 @@ func (s *mcpServer) getToolAccessLevel(name string) string {
 	}
 	// Unknown tools default to admin level to fail safely
 	return toolAccessAdmin
+}
+
+// applyJQFilter applies an optional jq filter from the tool arguments to the JSON result string.
+// If no "jq" argument is provided, the result is returned unchanged.
+func applyJQFilter(args json.RawMessage, result string) (string, error) {
+	if args == nil {
+		return result, nil
+	}
+
+	var jqArgs struct {
+		JQ string `json:"jq"`
+	}
+	if err := json.Unmarshal(args, &jqArgs); err != nil {
+		return result, nil // args may not contain jq field; ignore unmarshal errors
+	}
+	if jqArgs.JQ == "" {
+		return result, nil
+	}
+
+	query, err := gojq.Parse(jqArgs.JQ)
+	if err != nil {
+		return "", fmt.Errorf("jq parse error: %w", err)
+	}
+
+	var input interface{}
+	if err := json.Unmarshal([]byte(result), &input); err != nil {
+		return "", fmt.Errorf("jq: failed to parse tool result as JSON: %w", err)
+	}
+
+	iter := query.Run(input)
+	var outputs []interface{}
+	for {
+		v, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, isErr := v.(error); isErr {
+			return "", fmt.Errorf("jq evaluation error: %w", err)
+		}
+		outputs = append(outputs, v)
+	}
+
+	// If single result, return it directly; otherwise return as array
+	var out interface{}
+	switch len(outputs) {
+	case 0:
+		out = nil
+	case 1:
+		out = outputs[0]
+	default:
+		out = outputs
+	}
+
+	data, err := json.Marshal(out)
+	if err != nil {
+		return "", fmt.Errorf("jq: failed to marshal filtered result: %w", err)
+	}
+	return string(data), nil
 }
 
 // --- Tool implementations ---
@@ -1062,217 +1058,6 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, usern
 	LogBenchmarkUpdated(userID, username, benchmark.ID, benchmark.Title, changes)
 
 	data, err := json.Marshal(benchmark)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolDeleteBenchmark(args json.RawMessage, userID uint, username string, isAdmin bool) (string, error) {
-	var params struct {
-		ID int `json:"id"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.ID <= 0 {
-		return "", fmt.Errorf("id is required")
-	}
-
-	// Check if user is banned (admins can still delete)
-	if !isAdmin {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err != nil {
-			return "", fmt.Errorf("user not found")
-		}
-		if user.IsBanned {
-			return "", fmt.Errorf("your account has been banned")
-		}
-	}
-
-	var benchmark Benchmark
-	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
-		return "", fmt.Errorf("benchmark not found")
-	}
-
-	// Check ownership or admin
-	if benchmark.UserID != userID && !isAdmin {
-		return "", fmt.Errorf("not authorized")
-	}
-
-	title := benchmark.Title
-
-	if err := DeleteBenchmarkData(benchmark.ID); err != nil {
-		fmt.Printf("Warning: failed to delete benchmark data file: %v\n", err)
-	}
-
-	if err := s.db.DB.Delete(&benchmark).Error; err != nil {
-		return "", fmt.Errorf("failed to delete benchmark: %w", err)
-	}
-
-	LogBenchmarkDeleted(userID, username, benchmark.ID, title)
-
-	result := map[string]interface{}{
-		"message": "benchmark deleted",
-		"id":      params.ID,
-		"title":   title,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolDeleteBenchmarkRun(args json.RawMessage, userID uint, username string, isAdmin bool) (string, error) {
-	var params struct {
-		ID       int `json:"id"`
-		RunIndex int `json:"run_index"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.ID <= 0 {
-		return "", fmt.Errorf("id is required")
-	}
-
-	// Check if user is banned (admins can still delete)
-	if !isAdmin {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err != nil {
-			return "", fmt.Errorf("user not found")
-		}
-		if user.IsBanned {
-			return "", fmt.Errorf("your account has been banned")
-		}
-	}
-
-	var benchmark Benchmark
-	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
-		return "", fmt.Errorf("benchmark not found")
-	}
-
-	// Check ownership or admin
-	if benchmark.UserID != userID && !isAdmin {
-		return "", fmt.Errorf("not authorized")
-	}
-
-	benchmarkData, err := RetrieveBenchmarkData(uint(params.ID))
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve benchmark data: %w", err)
-	}
-
-	if params.RunIndex < 0 || params.RunIndex >= len(benchmarkData) {
-		return "", fmt.Errorf("run index out of range")
-	}
-
-	if len(benchmarkData) == 1 {
-		return "", fmt.Errorf("cannot delete the last run - delete the entire benchmark instead")
-	}
-
-	// Capture run label before deletion for audit log
-	runLabel := benchmarkData[params.RunIndex].Label
-
-	benchmarkData = append(benchmarkData[:params.RunIndex], benchmarkData[params.RunIndex+1:]...)
-
-	if err := StoreBenchmarkData(benchmarkData, uint(params.ID)); err != nil {
-		return "", fmt.Errorf("failed to update benchmark data: %w", err)
-	}
-
-	runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-	benchmark.RunNames = runNames
-	benchmark.Specifications = specifications
-
-	if err := s.db.DB.Save(&benchmark).Error; err != nil {
-		return "", fmt.Errorf("failed to update benchmark: %w", err)
-	}
-
-	LogBenchmarkRunDeleted(userID, username, benchmark.ID, benchmark.Title, params.RunIndex, runLabel)
-
-	runtime.GC()
-
-	return `{"message":"run deleted successfully"}`, nil
-}
-
-func (s *mcpServer) toolListAPITokens(userID uint) (string, error) {
-	var tokens []APIToken
-	if err := s.db.DB.Where("user_id = ?", userID).Order("created_at DESC").Find(&tokens).Error; err != nil {
-		return "", fmt.Errorf("failed to retrieve tokens: %w", err)
-	}
-
-	data, err := json.Marshal(tokens)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolCreateAPIToken(args json.RawMessage, userID uint) (string, error) {
-	var params struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.Name == "" || len(params.Name) > 100 {
-		return "", fmt.Errorf("name is required and must be at most 100 characters")
-	}
-
-	// Check token limit
-	var count int64
-	if err := s.db.DB.Model(&APIToken{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-		return "", fmt.Errorf("failed to check token count: %w", err)
-	}
-	if count >= maxTokensPerUser {
-		return "", fmt.Errorf("maximum number of tokens reached (%d)", maxTokensPerUser)
-	}
-
-	token, err := generateAPIToken()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	apiToken := APIToken{
-		UserID: userID,
-		Token:  token,
-		Name:   params.Name,
-	}
-	if createErr := s.db.DB.Create(&apiToken).Error; createErr != nil {
-		return "", fmt.Errorf("failed to create token: %w", createErr)
-	}
-
-	data, err := json.Marshal(apiToken)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(data), nil
-}
-
-func (s *mcpServer) toolDeleteAPIToken(args json.RawMessage, userID uint) (string, error) {
-	var params struct {
-		TokenID int `json:"token_id"`
-	}
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	if params.TokenID <= 0 {
-		return "", fmt.Errorf("token_id is required")
-	}
-
-	var token APIToken
-	if err := s.db.DB.Where("id = ? AND user_id = ?", params.TokenID, userID).First(&token).Error; err != nil {
-		return "", fmt.Errorf("token not found")
-	}
-
-	if err := s.db.DB.Delete(&token).Error; err != nil {
-		return "", fmt.Errorf("failed to delete token: %w", err)
-	}
-
-	result := map[string]interface{}{
-		"message":  "token deleted",
-		"token_id": params.TokenID,
-	}
-	data, err := json.Marshal(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %w", err)
 	}

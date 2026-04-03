@@ -82,7 +82,7 @@ A background goroutine cleans up expired entries every 5 minutes. The implementa
 
 ### MCP Protocol
 
-The application exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) endpoint at `/mcp` using JSON-RPC 2.0. This allows AI assistants to interact with the application programmatically. Tools mirror the REST API, except for binary file transfer operations (upload/download) which are unsuitable for MCP.
+The application exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) endpoint at `/mcp` using JSON-RPC 2.0. This allows AI assistants to interact with the application programmatically. Tools provide read-only benchmark access, metadata editing, and admin operations. Benchmark data upload, download, deletion, and API token management are intentionally excluded as they are unsuitable for MCP. All tools support an optional `jq` parameter for server-side result filtering and transformation.
 
 ## Frontend
 
