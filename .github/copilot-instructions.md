@@ -60,7 +60,7 @@ flightlesssomething/
 │   ├── benchmarks.go               # Benchmark CRUD handlers (create/read/update/delete/search)
 │   ├── config.go                   # Configuration parsing (flags + env vars)
 │   ├── database.go                 # GORM/SQLite initialization, admin user seeding
-│   ├── mcp.go                      # MCP server (JSON-RPC 2.0) with 17 tools
+│   ├── mcp.go                      # MCP server (JSON-RPC 2.0) with 10 tools + jq filtering
 │   ├── migration.go                # Database schema versioning and migrations
 │   ├── models.go                   # GORM models: User, Benchmark, APIToken, AuditLog
 │   ├── ratelimiter.go              # In-memory sliding window rate limiter
@@ -189,9 +189,9 @@ flightlesssomething/
 
 ---
 
-## MCP Tools (17 tools)
+## MCP Tools (10 tools)
 
-The MCP server exposes all non-file-transfer API functionality as tools. File upload/download operations are intentionally excluded because MCP is not suited for large binary transfers.
+The MCP server exposes read-only benchmark access, metadata editing, and admin tools. Benchmark data upload, download, deletion, and API token management are intentionally excluded — these operations involve large CSV file transfers unsuitable for MCP, or are better managed via the web UI.
 
 ### Public (no auth required)
 - `list_benchmarks` – Browse/search with pagination, user_id filter, sorting
@@ -200,29 +200,21 @@ The MCP server exposes all non-file-transfer API functionality as tools. File up
 - `get_benchmark_run` – Statistics for a single run
 
 ### Authenticated (Bearer token)
-- `get_current_user` – Authenticated user info
 - `update_benchmark` – Edit title/description/labels (owner or admin)
-- `delete_benchmark` – Delete benchmark (owner or admin)
-- `delete_benchmark_run` – Delete specific run (cannot delete last run)
-- `list_api_tokens` – List user's tokens
-- `create_api_token` – Create token (max 10/user)
-- `delete_api_token` – Delete token
 
 ### Admin (Bearer token + admin)
 - `list_users` – Search users by username/Discord ID
-- `list_audit_logs` – Filter logs by user_id, action, target_type
 - `delete_user` – Delete user (cannot delete self)
 - `delete_user_benchmarks` – Delete all user's benchmarks
 - `ban_user` – Ban/unban (cannot ban self)
 - `toggle_user_admin` – Grant/revoke admin (cannot revoke self)
 
+### Server-Side jq Filtering
+All tools support an optional `jq` parameter for server-side filtering and transformation of JSON results, reducing response size and context usage.
+
 ### API vs MCP Parity
 
-Everything in the REST API has an MCP equivalent **except** these intentionally excluded operations:
-- **Benchmark file upload** (`POST /api/benchmarks`, `POST /api/benchmarks/:id/runs`) – requires multipart file transfer, unsuitable for MCP
-- **Benchmark ZIP download** (`GET /api/benchmarks/:id/download`) – large binary transfer, unsuitable for MCP
-
-When adding new API endpoints, always add the corresponding MCP tool unless it involves binary file transfer. See section "PR Checklist" rule 5.
+The MCP server does not support benchmark data upload, download, or deletion operations. API token management is also excluded. These are handled via the web UI or REST API. When adding new API endpoints, add the corresponding MCP tool unless it involves binary file transfer or token management.
 
 ---
 
@@ -309,7 +301,7 @@ Test files and what they cover:
 | `benchmark_streaming_test.go` | Streaming 1M points with minimal memory overhead |
 | `benchmarks_test.go` | List/get/delete benchmarks, search, run management |
 | `config_test.go` | Config flag parsing |
-| `mcp_test.go` | All 17 MCP tools: requests, responses, auth, errors |
+| `mcp_test.go` | All 10 MCP tools: requests, responses, auth, errors, jq filtering |
 | `migration_test.go` | Schema migrations, backward compat, timestamp preservation |
 | `ratelimiter_test.go` | Rate limit logic, sliding window, cleanup |
 | `ratelimiter_integration_test.go` | Rate limits applied to login/upload handlers |
@@ -445,10 +437,11 @@ Every pull request **must** satisfy ALL of the following requirements:
 - For MCP changes: verify tool input/output schemas and error handling
 
 ### 5. API–MCP Parity
-- Every new REST API endpoint must have a corresponding MCP tool, **unless** the operation involves binary file transfer (multipart uploads or file downloads)
-- Currently excluded from MCP (intentionally): benchmark file upload (`POST /api/benchmarks`, `POST /api/benchmarks/:id/runs`) and benchmark ZIP download (`GET /api/benchmarks/:id/download`)
+- Every new REST API endpoint must have a corresponding MCP tool, **unless** the operation involves binary file transfer (multipart uploads or file downloads), benchmark data deletion, or API token management
+- Currently excluded from MCP (intentionally): benchmark file upload (`POST /api/benchmarks`, `POST /api/benchmarks/:id/runs`), benchmark ZIP download (`GET /api/benchmarks/:id/download`), benchmark deletion (`DELETE /api/benchmarks/:id`, `DELETE /api/benchmarks/:id/runs/:run_index`), and API token management (`GET/POST/DELETE /api/tokens`)
 - When adding a new API endpoint, add the MCP tool in `internal/app/mcp.go` and add corresponding tests in `internal/app/mcp_test.go`
 - Verify that MCP tool parameters, responses, and error handling match the REST API behavior
+- All MCP tools must include the optional `jq` parameter for server-side result filtering
 
 ### 6. Security and Performance
 - Follow security best practices: validate all inputs, use parameterized queries (GORM handles this), sanitize HTML output (DOMPurify on frontend)

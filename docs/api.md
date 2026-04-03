@@ -335,11 +335,6 @@ The `initialize` response includes contextual information in its `instructions` 
 | Tool | Description | Read-only |
 |---|---|---|
 | `update_benchmark` | Update title, description, and/or run labels. Owner or admin only. | No |
-| `delete_benchmark` | Delete a benchmark and all its data. Owner or admin only. | No |
-| `delete_benchmark_run` | Delete a specific run. Cannot delete the last remaining run. Owner or admin only. | No |
-| `list_api_tokens` | List the current user's API tokens. | Yes |
-| `create_api_token` | Create a new API token (max 10 per user). | No |
-| `delete_api_token` | Delete an API token belonging to the current user. | No |
 
 #### Admin (Bearer token with admin privileges)
 
@@ -353,17 +348,37 @@ The `initialize` response includes contextual information in its `instructions` 
 
 ### API–MCP Parity
 
-Every REST API endpoint has a corresponding MCP tool **except**:
+The MCP server does not support benchmark data upload, download, or deletion operations — these involve large CSV file transfers which are not suitable for the MCP protocol. Use the web UI for uploading, downloading, or deleting benchmarks. API token management is also not available via MCP — use the web UI at `/api-tokens` to manage tokens.
+
+Operations intentionally excluded from MCP:
 
 - **Benchmark file upload** (`POST /api/benchmarks`, `POST /api/benchmarks/:id/runs`) — requires multipart form data, unsuitable for MCP.
 - **Benchmark ZIP download** (`GET /api/benchmarks/:id/download`) — large binary transfer, unsuitable for MCP.
+- **Benchmark deletion** (`DELETE /api/benchmarks/:id`, `DELETE /api/benchmarks/:id/runs/:run_index`) — data operations, handled via web UI or REST API.
+- **API token management** (`GET /api/tokens`, `POST /api/tokens`, `DELETE /api/tokens/:id`) — managed via web UI.
 - **Current user info** (`GET /api/auth/me`) — user context is provided in the `initialize` response instead, eliminating the need for a separate tool call.
 
-For these operations, the MCP server's initialization instructions guide AI agents to use `curl` with the REST API directly.
+### Server-Side jq Filtering
+
+All MCP tools support an optional `jq` parameter that applies a [jq](https://jqlang.github.io/jq/) expression to the tool's JSON result server-side before returning it. This reduces response size and avoids wasting context tokens on unneeded data.
+
+**Example usage:**
+
+```json
+{
+  "name": "get_benchmark_data",
+  "arguments": {
+    "id": 42,
+    "jq": ".runs[0].metrics.fps | {avg, p01, p99}"
+  }
+}
+```
+
+This returns only the FPS stats instead of the full benchmark data response.
 
 ### Tool Parameters
 
-Each tool accepts a JSON object as `arguments` in the `tools/call` request. Below are the parameters for each tool.
+Each tool accepts a JSON object as `arguments` in the `tools/call` request. All tools support an optional `jq` parameter (string) for server-side result filtering. Below are the tool-specific parameters.
 
 #### `list_benchmarks`
 
@@ -376,12 +391,14 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 | `username` | string | No | Filter by exact username (case-insensitive). Use instead of `user_id` when you know the username. |
 | `sort_by` | string | No | `title`, `created_at`, or `updated_at` (default: `created_at`). |
 | `sort_order` | string | No | `asc` or `desc` (default: `desc`). |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `get_benchmark`
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | int | Yes | Benchmark ID. |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `get_benchmark_data`
 
@@ -389,6 +406,7 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 |---|---|---|---|
 | `id` | int | Yes | Benchmark ID. |
 | `max_points` | int | No | Include downsampled raw data (0 = stats only, 1–5,000 for time series). |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `get_benchmark_run`
 
@@ -397,6 +415,7 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 | `id` | int | Yes | Benchmark ID. |
 | `run_index` | int | Yes | Zero-based run index. |
 | `max_points` | int | No | Include downsampled raw data (0 = stats only, 1–5,000 for time series). |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `update_benchmark`
 
@@ -406,35 +425,7 @@ Each tool accepts a JSON object as `arguments` in the `tools/call` request. Belo
 | `title` | string | No | New title (max 100 characters). |
 | `description` | string | No | New description in Markdown (max 5,000 characters). |
 | `labels` | object | No | Map of run index (string key) to new label, e.g. `{"0": "Run A"}`. |
-
-#### `delete_benchmark`
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | int | Yes | Benchmark ID. |
-
-#### `delete_benchmark_run`
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | int | Yes | Benchmark ID. |
-| `run_index` | int | Yes | Zero-based run index. |
-
-#### `list_api_tokens`
-
-No parameters.
-
-#### `create_api_token`
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | Yes | Token name (1–100 characters). |
-
-#### `delete_api_token`
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `token_id` | int | Yes | Token ID to delete. |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `list_users`
 
@@ -443,6 +434,7 @@ No parameters.
 | `page` | int | No | Page number (default: 1). |
 | `per_page` | int | No | Results per page, 1–100 (default: 10). |
 | `search` | string | No | Search by username or Discord ID. |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `delete_user`
 
@@ -450,12 +442,14 @@ No parameters.
 |---|---|---|---|
 | `user_id` | int | Yes | User ID to delete. |
 | `delete_data` | bool | No | Also delete all benchmark data files (default: false). |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `delete_user_benchmarks`
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `user_id` | int | Yes | User ID whose benchmarks to delete. |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `ban_user`
 
@@ -463,6 +457,7 @@ No parameters.
 |---|---|---|---|
 | `user_id` | int | Yes | User ID to ban/unban. |
 | `banned` | bool | Yes | `true` to ban, `false` to unban. |
+| `jq` | string | No | jq expression to filter/transform the result. |
 
 #### `toggle_user_admin`
 
@@ -470,3 +465,4 @@ No parameters.
 |---|---|---|---|
 | `user_id` | int | Yes | User ID to modify. |
 | `is_admin` | bool | Yes | `true` to grant admin, `false` to revoke. |
+| `jq` | string | No | jq expression to filter/transform the result. |
