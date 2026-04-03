@@ -71,14 +71,7 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v6
-        if: always()
-        with:
-          files: ./coverage.out
-          fail_ci_if_error: false
+        run: go test -v -race ./...
 
   build:
     name: Build Server Binary
