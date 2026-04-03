@@ -680,7 +680,7 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		JQ string `json:"jq"`
 	}
 	if err := json.Unmarshal(args, &jqArgs); err != nil {
-		return result, nil // ignore parse errors for jq extraction
+		return result, nil // args may not contain jq field; ignore unmarshal errors
 	}
 	if jqArgs.JQ == "" {
 		return result, nil

@@ -6,6 +6,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gin-contrib/sessions v1.1.0
 	github.com/gin-gonic/gin v1.12.0
+	github.com/itchyny/gojq v0.12.19
 	github.com/klauspost/compress v1.18.5
 	github.com/peterbourgon/ff/v3 v3.4.0
 	golang.org/x/oauth2 v0.36.0
@@ -28,7 +29,6 @@ require (
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/sessions v1.4.0 // indirect
-	github.com/itchyny/gojq v0.12.19 // indirect
 	github.com/itchyny/timefmt-go v0.1.8 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
