@@ -679,7 +679,9 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 	var jqArgs struct {
 		JQ string `json:"jq"`
 	}
-	_ = json.Unmarshal(args, &jqArgs) // args may not contain jq field; ignore unmarshal errors
+	if err := json.Unmarshal(args, &jqArgs); err != nil {
+		return result, nil //nolint:nilerr // args may not contain jq field; ignore unmarshal errors
+	}
 	if jqArgs.JQ == "" {
 		return result, nil
 	}
