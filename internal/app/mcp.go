@@ -680,7 +680,7 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		JQ string `json:"jq"`
 	}
 	if err := json.Unmarshal(args, &jqArgs); err != nil {
-		return result, nil // args may not contain jq field; ignore unmarshal errors
+		return result, nil //nolint:nilerr // args may not contain jq field; ignore unmarshal errors
 	}
 	if jqArgs.JQ == "" {
 		return result, nil
@@ -692,8 +692,8 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 	}
 
 	var input interface{}
-	if err := json.Unmarshal([]byte(result), &input); err != nil {
-		return "", fmt.Errorf("jq: failed to parse tool result as JSON: %w", err)
+	if parseErr := json.Unmarshal([]byte(result), &input); parseErr != nil {
+		return "", fmt.Errorf("jq: failed to parse tool result as JSON: %w", parseErr)
 	}
 
 	iter := query.Run(input)
@@ -703,8 +703,8 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		if !ok {
 			break
 		}
-		if err, isErr := v.(error); isErr {
-			return "", fmt.Errorf("jq evaluation error: %w", err)
+		if jqErr, isErr := v.(error); isErr {
+			return "", fmt.Errorf("jq evaluation error: %w", jqErr)
 		}
 		outputs = append(outputs, v)
 	}
