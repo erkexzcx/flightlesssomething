@@ -35,7 +35,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			// Default to title,description to match frontend defaults
 			searchFieldsParam := c.DefaultQuery("search_fields", "title,description")
 			searchFields := strings.Split(searchFieldsParam, ",")
-			
+
 			// Build a map of enabled search fields - validate against allowlist
 			validFields := map[string]bool{
 				"title":          true,
@@ -52,10 +52,10 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 					enabledFields[field] = true
 				}
 			}
-			
+
 			// Split search query into keywords
 			keywords := strings.Fields(search)
-			
+
 			// For each keyword, search in enabled fields
 			// All keywords must match (AND logic), but each keyword can match any enabled field (OR logic)
 			for _, keyword := range keywords {
@@ -64,7 +64,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 					// Build OR conditions for this keyword across enabled fields
 					var orConditions []string
 					var orValues []interface{}
-					
+
 					if enabledFields["title"] {
 						orConditions = append(orConditions, "benchmarks.title LIKE ?")
 						orValues = append(orValues, "%"+keyword+"%")
@@ -85,7 +85,7 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 						orConditions = append(orConditions, "benchmarks.specifications LIKE ?")
 						orValues = append(orValues, "%"+keyword+"%")
 					}
-					
+
 					// Only apply search if at least one field is enabled
 					if len(orConditions) > 0 {
 						orClause := strings.Join(orConditions, " OR ")
@@ -438,6 +438,10 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			// Update labels
 			for idx, newLabel := range req.Labels {
 				if idx >= 0 && idx < len(benchmarkData) {
+					if len(newLabel) > maxStringLength {
+						c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("label for run %d exceeds maximum length of %d characters", idx, maxStringLength)})
+						return
+					}
 					benchmarkData[idx].Label = newLabel
 				}
 			}
@@ -458,7 +462,7 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			runNames, specifications := ExtractSearchableMetadata(benchmarkData)
 			benchmark.RunNames = runNames
 			benchmark.Specifications = specifications
-			
+
 			// Trigger GC to reclaim memory from loaded benchmark data
 			runtime.GC()
 		}
@@ -729,6 +733,20 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			}
 			if user.IsBanned {
 				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
+				return
+			}
+		}
+
+		// Check rate limiting for benchmark uploads (skip for admins)
+		if !adminFlag {
+			limiter := GetBenchmarkUploadLimiter()
+			userKey := fmt.Sprintf("user_%d", uid)
+			if !limiter.Allow(userKey) {
+				remaining := limiter.GetRemainingTime(userKey)
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error":            "rate limit exceeded: maximum 5 benchmarks per 10 minutes",
+					"retry_after_secs": int(remaining.Seconds()),
+				})
 				return
 			}
 		}

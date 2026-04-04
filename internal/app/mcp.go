@@ -640,8 +640,7 @@ func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, 
 
 	// Update last used timestamp
 	now := time.Now()
-	apiToken.LastUsedAt = &now
-	s.db.DB.Save(&apiToken)
+	s.db.DB.Model(&APIToken{}).Where("id = ?", apiToken.ID).Update("last_used_at", now)
 	s.db.DB.Model(&User{}).Where("id = ?", apiToken.UserID).Update("last_api_activity_at", now)
 
 	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true
@@ -1031,12 +1030,20 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, usern
 				continue
 			}
 			if idx >= 0 && idx < len(benchmarkData) {
+				if len(newLabel) > maxStringLength {
+					return "", fmt.Errorf("label for run %d exceeds maximum length of %d characters", idx, maxStringLength)
+				}
 				benchmarkData[idx].Label = newLabel
 			}
 		}
 
 		if err := StoreBenchmarkData(benchmarkData, uint(params.ID)); err != nil {
 			return "", fmt.Errorf("failed to update labels: %w", err)
+		}
+
+		preCalc := ComputePreCalculatedRuns(benchmarkData)
+		if storeErr := StorePreCalculatedStats(preCalc, uint(params.ID)); storeErr != nil {
+			fmt.Printf("Warning: failed to update pre-calculated stats for benchmark %d: %v\n", params.ID, storeErr)
 		}
 
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)

@@ -34,6 +34,7 @@ You are a senior full-stack developer proficient in:
    - **Go lint/build**: Use terminal for `golangci-lint` and `go build`
    - **Vue lint/build**: Use terminal for frontend linting and building
    - Prefer built-in tools (`runTests`, `get_errors`) over terminal commands when available — they don't require user approval
+   - MUST USE READ FILE TOOL FOR READING FILES, NEVER EXECUTE TERMINAL COMMANDS TO READ FILES!!!
 6. Fix any failures and re-validate until clean
 
 ### Phase 2: Self-Review

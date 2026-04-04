@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -28,18 +27,18 @@ const (
 	FileTypeAfterburner
 
 	// Data processing constants
-	precisionFactor     = 100000
-	bytesToKB           = 1024
-	maxTotalDataLines   = 1000000 // Total limit across all runs in a benchmark
-	maxPerRunDataLines  = 500000  // Maximum data lines per single run
-	maxStringLength     = 100
-	
+	precisionFactor    = 100000
+	bytesToKB          = 1024
+	maxTotalDataLines  = 1000000 // Total limit across all runs in a benchmark
+	maxPerRunDataLines = 500000  // Maximum data lines per single run
+	maxStringLength    = 100
+
 	// Storage format version for backward compatibility
 	storageFormatVersion = 2 // Version 2: Streaming-friendly format with individual run encoding
-	
+
 	// GC tuning constants for streaming operations
 	// These control how often runtime.GC() is called during streaming to aggressively reclaim memory
-	gcFrequencyExport    = 5  // Trigger GC every N runs during ZIP export (more aggressive due to CSV overhead)
+	gcFrequencyExport = 5 // Trigger GC every N runs during ZIP export (more aggressive due to CSV overhead)
 )
 
 var benchmarksDir string
@@ -79,7 +78,7 @@ func parseHeader(scanner *bufio.Scanner) (map[int]string, error) {
 // parseData parses the data lines from the CSV file
 func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *BenchmarkData, isAfterburner bool, expectedLines int) error {
 	counter := 0
-	
+
 	// Pre-allocate slices with EXACT capacity based on actual line count
 	// Two-pass approach: first pass counts lines (streaming, no memory storage),
 	// second pass parses with exact pre-allocation to achieve 100% accuracy.
@@ -88,7 +87,7 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 	if capacity < 0 {
 		capacity = 0 // Safety check
 	}
-	
+
 	benchmarkData.DataFPS = make([]float64, 0, capacity)
 	benchmarkData.DataFrameTime = make([]float64, 0, capacity)
 	benchmarkData.DataCPULoad = make([]float64, 0, capacity)
@@ -208,11 +207,9 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*Bench
 			case 2:
 				benchmarkData.SpecGPU = truncateString(strings.TrimSpace(v))
 			case 3:
-				kilobytes := new(big.Int)
-				_, ok := kilobytes.SetString(strings.TrimSpace(v), 10)
-				if ok {
-					ramBytes := new(big.Int).Mul(kilobytes, big.NewInt(1024))
-					benchmarkData.SpecRAM = humanize.Bytes(ramBytes.Uint64())
+				kb, parseErr := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+				if parseErr == nil && kb >= 0 {
+					benchmarkData.SpecRAM = humanize.Bytes(uint64(kb) * 1024)
 				} else {
 					benchmarkData.SpecRAM = truncateString(strings.TrimSpace(v))
 				}
@@ -253,7 +250,7 @@ func readBenchmarkFile(scanner *bufio.Scanner, fileType, totalLines int) (*Bench
 	if dataLines < 0 {
 		dataLines = 100 // Fallback minimum
 	}
-	
+
 	err = parseData(scanner, headerMap, benchmarkData, fileType == FileTypeAfterburner, dataLines)
 	if err != nil {
 		return nil, err
@@ -297,7 +294,7 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	lineCount := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -307,12 +304,12 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		_ = file.Close() //nolint:errcheck // Error from counting, will report scan error
 		return nil, fmt.Errorf("failed to count lines: %w", scanErr)
 	}
-	
+
 	// Close file after first pass
 	if closeErr := file.Close(); closeErr != nil {
 		return nil, fmt.Errorf("failed to close file after counting: %w", closeErr)
 	}
-	
+
 	// PASS 2: Reopen file and parse with exact pre-allocation
 	file, err = fileHeader.Open()
 	if err != nil {
@@ -324,7 +321,7 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
 		}
 	}()
-	
+
 	reader := bufio.NewReader(file)
 	scanner = bufio.NewScanner(reader)
 
@@ -424,10 +421,10 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	// Use buffered writer to reduce syscalls and improve write performance
 	// 256KB buffer is large enough for efficient I/O without excessive memory use
 	bufWriter := bufio.NewWriterSize(file, 256*1024)
-	
+
 	// Use higher compression concurrency and better compression level for storage
 	// SpeedDefault provides good balance between compression ratio and speed
-	zstdEncoder, err := zstd.NewWriter(bufWriter, 
+	zstdEncoder, err := zstd.NewWriter(bufWriter,
 		zstd.WithEncoderLevel(zstd.SpeedDefault),
 		zstd.WithEncoderConcurrency(2))
 	if err != nil {
@@ -435,7 +432,7 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	}
 
 	gobEncoder := gob.NewEncoder(zstdEncoder)
-	
+
 	// Write file header with version and run count
 	// Pre-allocated struct avoids allocation during encoding
 	header := fileHeader{
@@ -448,7 +445,7 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 		}
 		return fmt.Errorf("failed to encode header: %w", err)
 	}
-	
+
 	// Write each run separately (enables streaming reads)
 	for i, run := range benchmarkData {
 		if err := gobEncoder.Encode(run); err != nil {
@@ -463,7 +460,7 @@ func StoreBenchmarkData(benchmarkData []*BenchmarkData, benchmarkID uint) error 
 	if err := zstdEncoder.Close(); err != nil {
 		return fmt.Errorf("failed to close zstd encoder: %w", err)
 	}
-	
+
 	// Flush buffered writer to disk
 	if err := bufWriter.Flush(); err != nil {
 		return fmt.Errorf("failed to flush buffer: %w", err)
@@ -530,7 +527,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 	defer zstdDecoder.Close()
 
 	gobDecoder := gob.NewDecoder(zstdDecoder)
-	
+
 	// Try to read header first
 	var header fileHeader
 	if err := gobDecoder.Decode(&header); err != nil {
@@ -538,7 +535,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 		// Reopen and try old format
 		return retrieveBenchmarkDataLegacy(benchmarkID)
 	}
-	
+
 	// Check version
 	if header.Version == 1 {
 		// Old format: single array (shouldn't happen as old files don't have headers, but handle it)
@@ -546,7 +543,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 	} else if header.Version != storageFormatVersion {
 		return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
 	}
-	
+
 	// New format (version 2): read runs individually
 	benchmarkData := make([]*BenchmarkData, header.RunCount)
 	for i := 0; i < header.RunCount; i++ {
@@ -556,7 +553,7 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 		}
 		benchmarkData[i] = &run
 	}
-	
+
 	return benchmarkData, nil
 }
 
@@ -660,7 +657,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 		}
 	}
 	runNames = strings.Join(runLabelsOrdered, ", ")
-	
+
 	// Extract specifications - collect unique values from all runs
 	specSet := make(map[string]bool)
 	for _, data := range benchmarkData {
@@ -683,7 +680,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 			specSet[data.SpecLinuxScheduler] = true
 		}
 	}
-	
+
 	// Convert set to slice and sort for deterministic output
 	specs := make([]string, 0, len(specSet))
 	for spec := range specSet {
@@ -692,7 +689,7 @@ func ExtractSearchableMetadata(benchmarkData []*BenchmarkData) (runNames, specif
 	// Sort alphabetically for consistent ordering
 	sort.Strings(specs)
 	specifications = strings.Join(specs, ", ")
-	
+
 	return runNames, specifications
 }
 
@@ -738,7 +735,7 @@ func CountTotalDataLines(benchmarkData []*BenchmarkData) int {
 func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 	for i, data := range benchmarkData {
 		runDataPoints := getRunDataPointCount(data)
-		
+
 		if runDataPoints > maxPerRunDataLines {
 			runLabel := data.Label
 			if runLabel == "" {
@@ -881,29 +878,29 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	defer zstdDecoder.Close()
 
 	gobDecoder := gob.NewDecoder(zstdDecoder)
-	
+
 	// Try to read header to determine format version
 	var header fileHeader
 	var runCount int
-	
+
 	if err := gobDecoder.Decode(&header); err != nil {
 		// Old format - fall back to loading entire dataset
 		zstdDecoder.Close()
 		_ = file.Close() //nolint:errcheck // Error not critical, falling back to legacy reader
-		
+
 		benchmarkData, err := retrieveBenchmarkDataLegacy(benchmarkID)
 		if err != nil {
 			return err
 		}
-		
+
 		return exportBenchmarkDataLegacy(benchmarkData, writer)
 	}
-	
+
 	// New format
 	if header.Version != storageFormatVersion {
 		return fmt.Errorf("unsupported storage format version: %d", header.Version)
 	}
-	
+
 	runCount = header.RunCount
 
 	if runCount == 0 {
@@ -924,7 +921,7 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 		if err := gobDecoder.Decode(&run); err != nil {
 			return fmt.Errorf("failed to decode run %d: %w", i, err)
 		}
-		
+
 		// Create a safe filename from the label
 		filename := sanitizeFilename(run.Label) + ".csv"
 
@@ -938,7 +935,7 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 		if err := writeBenchmarkDataAsCSV(&run, fileWriter); err != nil {
 			return err
 		}
-		
+
 		// Trigger GC periodically to aggressively reclaim memory
 		if i%gcFrequencyExport == 0 && i > 0 {
 			runtime.GC()
@@ -977,10 +974,10 @@ func exportBenchmarkDataLegacy(benchmarkData []*BenchmarkData, writer io.Writer)
 		if err := writeBenchmarkDataAsCSV(data, fileWriter); err != nil {
 			return err
 		}
-		
+
 		// Explicitly nil out the reference to allow GC to reclaim this run's memory
 		benchmarkData[i] = nil
-		
+
 		// Trigger GC periodically to aggressively reclaim memory
 		if i%gcFrequencyExport == 0 && i > 0 {
 			runtime.GC()
@@ -990,25 +987,27 @@ func exportBenchmarkDataLegacy(benchmarkData []*BenchmarkData, writer io.Writer)
 	return nil
 }
 
+// filenameReplacer replaces characters unsafe for filenames with underscores.
+// Initialized once as a package-level variable to avoid repeated allocations.
+var filenameReplacer = strings.NewReplacer(
+	"/", "_",
+	"\\", "_",
+	":", "_",
+	"*", "_",
+	"?", "_",
+	"\"", "_",
+	"<", "_",
+	">", "_",
+	"|", "_",
+	" ", "_",
+)
+
 // sanitizeFilename removes or replaces characters that are not safe for filenames
 func sanitizeFilename(filename string) string {
 	// First trim whitespace
 	filename = strings.TrimSpace(filename)
 
-	// Replace problematic characters with underscores
-	replacer := strings.NewReplacer(
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		"*", "_",
-		"?", "_",
-		"\"", "_",
-		"<", "_",
-		">", "_",
-		"|", "_",
-		" ", "_",
-	)
-	sanitized := replacer.Replace(filename)
+	sanitized := filenameReplacer.Replace(filename)
 
 	// If empty after sanitization, use a default name
 	if sanitized == "" {
@@ -1083,7 +1082,7 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 	// Reusing the same slice prevents allocations and also ensures proper clearing
 	// of values when arrays have different lengths
 	row := make([]string, len(headers))
-	
+
 	// Write data rows
 	for i := 0; i < maxLen; i++ {
 		for j, arr := range dataArrays {
@@ -1142,55 +1141,55 @@ func convertRAMToKB(ramStr string) string {
 // RetrieveBenchmarkRun retrieves a single run from benchmark data
 // runIndex is 0-based
 func RetrieveBenchmarkRun(benchmarkID uint, runIndex int) (*BenchmarkData, error) {
-filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
-file, err := os.Open(filePath)
-if err != nil {
-return nil, err
-}
-defer func() {
-if closeErr := file.Close(); closeErr != nil {
-fmt.Printf("Warning: failed to close file: %v\n", closeErr)
-}
-}()
+	filePath := filepath.Join(benchmarksDir, fmt.Sprintf("%d.bin", benchmarkID))
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", closeErr)
+		}
+	}()
 
-zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
-if err != nil {
-return nil, err
-}
-defer zstdDecoder.Close()
+	zstdDecoder, err := zstd.NewReader(file, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return nil, err
+	}
+	defer zstdDecoder.Close()
 
-gobDecoder := gob.NewDecoder(zstdDecoder)
+	gobDecoder := gob.NewDecoder(zstdDecoder)
 
-// Try to read header to determine format version
-var header fileHeader
-if err := gobDecoder.Decode(&header); err != nil {
-// Old format - need to load all data
-return nil, fmt.Errorf("old format not supported for single run retrieval")
-}
+	// Try to read header to determine format version
+	var header fileHeader
+	if err := gobDecoder.Decode(&header); err != nil {
+		// Old format - need to load all data
+		return nil, fmt.Errorf("old format not supported for single run retrieval")
+	}
 
-// New format detected
-if header.Version != storageFormatVersion {
-return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
-}
+	// New format detected
+	if header.Version != storageFormatVersion {
+		return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
 
-// Check if runIndex is valid
-if runIndex < 0 || runIndex >= header.RunCount {
-return nil, fmt.Errorf("invalid run index %d (total runs: %d)", runIndex, header.RunCount)
-}
+	// Check if runIndex is valid
+	if runIndex < 0 || runIndex >= header.RunCount {
+		return nil, fmt.Errorf("invalid run index %d (total runs: %d)", runIndex, header.RunCount)
+	}
 
-// Skip to the requested run
-for i := 0; i < runIndex; i++ {
-var skipRun BenchmarkData
-if err := gobDecoder.Decode(&skipRun); err != nil {
-return nil, fmt.Errorf("failed to skip run %d: %w", i, err)
-}
-}
+	// Skip to the requested run
+	for i := 0; i < runIndex; i++ {
+		var skipRun BenchmarkData
+		if err := gobDecoder.Decode(&skipRun); err != nil {
+			return nil, fmt.Errorf("failed to skip run %d: %w", i, err)
+		}
+	}
 
-// Decode the requested run
-var run BenchmarkData
-if err := gobDecoder.Decode(&run); err != nil {
-return nil, fmt.Errorf("failed to decode run %d: %w", runIndex, err)
-}
+	// Decode the requested run
+	var run BenchmarkData
+	if err := gobDecoder.Decode(&run); err != nil {
+		return nil, fmt.Errorf("failed to decode run %d: %w", runIndex, err)
+	}
 
-return &run, nil
+	return &run, nil
 }

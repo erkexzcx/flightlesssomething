@@ -64,6 +64,8 @@ linters:
           disabled: true
 
   exclusions:
+    paths:
+      - web/node_modules # Third-party frontend packages
     rules:
       # Exclude some linters from running on tests files
       - path: _test\.go

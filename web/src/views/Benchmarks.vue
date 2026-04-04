@@ -741,6 +741,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleResize)
 })

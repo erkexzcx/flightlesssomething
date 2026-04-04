@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -76,6 +77,8 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 			return
 		}
+		// Clear the one-time OAuth state nonce now that it has been validated
+		session.Delete("OAuthState")
 
 		token, err := discordOAuthConfig.Exchange(context.Background(), c.Query("code"))
 		if err != nil {
@@ -145,8 +148,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 
 		// Update last web activity
 		now := time.Now()
-		user.LastWebActivityAt = &now
-		db.DB.Save(&user)
+		db.DB.Model(&User{}).Where("id = ?", user.ID).Update("last_web_activity_at", now)
 
 		session.Set("UserID", user.ID)
 		session.Set("Username", user.Username)
@@ -163,9 +165,11 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 // HandleAdminLogin handles admin login with username and password
 func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check if admin login is rate limited (global lock)
+		// Rate-limit admin login attempts using Allow as the atomic gate.
+		// Allow records the attempt and checks the count in a single mutex-protected
+		// operation, preventing concurrent brute-force bypass.
 		limiter := GetAdminLoginLimiter()
-		if limiter.IsLocked("admin_login") {
+		if !limiter.Allow("admin_login") {
 			remaining := limiter.GetRemainingTime("admin_login")
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":            "too many failed login attempts",
@@ -184,9 +188,10 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		if loginReq.Username != config.AdminUsername || loginReq.Password != config.AdminPassword {
-			// Record failed login attempt
-			limiter.Allow("admin_login")
+		// Use constant-time comparison to prevent timing side-channel attacks.
+		usernameOK := subtle.ConstantTimeCompare([]byte(loginReq.Username), []byte(config.AdminUsername))
+		passwordOK := subtle.ConstantTimeCompare([]byte(loginReq.Password), []byte(config.AdminPassword))
+		if usernameOK&passwordOK != 1 {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 			return
 		}
@@ -212,14 +217,12 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 
 		// Ensure admin flag is set
 		if !adminUser.IsAdmin {
-			adminUser.IsAdmin = true
-			db.DB.Save(&adminUser)
+			db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("is_admin", true)
 		}
 
 		// Update last web activity
 		now := time.Now()
-		adminUser.LastWebActivityAt = &now
-		db.DB.Save(&adminUser)
+		db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("last_web_activity_at", now)
 
 		session := sessions.Default(c)
 		session.Set("UserID", adminUser.ID)

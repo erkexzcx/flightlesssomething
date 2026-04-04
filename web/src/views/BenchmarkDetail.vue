@@ -312,7 +312,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -379,6 +379,9 @@ const fileInput = ref(null)
 const selectedFiles = ref([])
 const descriptionContentRef = ref(null)
 const shouldShowCollapseButton = ref(false)
+
+// AbortController for cancelling in-flight run downloads when the component unmounts
+let loadAbortController = null
 
 const isOwner = computed(() => {
   if (!authStore.isAuthenticated || !benchmark.value) return false
@@ -473,10 +476,17 @@ async function loadBenchmarkData(id) {
       return
     }
     
+    // Create a fresh controller for this load; abort any previous download
+    if (loadAbortController) {
+      loadAbortController.abort()
+    }
+    loadAbortController = new AbortController()
+    
     benchmarkData.value = await api.benchmarks.getDataIncremental(id, totalRuns.value, {
       onError: (error, runIndex) => {
         console.error(`Error loading run ${runIndex}:`, error)
-      }
+      },
+      signal: loadAbortController?.signal,
     })
     
     // Initialize edit labels from loaded data (processed data has lowercase 'label')
@@ -552,9 +562,9 @@ async function handleDeleteRun() {
     
     // Remove the deleted run locally instead of reloading all data
     if (benchmarkData.value) {
-      benchmarkData.value.splice(deletedIndex, 1)
+      benchmarkData.value = benchmarkData.value.filter((_, i) => i !== deletedIndex)
     }
-    editLabels.value.splice(deletedIndex, 1)
+    editLabels.value = editLabels.value.filter((_, i) => i !== deletedIndex)
     
     // Update metadata
     benchmark.value = await api.benchmarks.get(benchmark.value.ID)
@@ -678,6 +688,12 @@ function downloadBenchmark() {
 
 onMounted(() => {
   loadBenchmark()
+})
+
+onUnmounted(() => {
+  if (loadAbortController) {
+    loadAbortController.abort()
+  }
 })
 </script>
 
