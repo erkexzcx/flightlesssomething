@@ -127,6 +127,19 @@ func TestComputeDensityData(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("overflow values are skipped", func(t *testing.T) {
+		// Values outside int32 range must be skipped without panicking or producing corrupt keys.
+		values := []float64{1e20, 42, -1e20}
+		result := computeDensityData(values, -1e30, 1e30)
+		// Only 42 survives the overflow check; the extreme values are dropped.
+		if len(result) != 1 {
+			t.Fatalf("expected 1 density entry (only 42), got %d: %v", len(result), result)
+		}
+		if result[0][0] != 42 {
+			t.Errorf("expected density key 42, got %d", result[0][0])
+		}
+	})
 }
 
 func TestComputeMetricStatsForMethod(t *testing.T) {
@@ -513,26 +526,26 @@ func TestComputePreCalculatedRuns(t *testing.T) {
 			data[i] = float64(i)
 		}
 		runs := []*BenchmarkData{{
-			Label:            "full",
-			SpecOS:           "Linux",
-			SpecCPU:          "Ryzen 9",
-			SpecGPU:          "RTX 4090",
-			SpecRAM:          "32GB",
-			SpecLinuxKernel:   "6.5",
+			Label:              "full",
+			SpecOS:             "Linux",
+			SpecCPU:            "Ryzen 9",
+			SpecGPU:            "RTX 4090",
+			SpecRAM:            "32GB",
+			SpecLinuxKernel:    "6.5",
 			SpecLinuxScheduler: "EEVDF",
-			DataFPS:          data,
-			DataFrameTime:    data,
-			DataCPULoad:      data,
-			DataGPULoad:      data,
-			DataCPUTemp:      data,
-			DataCPUPower:     data,
-			DataGPUTemp:      data,
-			DataGPUCoreClock: data,
-			DataGPUMemClock:  data,
-			DataGPUVRAMUsed:  data,
-			DataGPUPower:     data,
-			DataRAMUsed:      data,
-			DataSwapUsed:     data,
+			DataFPS:            data,
+			DataFrameTime:      data,
+			DataCPULoad:        data,
+			DataGPULoad:        data,
+			DataCPUTemp:        data,
+			DataCPUPower:       data,
+			DataGPUTemp:        data,
+			DataGPUCoreClock:   data,
+			DataGPUMemClock:    data,
+			DataGPUVRAMUsed:    data,
+			DataGPUPower:       data,
+			DataRAMUsed:        data,
+			DataSwapUsed:       data,
 		}}
 		result := ComputePreCalculatedRuns(runs)
 		r := result[0]

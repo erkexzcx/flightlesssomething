@@ -65,11 +65,17 @@ func NewConfig() (*Config, error) {
 	if config.SessionSecret == "" {
 		return nil, errors.New("missing session-secret argument")
 	}
+	if len(config.SessionSecret) < 32 {
+		return nil, errors.New("session-secret must be at least 32 characters")
+	}
 	if config.AdminUsername == "" {
 		return nil, errors.New("missing admin-username argument")
 	}
 	if config.AdminPassword == "" {
 		return nil, errors.New("missing admin-password argument")
+	}
+	if len(config.AdminPassword) < 12 {
+		return nil, errors.New("admin-password must be at least 12 characters")
 	}
 
 	return config, nil

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -67,20 +66,32 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
 
+		// Check if Discord rejected the authorization (user denied, app disabled, etc.)
+		if errParam := c.Query("error"); errParam != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "authorization denied"})
+			return
+		}
+
 		savedState := session.Get("OAuthState")
 		if savedState == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 			return
 		}
 		stateStr, ok := savedState.(string)
-		if !ok || c.Query("state") != stateStr {
+		if !ok || subtle.ConstantTimeCompare([]byte(c.Query("state")), []byte(stateStr)) != 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 			return
 		}
-		// Clear the one-time OAuth state nonce now that it has been validated
+		// Clear the one-time OAuth state nonce now that it has been validated.
+		// Save the session immediately so the nonce is invalidated even if the
+		// downstream Exchange call fails — preserving the one-time-use guarantee.
 		session.Delete("OAuthState")
+		if err := session.Save(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
+			return
+		}
 
-		token, err := discordOAuthConfig.Exchange(context.Background(), c.Query("code"))
+		token, err := discordOAuthConfig.Exchange(c.Request.Context(), c.Query("code"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to exchange code"})
 			return
@@ -92,9 +103,9 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 			return
 		}
-		client := discordOAuthConfig.Client(context.Background(), token)
+		client := discordOAuthConfig.Client(c.Request.Context(), token)
 		res, err := client.Do(req)
-		if err != nil || res.StatusCode != 200 {
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
 			return
 		}
@@ -104,8 +115,12 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 				fmt.Printf("Warning: failed to close response body: %v\n", closeErr)
 			}
 		}()
+		if res.StatusCode != 200 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
+			return
+		}
 
-		body, err := io.ReadAll(res.Body)
+		body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20)) // limit Discord response to 1 MB
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read response"})
 			return
@@ -150,6 +165,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 		now := time.Now()
 		db.DB.Model(&User{}).Where("id = ?", user.ID).Update("last_web_activity_at", now)
 
+		session.Clear()
 		session.Set("UserID", user.ID)
 		session.Set("Username", user.Username)
 		session.Set("IsAdmin", user.IsAdmin)
@@ -165,12 +181,11 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 // HandleAdminLogin handles admin login with username and password
 func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Rate-limit admin login attempts using Allow as the atomic gate.
-		// Allow records the attempt and checks the count in a single mutex-protected
-		// operation, preventing concurrent brute-force bypass.
+		// Rate-limit admin login attempts per source IP to prevent a single attacker
+		// from locking out all admins by exhausting a global slot.
 		limiter := GetAdminLoginLimiter()
-		if !limiter.Allow("admin_login") {
-			remaining := limiter.GetRemainingTime("admin_login")
+		clientIP := c.ClientIP()
+		if allowed, remaining := limiter.AllowWithRemaining(clientIP); !allowed {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":            "too many failed login attempts",
 				"retry_after_secs": int(remaining.Seconds()),
@@ -196,8 +211,8 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Successful login - reset the rate limiter
-		limiter.Reset("admin_login")
+		// Successful login - reset the rate limiter for this IP
+		limiter.Reset(clientIP)
 
 		// Get or create admin user
 		var adminUser User
@@ -215,6 +230,12 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
+		// Prevent banned admin from logging in before making any DB changes
+		if adminUser.IsBanned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
+			return
+		}
+
 		// Ensure admin flag is set
 		if !adminUser.IsAdmin {
 			db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("is_admin", true)
@@ -225,6 +246,7 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 		db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("last_web_activity_at", now)
 
 		session := sessions.Default(c)
+		session.Clear()
 		session.Set("UserID", adminUser.ID)
 		session.Set("Username", adminUser.Username)
 		session.Set("IsAdmin", true)
@@ -259,21 +281,30 @@ func HandleLogout(secureCookie bool) gin.HandlerFunc {
 	}
 }
 
-// HandleGetCurrentUser returns the current user's session information
-func HandleGetCurrentUser(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("UserID")
+// HandleGetCurrentUser returns the current user's information, validated against the database.
+func HandleGetCurrentUser(db *DBInstance) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("UserID")
 
-	if userID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
-		return
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		// Re-validate against DB to catch banned/deleted/demoted users.
+		var user User
+		if err := db.DB.First(&user, userID).Error; err != nil || user.IsBanned {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"user_id":  user.ID,
+			"username": user.Username,
+			"is_admin": user.IsAdmin,
+		})
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"user_id":  userID,
-		"username": session.Get("Username"),
-		"is_admin": session.Get("IsAdmin"),
-	})
 }
 
 // RequireAdmin is a middleware that requires admin privileges.

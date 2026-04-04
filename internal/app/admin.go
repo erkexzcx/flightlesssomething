@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,6 +17,9 @@ func HandleListUsers(db *DBInstance) gin.HandlerFunc {
 		if err != nil || page < 1 {
 			page = 1
 		}
+		if page > 10000 {
+			page = 10000
+		}
 		perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "10"))
 		if err != nil || perPage < 1 || perPage > 100 {
 			perPage = 10
@@ -23,8 +27,13 @@ func HandleListUsers(db *DBInstance) gin.HandlerFunc {
 
 		// Build query with optional search filter
 		query := db.DB.Model(&User{})
+		const maxSearchLength = 200
 		if search := c.Query("search"); search != "" {
-			query = query.Where("username LIKE ? OR discord_id LIKE ?", "%"+search+"%", "%"+search+"%")
+			if len(search) > maxSearchLength {
+				search = search[:maxSearchLength]
+			}
+			escapedSearch := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+			query = query.Where("username LIKE ? ESCAPE '\\' OR discord_id LIKE ? ESCAPE '\\'", "%"+escapedSearch+"%", "%"+escapedSearch+"%")
 		}
 
 		// Get total count with filter applied
@@ -44,16 +53,37 @@ func HandleListUsers(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Then count benchmarks for each user
-		for i := range users {
-			var count int64
-			db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&count)
-			users[i].BenchmarkCount = int(count)
+		// Then count benchmarks for each user in two batch queries (one for benchmarks, one for tokens)
+		if len(users) > 0 {
+			userIDs := make([]uint, len(users))
+			for i := range users {
+				userIDs[i] = users[i].ID
+			}
 
-			// Count API tokens for each user
-			var tokenCount int64
-			db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
-			users[i].APITokenCount = int(tokenCount)
+			var benchmarkCounts []struct {
+				UserID uint
+				Count  int64
+			}
+			db.DB.Model(&Benchmark{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&benchmarkCounts)
+			benchCountMap := make(map[uint]int64, len(benchmarkCounts))
+			for _, bc := range benchmarkCounts {
+				benchCountMap[bc.UserID] = bc.Count
+			}
+
+			var tokenCounts []struct {
+				UserID uint
+				Count  int64
+			}
+			db.DB.Model(&APIToken{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&tokenCounts)
+			tokenCountMap := make(map[uint]int64, len(tokenCounts))
+			for _, tc := range tokenCounts {
+				tokenCountMap[tc.UserID] = tc.Count
+			}
+
+			for i := range users {
+				users[i].BenchmarkCount = int(benchCountMap[users[i].ID])
+				users[i].APITokenCount = int(tokenCountMap[users[i].ID])
+			}
 		}
 
 		// Sort by benchmark count (top uploaders first)
@@ -80,9 +110,21 @@ func HandleDeleteUser(db *DBInstance) gin.HandlerFunc {
 		id := c.Param("id")
 		deleteData := c.Query("delete_data") == "true"
 
+		userID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+			return
+		}
+
 		var user User
-		if err := db.DB.First(&user, id).Error; err != nil {
+		if err := db.DB.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		// Prevent deleting the system admin account
+		if user.DiscordID == "admin" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete the system admin account"})
 			return
 		}
 
@@ -137,8 +179,14 @@ func HandleDeleteUserBenchmarks(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
+		userID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+			return
+		}
+
 		var user User
-		if err := db.DB.First(&user, id).Error; err != nil {
+		if err := db.DB.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
@@ -189,22 +237,34 @@ func HandleBanUser(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		userID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+			return
+		}
+
 		var user User
-		if err := db.DB.First(&user, id).Error; err != nil {
+		if err := db.DB.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
 
-		// Prevent self-ban
-		if adminUserID, exists := c.Get("UserID"); exists {
-			if uid, ok := adminUserID.(uint); ok && user.ID == uid && req.Banned {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "cannot ban your own account"})
+		// Prevent self-ban and prevent banning the system admin account
+		if req.Banned {
+			if user.DiscordID == "admin" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "cannot ban the system admin account"})
 				return
+			}
+			if adminUserID, exists := c.Get("UserID"); exists {
+				if uid, ok := adminUserID.(uint); ok && user.ID == uid {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "cannot ban your own account"})
+					return
+				}
 			}
 		}
 
 		user.IsBanned = req.Banned
-		if err := db.DB.Save(&user).Error; err != nil {
+		if err := db.DB.Model(&user).Update("is_banned", req.Banned).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 			return
 		}
@@ -239,9 +299,21 @@ func HandleToggleUserAdmin(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		userID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+			return
+		}
+
 		var user User
-		if err := db.DB.First(&user, id).Error; err != nil {
+		if err := db.DB.First(&user, userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		// Prevent revoking system admin's privileges
+		if !req.IsAdmin && user.DiscordID == "admin" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot revoke admin privileges from the system admin account"})
 			return
 		}
 
@@ -254,7 +326,7 @@ func HandleToggleUserAdmin(db *DBInstance) gin.HandlerFunc {
 		}
 
 		user.IsAdmin = req.IsAdmin
-		if err := db.DB.Save(&user).Error; err != nil {
+		if err := db.DB.Model(&user).Update("is_admin", req.IsAdmin).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 			return
 		}

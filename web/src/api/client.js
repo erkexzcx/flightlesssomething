@@ -10,13 +10,14 @@ class APIError extends Error {
 }
 
 async function fetchJSON(url, options = {}) {
+  const headers = { ...options.headers }
+  if (options.body !== undefined && options.body !== null) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json'
+  }
   const response = await fetch(API_BASE + url, {
     ...options,
     credentials: 'include', // Include cookies for session management
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -31,6 +32,9 @@ export const api = {
   // Health check
   async health() {
     const response = await fetch(API_BASE + '/health', { credentials: 'include' })
+    if (!response.ok) {
+      throw new APIError('Health check failed', response.status)
+    }
     return response.json()
   },
 
@@ -97,7 +101,7 @@ export const api = {
     },
 
     async get(id) {
-      return fetchJSON(`/api/benchmarks/${id}`)
+      return fetchJSON(`/api/benchmarks/${encodeURIComponent(id)}`)
     },
 
     async create(formData) {
@@ -116,14 +120,14 @@ export const api = {
     },
 
     async update(id, data) {
-      return fetchJSON(`/api/benchmarks/${id}`, {
+      return fetchJSON(`/api/benchmarks/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       })
     },
 
     async delete(id) {
-      return fetchJSON(`/api/benchmarks/${id}`, {
+      return fetchJSON(`/api/benchmarks/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       })
     },
@@ -138,13 +142,13 @@ export const api = {
     },
 
     async deleteRun(id, runIndex) {
-      return fetchJSON(`/api/benchmarks/${id}/runs/${runIndex}`, {
+      return fetchJSON(`/api/benchmarks/${encodeURIComponent(id)}/runs/${encodeURIComponent(runIndex)}`, {
         method: 'DELETE',
       })
     },
 
     async addRuns(id, formData) {
-      const response = await fetch(API_BASE + `/api/benchmarks/${id}/runs`, {
+      const response = await fetch(API_BASE + `/api/benchmarks/${encodeURIComponent(id)}/runs`, {
         method: 'POST',
         credentials: 'include',
         body: formData, // FormData for file uploads
@@ -174,26 +178,26 @@ export const api = {
 
     async deleteUser(id, deleteData = false) {
       const params = deleteData ? '?delete_data=true' : ''
-      return fetchJSON(`/api/admin/users/${id}${params}`, {
+      return fetchJSON(`/api/admin/users/${encodeURIComponent(id)}${params}`, {
         method: 'DELETE',
       })
     },
 
     async deleteUserBenchmarks(id) {
-      return fetchJSON(`/api/admin/users/${id}/benchmarks`, {
+      return fetchJSON(`/api/admin/users/${encodeURIComponent(id)}/benchmarks`, {
         method: 'DELETE',
       })
     },
 
     async banUser(id, banned) {
-      return fetchJSON(`/api/admin/users/${id}/ban`, {
+      return fetchJSON(`/api/admin/users/${encodeURIComponent(id)}/ban`, {
         method: 'PUT',
         body: JSON.stringify({ banned }),
       })
     },
 
     async toggleUserAdmin(id, isAdmin) {
-      return fetchJSON(`/api/admin/users/${id}/admin`, {
+      return fetchJSON(`/api/admin/users/${encodeURIComponent(id)}/admin`, {
         method: 'PUT',
         body: JSON.stringify({ is_admin: isAdmin }),
       })
@@ -214,10 +218,18 @@ export const api = {
     },
 
     async delete(id) {
-      return fetchJSON(`/api/tokens/${id}`, {
+      return fetchJSON(`/api/tokens/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       })
     },
+  },
+
+  // Debug calc endpoint
+  async debugcalc(fps, frameTime) {
+    return fetchJSON('/api/debugcalc', {
+      method: 'POST',
+      body: JSON.stringify({ fps, frameTime }),
+    })
   },
 }
 

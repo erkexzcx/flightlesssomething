@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -72,7 +73,16 @@ func HandleCreateAPIToken(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, apiToken)
+		// Return token value only at creation time — it is excluded from all other responses.
+		c.JSON(http.StatusCreated, gin.H{
+			"id":           apiToken.ID,
+			"user_id":      apiToken.UserID,
+			"name":         apiToken.Name,
+			"token":        apiToken.Token,
+			"last_used_at": apiToken.LastUsedAt,
+			"created_at":   apiToken.CreatedAt,
+			"updated_at":   apiToken.UpdatedAt,
+		})
 	}
 }
 
@@ -80,7 +90,13 @@ func HandleCreateAPIToken(db *DBInstance) gin.HandlerFunc {
 func HandleDeleteAPIToken(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetUint("UserID")
-		tokenID := c.Param("id")
+		tokenIDStr := c.Param("id")
+
+		tokenID, err := strconv.ParseUint(tokenIDStr, 10, 64)
+		if err != nil || tokenID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+			return
+		}
 
 		// Verify the token belongs to the current user
 		var token APIToken
@@ -164,6 +180,14 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 
 		token := authHeader[len(prefix):]
 
+		// Validate token length before querying the database to reject clearly invalid tokens early
+		const expectedTokenLength = 64 // 32 random bytes encoded as hex
+		if len(token) != expectedTokenLength {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.Abort()
+			return
+		}
+
 		// Find the API token
 		var apiToken APIToken
 		if err := db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
@@ -183,14 +207,10 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 		// Note: This adds DB writes on every API request. For high-traffic scenarios,
 		// consider batching updates or using a background process.
 		now := time.Now()
-		apiToken.LastUsedAt = &now
-		if err := db.DB.Save(&apiToken).Error; err != nil {
+		if err := db.DB.Model(&APIToken{}).Where("id = ?", apiToken.ID).Update("last_used_at", now).Error; err != nil {
 			// Log error but don't fail authentication - the user is valid
 			// This is a non-critical failure that only affects tracking
-			if cErr := c.Error(err); cErr != nil {
-				// Log but continue - error handling in Gin context is best-effort
-				fmt.Printf("Warning: failed to set context error: %v\n", cErr)
-			}
+			fmt.Printf("Warning: failed to update token last_used_at: %v\n", err)
 		}
 
 		// Update user's last API activity timestamp

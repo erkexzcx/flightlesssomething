@@ -7,8 +7,9 @@ export const useAppStore = defineStore('app', () => {
   const loading = ref(false)
 
   // Theme: 'light' or 'dark'
+  const validThemes = ['light', 'dark']
   const storedTheme = localStorage.getItem('theme')
-  const theme = ref(storedTheme || 'dark')
+  const theme = ref(validThemes.includes(storedTheme) ? storedTheme : 'dark')
   
   // Initialize theme if not set
   if (!storedTheme) {
@@ -16,8 +17,9 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Calculation method: 'linear-interpolation' or 'mangohud-threshold'
+  const validCalculationMethods = ['linear-interpolation', 'mangohud-threshold']
   const storedCalculationMethod = localStorage.getItem('calculationMethod')
-  const calculationMethod = ref(storedCalculationMethod || 'linear-interpolation')
+  const calculationMethod = ref(validCalculationMethods.includes(storedCalculationMethod) ? storedCalculationMethod : 'linear-interpolation')
   
   // Initialize calculation method if not set
   if (!storedCalculationMethod) {
@@ -25,8 +27,9 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Comparison mode: 'percentage', 'numbers', or 'numbers-diff'
+  const validComparisonModes = ['percentage', 'numbers', 'numbers-diff']
   const storedComparisonMode = localStorage.getItem('comparisonMode')
-  const comparisonMode = ref(storedComparisonMode || 'percentage')
+  const comparisonMode = ref(validComparisonModes.includes(storedComparisonMode) ? storedComparisonMode : 'percentage')
   
   // Initialize comparison mode if not set
   if (!storedComparisonMode) {
@@ -51,6 +54,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Set theme
   function setTheme(newTheme) {
+    if (!validThemes.includes(newTheme)) return
     theme.value = newTheme
     localStorage.setItem('theme', newTheme)
     // Update the data-bs-theme attribute on the html element
@@ -65,12 +69,14 @@ export const useAppStore = defineStore('app', () => {
 
   // Set calculation method
   function setCalculationMethod(newMethod) {
+    if (!validCalculationMethods.includes(newMethod)) return
     calculationMethod.value = newMethod
     localStorage.setItem('calculationMethod', newMethod)
   }
 
   // Set comparison mode
   function setComparisonMode(newMode) {
+    if (!validComparisonModes.includes(newMode)) return
     comparisonMode.value = newMode
     localStorage.setItem('comparisonMode', newMode)
   }

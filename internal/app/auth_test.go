@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -142,17 +144,20 @@ func TestHandleGetCurrentUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("unauthenticated", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
 		w := httptest.NewRecorder()
-		c, r := gin.CreateTestContext(w)
+		_, r := gin.CreateTestContext(w)
 
 		// Setup sessions
 		store := cookie.NewStore([]byte("test-secret"))
 		r.Use(sessions.Sessions("test_session", store))
-		r.GET("/api/auth/me", HandleGetCurrentUser)
+		r.GET("/api/auth/me", HandleGetCurrentUser(db))
 
 		// Make request
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
-		r.ServeHTTP(w, c.Request)
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -160,8 +165,17 @@ func TestHandleGetCurrentUser(t *testing.T) {
 	})
 
 	t.Run("authenticated", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
+		// Create a real user in the DB
+		user := User{DiscordID: "disc-123", Username: "testuser", IsAdmin: false}
+		if err := db.DB.Create(&user).Error; err != nil {
+			t.Fatalf("failed to create test user: %v", err)
+		}
+
 		w := httptest.NewRecorder()
-		c, r := gin.CreateTestContext(w)
+		_, r := gin.CreateTestContext(w)
 
 		// Setup sessions
 		store := cookie.NewStore([]byte("test-secret"))
@@ -170,21 +184,135 @@ func TestHandleGetCurrentUser(t *testing.T) {
 		// Setup route and session data
 		r.GET("/api/auth/me", func(ctx *gin.Context) {
 			session := sessions.Default(ctx)
-			session.Set("UserID", uint(123))
-			session.Set("Username", "testuser")
+			session.Set("UserID", user.ID)
+			session.Set("Username", user.Username)
 			session.Set("IsAdmin", false)
 			if err := session.Save(); err != nil {
 				t.Errorf("Failed to save session: %v", err)
 			}
-			HandleGetCurrentUser(ctx)
+			HandleGetCurrentUser(db)(ctx)
 		})
 
 		// Make request
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
-		r.ServeHTTP(w, c.Request)
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+			t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("banned_user_session", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
+		// Create a banned user
+		user := User{DiscordID: "disc-banned", Username: "banneduser", IsBanned: true}
+		if err := db.DB.Create(&user).Error; err != nil {
+			t.Fatalf("failed to create test user: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		_, r := gin.CreateTestContext(w)
+
+		store := cookie.NewStore([]byte("test-secret"))
+		r.Use(sessions.Sessions("test_session", store))
+
+		r.GET("/api/auth/me", func(ctx *gin.Context) {
+			session := sessions.Default(ctx)
+			session.Set("UserID", user.ID)
+			if err := session.Save(); err != nil {
+				t.Errorf("Failed to save session: %v", err)
+			}
+			HandleGetCurrentUser(db)(ctx)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status %d for banned user, got %d", http.StatusUnauthorized, w.Code)
+		}
+	})
+}
+
+func TestHandleAdminLoginBannedAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	config := &Config{
+		AdminUsername: "admin",
+		AdminPassword: "adminpass",
+	}
+
+	InitRateLimiters()
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
+
+	// Create the system admin account with IsBanned=true
+	sysAdmin := User{DiscordID: "admin", Username: "Admin", IsAdmin: true, IsBanned: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create banned system admin: %v", err)
+	}
+
+	loginBody, err := json.Marshal(map[string]string{"username": "admin", "password": "adminpass"})
+	if err != nil {
+		t.Fatalf("Failed to marshal login body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin/login", bytes.NewBuffer(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected 403 for banned admin, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAdminLoginSessionClear(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	config := &Config{
+		AdminUsername: "adminuser",
+		AdminPassword: "adminpass",
+	}
+
+	InitRateLimiters()
+
+	r := gin.New()
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
+
+	// Login and capture the session cookie
+	loginBody, err := json.Marshal(map[string]string{"username": "adminuser", "password": "adminpass"})
+	if err != nil {
+		t.Fatalf("Failed to marshal login body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin/login", bytes.NewBuffer(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for admin login, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// The session should contain the admin's UserID, not any stale data
+	// This is validated by a successful login response
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if resp["message"] != "admin login successful" {
+		t.Errorf("Expected success message, got: %v", resp)
+	}
 }

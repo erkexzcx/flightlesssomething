@@ -48,6 +48,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 	// Check if rate limit exceeded
 	if len(attempts) >= rl.maxAttempts {
+		rl.entries[key] = attempts // persist compacted slice
 		return false
 	}
 
@@ -56,6 +57,53 @@ func (rl *RateLimiter) Allow(key string) bool {
 	rl.entries[key] = attempts
 
 	return true
+}
+
+// AllowWithRemaining atomically checks whether key is allowed and, if not,
+// returns the duration until the rate limit lifts. This avoids the TOCTOU
+// race between a separate Allow() + GetRemainingTime() call pair.
+// Returns (true, 0) when allowed; (false, remaining) when rate-limited.
+func (rl *RateLimiter) AllowWithRemaining(key string) (bool, time.Duration) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	attempts := rl.entries[key]
+
+	// Remove expired attempts in-place
+	n := 0
+	for _, t := range attempts {
+		if t.After(cutoff) {
+			attempts[n] = t
+			n++
+		}
+	}
+	attempts = attempts[:n]
+
+	// If rate limit exceeded, calculate remaining time under the same lock
+	if len(attempts) >= rl.maxAttempts {
+		oldestValid := time.Time{}
+		for _, t := range attempts {
+			if oldestValid.IsZero() || t.Before(oldestValid) {
+				oldestValid = t
+			}
+		}
+		rl.entries[key] = attempts
+		var remaining time.Duration
+		if !oldestValid.IsZero() {
+			if r := oldestValid.Add(rl.window).Sub(now); r > 0 {
+				remaining = r
+			}
+		}
+		return false, remaining
+	}
+
+	// Record this attempt
+	attempts = append(attempts, now)
+	rl.entries[key] = attempts
+	return true, 0
 }
 
 // Reset clears all entries for a specific key
@@ -94,7 +142,14 @@ func (rl *RateLimiter) GetRemainingTime(key string) time.Duration {
 	cutoff := now.Add(-rl.window)
 
 	attempts := rl.entries[key]
-	if len(attempts) < rl.maxAttempts {
+	// Count only valid (non-expired) entries
+	validCount := 0
+	for _, t := range attempts {
+		if t.After(cutoff) {
+			validCount++
+		}
+	}
+	if validCount < rl.maxAttempts {
 		return 0
 	}
 
@@ -152,6 +207,8 @@ var (
 	// Global rate limiters
 	benchmarkUploadLimiter *RateLimiter
 	adminLoginLimiter      *RateLimiter
+	debugCalcLimiter       *RateLimiter
+	mcpLimiter             *RateLimiter
 	cleanupOnce            sync.Once
 )
 
@@ -160,23 +217,33 @@ func InitRateLimiters() {
 	// 5 benchmark uploads per 10 minutes per user
 	benchmarkUploadLimiter = NewRateLimiter(5, 10*time.Minute)
 
-	// 3 failed admin login attempts locks for 10 minutes (globally)
+	// 3 failed admin login attempts per source IP locks for 10 minutes
 	adminLoginLimiter = NewRateLimiter(3, 10*time.Minute)
+
+	// 30 debug calc requests per minute per IP
+	debugCalcLimiter = NewRateLimiter(30, time.Minute)
+
+	// 120 MCP requests per minute per IP
+	mcpLimiter = NewRateLimiter(120, time.Minute)
 
 	// Start cleanup goroutine (only once)
 	// Note: This goroutine runs for the lifetime of the application.
 	// It will be terminated naturally when the application shuts down.
 	cleanupOnce.Do(func() {
+		// Capture limiter values at goroutine start to avoid data races
+		// if InitRateLimiters() is called again (e.g., in tests).
+		bl := benchmarkUploadLimiter
+		al := adminLoginLimiter
+		dl := debugCalcLimiter
+		ml := mcpLimiter
 		go func() {
 			ticker := time.NewTicker(5 * time.Minute)
 			defer ticker.Stop()
 			for range ticker.C {
-				if benchmarkUploadLimiter != nil {
-					benchmarkUploadLimiter.CleanupExpired()
-				}
-				if adminLoginLimiter != nil {
-					adminLoginLimiter.CleanupExpired()
-				}
+				bl.CleanupExpired()
+				al.CleanupExpired()
+				dl.CleanupExpired()
+				ml.CleanupExpired()
 			}
 		}()
 	})
@@ -190,4 +257,14 @@ func GetBenchmarkUploadLimiter() *RateLimiter {
 // GetAdminLoginLimiter returns the global admin login limiter
 func GetAdminLoginLimiter() *RateLimiter {
 	return adminLoginLimiter
+}
+
+// GetDebugCalcLimiter returns the global debug calc rate limiter
+func GetDebugCalcLimiter() *RateLimiter {
+	return debugCalcLimiter
+}
+
+// GetMCPLimiter returns the global MCP rate limiter
+func GetMCPLimiter() *RateLimiter {
+	return mcpLimiter
 }

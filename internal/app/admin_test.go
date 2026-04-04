@@ -20,7 +20,7 @@ func TestEnsureSystemAdmin(t *testing.T) {
 	}
 
 	t.Run("creates new system admin", func(t *testing.T) {
-		err := EnsureSystemAdmin(db, "testadmin", "testpass")
+		err := EnsureSystemAdmin(db, "testadmin")
 		if err != nil {
 			t.Fatalf("Failed to ensure system admin: %v", err)
 		}
@@ -41,7 +41,7 @@ func TestEnsureSystemAdmin(t *testing.T) {
 	})
 
 	t.Run("updates existing system admin username", func(t *testing.T) {
-		err := EnsureSystemAdmin(db, "newadminname", "testpass")
+		err := EnsureSystemAdmin(db, "newadminname")
 		if err != nil {
 			t.Fatalf("Failed to update system admin: %v", err)
 		}
@@ -72,7 +72,7 @@ func TestEnsureSystemAdmin(t *testing.T) {
 		db.DB.Save(&admin)
 
 		// Run EnsureSystemAdmin again
-		err := EnsureSystemAdmin(db, "adminuser", "testpass")
+		err := EnsureSystemAdmin(db, "adminuser")
 		if err != nil {
 			t.Fatalf("Failed to ensure system admin: %v", err)
 		}
@@ -614,4 +614,190 @@ func TestSelfProtectionToggleAdmin(t *testing.T) {
 			t.Error("User should no longer have admin privileges")
 		}
 	})
+}
+
+func TestSystemAdminCannotBeBanned(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("prevents banning the system admin account", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		db, err := InitDB(tmpDir)
+		if err != nil {
+			t.Fatalf("Failed to initialize database: %v", err)
+		}
+
+		// Create the system admin account (DiscordID == "admin")
+		sysAdmin := User{
+			DiscordID: "admin",
+			Username:  "sysadmin",
+			IsAdmin:   true,
+		}
+		if createErr := db.DB.Create(&sysAdmin).Error; createErr != nil {
+			t.Fatalf("Failed to create system admin: %v", createErr)
+		}
+
+		// Create a regular admin to perform the action
+		actor := User{
+			DiscordID: "actor123",
+			Username:  "actor",
+			IsAdmin:   true,
+		}
+		if createErr := db.DB.Create(&actor).Error; createErr != nil {
+			t.Fatalf("Failed to create actor: %v", createErr)
+		}
+
+		w := httptest.NewRecorder()
+		c, r := gin.CreateTestContext(w)
+		r.PUT("/api/admin/users/:id/ban", func(ctx *gin.Context) {
+			ctx.Set("UserID", actor.ID)
+			HandleBanUser(db)(ctx)
+		})
+
+		requestBody, err := json.Marshal(map[string]interface{}{"banned": true})
+		if err != nil {
+			t.Fatalf("Failed to marshal request body: %v", err)
+		}
+		c.Request = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/admin/users/%d/ban", sysAdmin.ID), bytes.NewBuffer(requestBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, c.Request)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+
+		// System admin should remain unbanned
+		var check User
+		db.DB.First(&check, sysAdmin.ID)
+		if check.IsBanned {
+			t.Error("System admin account should not be bannable")
+		}
+	})
+}
+
+func TestInvalidUserIDsRejected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	admin := createTestUser(db, "adminactor", true)
+
+	r := gin.New()
+	r.DELETE("/api/admin/users/:id", func(ctx *gin.Context) {
+		ctx.Set("UserID", admin.ID)
+		HandleDeleteUser(db)(ctx)
+	})
+	r.DELETE("/api/admin/users/:id/benchmarks", func(ctx *gin.Context) {
+		ctx.Set("UserID", admin.ID)
+		HandleDeleteUserBenchmarks(db)(ctx)
+	})
+	r.PUT("/api/admin/users/:id/ban", func(ctx *gin.Context) {
+		ctx.Set("UserID", admin.ID)
+		HandleBanUser(db)(ctx)
+	})
+	r.PUT("/api/admin/users/:id/admin", func(ctx *gin.Context) {
+		ctx.Set("UserID", admin.ID)
+		HandleToggleUserAdmin(db)(ctx)
+	})
+
+	routes := []struct {
+		method string
+		path   string
+		body   []byte
+	}{
+		{http.MethodDelete, "/api/admin/users/notanumber", nil},
+		{http.MethodDelete, "/api/admin/users/notanumber/benchmarks", nil},
+		{http.MethodPut, "/api/admin/users/notanumber/ban", []byte(`{"banned":true}`)},
+		{http.MethodPut, "/api/admin/users/notanumber/admin", []byte(`{"is_admin":true}`)},
+	}
+
+	for _, route := range routes {
+		t.Run(route.method+"_"+route.path, func(t *testing.T) {
+			var reqBody *bytes.Buffer
+			if route.body != nil {
+				reqBody = bytes.NewBuffer(route.body)
+			} else {
+				reqBody = bytes.NewBuffer(nil)
+			}
+			req := httptest.NewRequest(route.method, route.path, reqBody)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Expected 400 for invalid ID on %s %s, got %d: %s", route.method, route.path, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestSystemAdminCannotBeDeleted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	sysAdmin := User{DiscordID: "admin", Username: "sysadmin", IsAdmin: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create system admin: %v", err)
+	}
+
+	actor := createTestUser(db, "deleteactor", true)
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	r.DELETE("/api/admin/users/:id", func(ctx *gin.Context) {
+		ctx.Set("UserID", actor.ID)
+		HandleDeleteUser(db)(ctx)
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/admin/users/%d", sysAdmin.ID), nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 when deleting system admin, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var check User
+	if err := db.DB.First(&check, sysAdmin.ID).Error; err != nil {
+		t.Error("System admin should still exist after failed delete attempt")
+	}
+}
+
+func TestSystemAdminAdminCannotBeRevoked(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	sysAdmin := User{DiscordID: "admin", Username: "sysadmin", IsAdmin: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create system admin: %v", err)
+	}
+
+	actor := createTestUser(db, "toggleactor", true)
+	requestBody, err := json.Marshal(map[string]interface{}{"is_admin": false})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	r.PUT("/api/admin/users/:id/admin", func(ctx *gin.Context) {
+		ctx.Set("UserID", actor.ID)
+		HandleToggleUserAdmin(db)(ctx)
+	})
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/admin/users/%d/admin", sysAdmin.ID), bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 when revoking system admin privileges, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var check User
+	db.DB.First(&check, sysAdmin.ID)
+	if !check.IsAdmin {
+		t.Error("System admin should still have admin privileges")
+	}
 }

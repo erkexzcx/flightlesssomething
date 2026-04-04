@@ -54,6 +54,7 @@ func GetUsernameFromContext(c interface{ Get(any) (any, bool) }) string {
 // For example, if dataDir is /data, logs go to /logs/audit.json.
 // Docker deployments must mount the logs directory separately.
 func InitAuditLog(dataDir string) error {
+	dataDir = filepath.Clean(dataDir)
 	auditLogsDir = filepath.Join(filepath.Dir(dataDir), "logs")
 	auditLogPath = filepath.Join(auditLogsDir, "audit.json")
 	return os.MkdirAll(auditLogsDir, 0o750)
@@ -101,7 +102,19 @@ func rotateAuditLog() {
 	}
 
 	if err := gz.Close(); err != nil {
-		fmt.Printf("Warning: failed to close gzip writer: %v\n", err)
+		fmt.Printf("Warning: failed to finalize gzip writer during rotation: %v\n", err)
+		// Close file handles and remove the partially-written rotated file.
+		// Do NOT truncate the original log so we don't lose data.
+		if cerr := dst.Close(); cerr != nil {
+			fmt.Printf("Warning: failed to close rotated file: %v\n", cerr)
+		}
+		if cerr := src.Close(); cerr != nil {
+			fmt.Printf("Warning: failed to close audit log source: %v\n", cerr)
+		}
+		if cerr := os.Remove(rotatedPath); cerr != nil {
+			fmt.Printf("Warning: failed to remove partial rotated file: %v\n", cerr)
+		}
+		return
 	}
 	if err := dst.Close(); err != nil {
 		fmt.Printf("Warning: failed to close rotated file: %v\n", err)
@@ -184,6 +197,11 @@ func writeAuditLog(userID uint, username, action, description, targetType string
 
 	if _, err := f.Write(data); err != nil {
 		fmt.Printf("Warning: failed to write audit log entry: %v\n", err)
+		return
+	}
+	// Sync to durable storage so audit events are not silently lost on host crash
+	if err := f.Sync(); err != nil {
+		fmt.Printf("Warning: failed to sync audit log file: %v\n", err)
 	}
 }
 

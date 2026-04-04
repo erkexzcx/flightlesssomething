@@ -70,8 +70,8 @@ func TestAdminLoginRateLimit(t *testing.T) {
 		t.Error("Response should contain retry_after_secs field")
 	}
 
-	// Reset the rate limiter and test successful login
-	GetAdminLoginLimiter().Reset("admin_login")
+	// Reset the rate limiter for the test client IP (httptest uses 192.0.2.1) and test successful login
+	GetAdminLoginLimiter().Reset("192.0.2.1")
 
 	loginJSON = `{"username":"admin","password":"testpass"}`
 	req = httptest.NewRequest(http.MethodPost, "/auth/admin/login", strings.NewReader(loginJSON))
@@ -299,5 +299,115 @@ func TestRateLimitExpiration(t *testing.T) {
 	// Should be allowed again
 	if !rl.Allow("test-key") {
 		t.Error("Should be allowed after window expired")
+	}
+}
+
+func TestDebugCalcRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Initialize rate limiters
+	InitRateLimiters()
+
+	// Reset state from any previous test runs
+	GetDebugCalcLimiter().Reset("192.0.2.1")
+
+	// Create router with rate-limited debugcalc handler
+	r := gin.New()
+	debugCalcHandler := HandleDebugCalc()
+	r.POST("/api/debugcalc", func(c *gin.Context) {
+		if !GetDebugCalcLimiter().Allow(c.ClientIP()) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			c.Abort()
+			return
+		}
+		debugCalcHandler(c)
+	})
+
+	validBody := `{"fps":[60.0,61.0,59.0]}`
+
+	// First 30 requests should succeed
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/debugcalc", strings.NewReader(validBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Request %d: expected status %d, got %d", i+1, http.StatusOK, w.Code)
+		}
+	}
+
+	// 31st request should be rate limited
+	req := httptest.NewRequest(http.MethodPost, "/api/debugcalc", strings.NewReader(validBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("31st request: expected status %d, got %d", http.StatusTooManyRequests, w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse rate limit response: %v", err)
+	}
+	if _, ok := response["error"]; !ok {
+		t.Error("Rate limit response should contain error field")
+	}
+}
+
+func TestMCPRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	InitRateLimiters()
+
+	// Reset state from any previous test runs
+	GetMCPLimiter().Reset("192.0.2.1")
+
+	r := gin.New()
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+
+	mcp := r.Group("/mcp")
+	mcp.Use(MCPCors())
+	mcp.OPTIONS("", func(c *gin.Context) {})
+	mcpHandler := HandleMCP(db, "test", "")
+	mcp.POST("", func(c *gin.Context) {
+		if allowed, remaining := GetMCPLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+		mcpHandler(c)
+	})
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	// Allow up to limit
+	limiter := GetMCPLimiter()
+	for limiter.Allow("192.0.2.1") {
+		// drain the window
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("Expected 429 when rate limit exceeded, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse rate limit response: %v", err)
+	}
+	if _, ok := response["retry_after_secs"]; !ok {
+		t.Error("Rate limit response should contain retry_after_secs field")
 	}
 }

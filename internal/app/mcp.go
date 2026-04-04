@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -159,14 +160,20 @@ type BenchmarkDataSummary struct {
 
 // mcpServer holds the MCP server state
 type mcpServer struct {
-	db      *DBInstance
-	version string
-	tools   []mcpTool
+	db            *DBInstance
+	version       string
+	publicBaseURL string
+	tools         []mcpTool
+	toolAccessMap map[string]string
 }
 
-func newMCPServer(db *DBInstance, version string) *mcpServer {
-	s := &mcpServer{db: db, version: version}
+func newMCPServer(db *DBInstance, version, publicBaseURL string) *mcpServer {
+	s := &mcpServer{db: db, version: version, publicBaseURL: publicBaseURL}
 	s.tools = s.defineTools()
+	s.toolAccessMap = make(map[string]string, len(s.tools))
+	for _, t := range s.tools {
+		s.toolAccessMap[t.Name] = t.accessLevel
+	}
 	return s
 }
 
@@ -369,9 +376,13 @@ func (s *mcpServer) defineTools() []mcpTool {
 }
 
 // HandleMCP handles MCP JSON-RPC requests via POST
-func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
-	server := newMCPServer(db, version)
+func HandleMCP(db *DBInstance, version, publicBaseURL string) gin.HandlerFunc {
+	server := newMCPServer(db, version, publicBaseURL)
 	return func(c *gin.Context) {
+		// Limit request body size to prevent DoS via large payloads
+		const maxRequestBodySize = 1 * 1024 * 1024 // 1 MB
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodySize)
+
 		// Validate Content-Type
 		contentType := c.GetHeader("Content-Type")
 		if !strings.HasPrefix(contentType, "application/json") {
@@ -462,21 +473,36 @@ func HandleMCPGet(c *gin.Context) {
 
 // HandleMCPDelete handles session termination
 func HandleMCPDelete(c *gin.Context) {
-	// Stateless server - no sessions to terminate
-	c.JSON(http.StatusOK, gin.H{"message": "session terminated"})
+	// Stateless server - no sessions to maintain
+	c.JSON(http.StatusBadRequest, gin.H{"error": "no active session"})
 }
 
 func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	// Build base URL from request
-	scheme := c.Request.Header.Get("X-Forwarded-Proto")
-	if scheme == "" {
-		if c.Request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
+	// Use the configured public base URL when available to prevent Host header injection.
+	// Fall back to deriving it from the request only when no trusted URL is configured (e.g. dev/test).
+	var baseURL string
+	if s.publicBaseURL != "" {
+		baseURL = s.publicBaseURL
+	} else {
+		// Only trust "http" or "https" from proxy header to prevent custom-scheme injection.
+		scheme := c.Request.Header.Get("X-Forwarded-Proto")
+		if scheme != "http" && scheme != "https" {
+			scheme = ""
 		}
+		if scheme == "" {
+			if c.Request.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
+		}
+		baseURL = scheme + "://" + strings.Map(func(r rune) rune {
+			if r == '\n' || r == '\r' || r == '\u2028' || r == '\u2029' || r == '@' {
+				return -1
+			}
+			return r
+		}, c.Request.Host)
 	}
-	baseURL := scheme + "://" + c.Request.Host
 
 	// Build instructions with context
 	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. This MCP server does not support benchmark data upload, download, or deletion operations — these involve large CSV file transfers which are not suitable for the MCP protocol. Use the web UI at ` + baseURL + ` for uploading, downloading, or deleting benchmarks. API tokens can be managed via the web UI at ` + baseURL + `/api-tokens. All tools support an optional "jq" parameter for server-side filtering and transformation of results, reducing response size.
@@ -493,12 +519,17 @@ When writing jq filters: if the response shape is uncertain, call the tool once 
 Server base URL: ` + baseURL
 
 	// Add authenticated user context or anonymous mode notice
-	userID, _, isAdmin, authenticated := s.authenticateFromHeader(c)
-	if authenticated {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err == nil {
-			instructions += fmt.Sprintf("\n\nAuthenticated user context:\n- User ID: %d\n- Username: %s\n- Admin: %v", user.ID, user.Username, isAdmin)
-		}
+	_, _, isAdmin, authenticated, authUser := s.authenticateFromHeader(c)
+	if authenticated && authUser != nil {
+		// Sanitize the username before embedding in instructions to prevent prompt injection
+		// via maliciously crafted Discord display names containing newlines or backticks.
+		safeName := strings.Map(func(r rune) rune {
+			if r == '\n' || r == '\r' || r == '`' || r == '\u2028' || r == '\u2029' {
+				return ' '
+			}
+			return r
+		}, authUser.Username)
+		instructions += fmt.Sprintf("\n\nAuthenticated user context:\n- User ID: %d\n- Username: %s\n- Admin: %v", authUser.ID, safeName, isAdmin)
 	} else {
 		instructions += "\n\nAnonymous mode: No API token provided. Only read-only operations (browsing and viewing benchmarks) are available. To access write operations, provide an API token via the Authorization header."
 	}
@@ -521,7 +552,7 @@ Server base URL: ` + baseURL
 }
 
 func (s *mcpServer) handleToolsList(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	_, _, isAdmin, authenticated := s.authenticateFromHeader(c)
+	_, _, isAdmin, authenticated, _ := s.authenticateFromHeader(c)
 
 	filtered := make([]mcpTool, 0, len(s.tools))
 	for _, tool := range s.tools {
@@ -556,7 +587,7 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	}
 
 	// Determine authentication state
-	userID, username, isAdmin, authenticated := s.authenticateFromHeader(c)
+	userID, username, isAdmin, authenticated, _ := s.authenticateFromHeader(c)
 
 	// Check access level from tool definition (defense-in-depth: enforced even if tools/list was bypassed)
 	toolLevel := s.getToolAccessLevel(params.Name)
@@ -623,28 +654,35 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 }
 
 // authenticateFromHeader checks the Authorization header for an API token
-// Returns (userID, username, isAdmin, authenticated)
-func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, bool) {
+// Returns (userID, username, isAdmin, authenticated, user)
+func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, bool, *User) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	const prefix = "Bearer "
 	if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	token := authHeader[len(prefix):]
 
+	// Reject tokens that are too short before hitting the database.
+	// Note: The REST API middleware enforces len == 64; here we use len < 32
+	// as a fast-path rejection. The database query still enforces exact matching.
+	if len(token) < 32 {
+		return 0, "", false, false, nil
+	}
+
 	var apiToken APIToken
 	if err := s.db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	// Check if user is banned
 	if apiToken.User.IsBanned {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	// Update last used timestamp
@@ -652,7 +690,7 @@ func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, 
 	s.db.DB.Model(&APIToken{}).Where("id = ?", apiToken.ID).Update("last_used_at", now)
 	s.db.DB.Model(&User{}).Where("id = ?", apiToken.UserID).Update("last_api_activity_at", now)
 
-	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true
+	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true, &apiToken.User
 }
 
 func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
@@ -668,10 +706,8 @@ func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
 
 // getToolAccessLevel returns the access level for a tool by name.
 func (s *mcpServer) getToolAccessLevel(name string) string {
-	for _, tool := range s.tools {
-		if tool.Name == name {
-			return tool.accessLevel
-		}
+	if level, ok := s.toolAccessMap[name]; ok {
+		return level
 	}
 	// Unknown tools default to admin level to fail safely
 	return toolAccessAdmin
@@ -688,10 +724,15 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		JQ string `json:"jq"`
 	}
 	if err := json.Unmarshal(args, &jqArgs); err != nil {
-		return result, nil //nolint:nilerr // args may not contain jq field; ignore unmarshal errors
+		return result, nil // args may not contain jq field; ignore unmarshal errors
 	}
 	if jqArgs.JQ == "" {
 		return result, nil
+	}
+
+	const maxJQExprLength = 10000
+	if len(jqArgs.JQ) > maxJQExprLength {
+		return "", fmt.Errorf("jq expression too long (max %d characters)", maxJQExprLength)
 	}
 
 	query, err := gojq.Parse(jqArgs.JQ)
@@ -699,13 +740,23 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		return "", fmt.Errorf("jq parse error: %w", err)
 	}
 
+	const maxJQInputBytes = 10 * 1024 * 1024 // 10 MB
+	if len(result) > maxJQInputBytes {
+		return result, nil // skip jq for oversized results
+	}
+
 	var input interface{}
 	if parseErr := json.Unmarshal([]byte(result), &input); parseErr != nil {
 		return "", fmt.Errorf("jq: failed to parse tool result as JSON: %w", parseErr)
 	}
 
-	iter := query.Run(input)
+	// Run jq with a timeout to prevent CPU exhaustion from adversarial expressions.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	iter := query.RunWithContext(ctx, input)
 	var outputs []interface{}
+	const maxJQOutputItems = 10000
 	for {
 		v, ok := iter.Next()
 		if !ok {
@@ -715,6 +766,9 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 			return "", fmt.Errorf("jq evaluation error: %w", jqErr)
 		}
 		outputs = append(outputs, v)
+		if len(outputs) >= maxJQOutputItems {
+			return "", fmt.Errorf("jq: output exceeds maximum of %d items", maxJQOutputItems)
+		}
 	}
 
 	// If single result, return it directly; otherwise return as array
@@ -731,6 +785,11 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 	data, err := json.Marshal(out)
 	if err != nil {
 		return "", fmt.Errorf("jq: failed to marshal filtered result: %w", err)
+	}
+
+	const maxJQOutputBytes = 10 * 1024 * 1024 // 10 MB
+	if len(data) > maxJQOutputBytes {
+		return "", fmt.Errorf("jq: output exceeds maximum size of %d bytes", maxJQOutputBytes)
 	}
 	return string(data), nil
 }
@@ -756,6 +815,9 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
+	if params.Page > 10000 {
+		params.Page = 10000
+	}
 	if params.PerPage < 1 || params.PerPage > 100 {
 		params.PerPage = 10
 	}
@@ -770,18 +832,34 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	if params.Username != "" && params.UserID <= 0 {
 		var user User
 		if err := s.db.DB.Where("username = ? COLLATE NOCASE", params.Username).First(&user).Error; err != nil {
-			return "", fmt.Errorf("user not found: %s", params.Username)
+			// Return empty results rather than revealing whether a username exists
+			query = query.Where("1 = 0")
+		} else {
+			query = query.Where("user_id = ?", user.ID)
 		}
-		query = query.Where("user_id = ?", user.ID)
 	}
 
 	if params.Search != "" {
+		// Limit search query length and keyword count to prevent SQL complexity DoS
+		const maxSearchLength = 200
+		const maxKeywords = 10
+		if len(params.Search) > maxSearchLength {
+			params.Search = params.Search[:maxSearchLength]
+		}
 		keywords := strings.Fields(params.Search)
+		if len(keywords) > maxKeywords {
+			keywords = keywords[:maxKeywords]
+		}
 		for _, keyword := range keywords {
 			keyword = strings.TrimSpace(keyword)
+			if len(keyword) < 3 {
+				continue
+			}
 			if keyword != "" {
-				orClause := "benchmarks.title LIKE ? OR benchmarks.description LIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?) OR benchmarks.run_names LIKE ? OR benchmarks.specifications LIKE ?"
-				query = query.Where(orClause, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+				// Escape LIKE wildcards to prevent pattern injection
+				escapedKeyword := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(keyword)
+				orClause := "benchmarks.title LIKE ? ESCAPE '\\' OR benchmarks.description LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ? ESCAPE '\\') OR benchmarks.run_names LIKE ? ESCAPE '\\' OR benchmarks.specifications LIKE ? ESCAPE '\\'"
+				query = query.Where(orClause, "%"+escapedKeyword+"%", "%"+escapedKeyword+"%", "%"+escapedKeyword+"%", "%"+escapedKeyword+"%", "%"+escapedKeyword+"%")
 			}
 		}
 	}
@@ -805,21 +883,25 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 
 	var total int64
 	if err := query.Model(&Benchmark{}).Count(&total).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
+		return "", fmt.Errorf("database error")
 	}
 
 	var benchmarks []Benchmark
 	offset := (params.Page - 1) * params.PerPage
 	if err := query.Offset(offset).Limit(params.PerPage).Find(&benchmarks).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
+		return "", fmt.Errorf("database error")
 	}
 
 	// Populate run count and labels
+	const maxConcurrentMetaReads = 20
+	sem := make(chan struct{}, maxConcurrentMetaReads)
 	var wg sync.WaitGroup
 	for i := range benchmarks {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			count, labels, err := GetBenchmarkRunCount(benchmarks[idx].ID)
 			if err == nil {
 				benchmarks[idx].RunCount = count
@@ -941,6 +1023,9 @@ func (s *mcpServer) toolGetBenchmarkRun(args json.RawMessage) (string, error) {
 	if params.ID <= 0 {
 		return "", fmt.Errorf("id is required")
 	}
+	if params.RunIndex < 0 {
+		return "", fmt.Errorf("run_index must be non-negative")
+	}
 
 	maxPoints := params.MaxPoints
 	switch {
@@ -985,17 +1070,6 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, usern
 		return "", fmt.Errorf("id is required")
 	}
 
-	// Check if user is banned (admins can still update)
-	if !isAdmin {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err != nil {
-			return "", fmt.Errorf("user not found")
-		}
-		if user.IsBanned {
-			return "", fmt.Errorf("your account has been banned")
-		}
-	}
-
 	var benchmark Benchmark
 	if err := s.db.DB.First(&benchmark, params.ID).Error; err != nil {
 		return "", fmt.Errorf("benchmark not found")
@@ -1004,6 +1078,11 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, usern
 	// Check ownership or admin
 	if benchmark.UserID != userID && !isAdmin {
 		return "", fmt.Errorf("not authorized")
+	}
+
+	// Guard against excessively large labels maps to prevent memory exhaustion
+	if len(params.Labels) > maxRunsPerBenchmark {
+		return "", fmt.Errorf("too many labels provided")
 	}
 
 	// Track what fields were changed for audit logging
@@ -1062,6 +1141,18 @@ func (s *mcpServer) toolUpdateBenchmark(args json.RawMessage, userID uint, usern
 		runtime.GC()
 	}
 
+	if len(changes) == 0 {
+		// Nothing changed — return current benchmark without writing to DB or emitting an audit entry
+		if err := s.db.DB.Preload("User").First(&benchmark, benchmark.ID).Error; err != nil {
+			return "", fmt.Errorf("failed to load benchmark: %w", err)
+		}
+		data, err := json.Marshal(benchmark)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return string(data), nil
+	}
+
 	if err := s.db.DB.Save(&benchmark).Error; err != nil {
 		return "", fmt.Errorf("failed to update benchmark: %w", err)
 	}
@@ -1095,34 +1186,63 @@ func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
+	if params.Page > 10000 {
+		params.Page = 10000
+	}
 	if params.PerPage < 1 || params.PerPage > 100 {
 		params.PerPage = 10
+	}
+	if len(params.Search) > 200 {
+		params.Search = params.Search[:200]
 	}
 
 	query := s.db.DB.Model(&User{})
 	if params.Search != "" {
-		query = query.Where("username LIKE ? OR discord_id LIKE ?", "%"+params.Search+"%", "%"+params.Search+"%")
+		escapedSearch := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(params.Search)
+		query = query.Where("username LIKE ? ESCAPE '\\' OR discord_id LIKE ? ESCAPE '\\'", "%"+escapedSearch+"%", "%"+escapedSearch+"%")
 	}
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
+		return "", fmt.Errorf("database error")
 	}
 
 	var users []User
 	offset := (params.Page - 1) * params.PerPage
 	if err := query.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&users).Error; err != nil {
-		return "", fmt.Errorf("database error: %w", err)
+		return "", fmt.Errorf("database error")
 	}
 
-	for i := range users {
-		var benchCount int64
-		s.db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&benchCount)
-		users[i].BenchmarkCount = int(benchCount)
+	if len(users) > 0 {
+		userIDs := make([]uint, len(users))
+		for i := range users {
+			userIDs[i] = users[i].ID
+		}
 
-		var tokenCount int64
-		s.db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
-		users[i].APITokenCount = int(tokenCount)
+		var benchmarkCounts []struct {
+			UserID uint
+			Count  int64
+		}
+		s.db.DB.Model(&Benchmark{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&benchmarkCounts)
+		benchCountMap := make(map[uint]int64, len(benchmarkCounts))
+		for _, bc := range benchmarkCounts {
+			benchCountMap[bc.UserID] = bc.Count
+		}
+
+		var tokenCounts []struct {
+			UserID uint
+			Count  int64
+		}
+		s.db.DB.Model(&APIToken{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&tokenCounts)
+		tokenCountMap := make(map[uint]int64, len(tokenCounts))
+		for _, tc := range tokenCounts {
+			tokenCountMap[tc.UserID] = tc.Count
+		}
+
+		for i := range users {
+			users[i].BenchmarkCount = int(benchCountMap[users[i].ID])
+			users[i].APITokenCount = int(tokenCountMap[users[i].ID])
+		}
 	}
 
 	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))
@@ -1161,6 +1281,11 @@ func (s *mcpServer) toolDeleteUser(args json.RawMessage, adminUserID uint, admin
 	// Prevent self-deletion
 	if user.ID == adminUserID {
 		return "", fmt.Errorf("cannot delete your own account")
+	}
+
+	// Prevent deleting the system admin account
+	if user.DiscordID == "admin" {
+		return "", fmt.Errorf("cannot delete the system admin account")
 	}
 
 	username := user.Username
@@ -1262,8 +1387,12 @@ func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint, adminUse
 		return "", fmt.Errorf("cannot ban your own account")
 	}
 
-	user.IsBanned = params.Banned
-	if err := s.db.DB.Save(&user).Error; err != nil {
+	// Prevent banning the system admin account
+	if params.Banned && user.DiscordID == "admin" {
+		return "", fmt.Errorf("cannot ban the system admin account")
+	}
+
+	if err := s.db.DB.Model(&user).Update("is_banned", params.Banned).Error; err != nil {
 		return "", fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -1302,8 +1431,12 @@ func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint, 
 		return "", fmt.Errorf("cannot revoke your own admin privileges")
 	}
 
-	user.IsAdmin = params.IsAdmin
-	if err := s.db.DB.Save(&user).Error; err != nil {
+	// Prevent revoking system admin's privileges
+	if !params.IsAdmin && user.DiscordID == "admin" {
+		return "", fmt.Errorf("cannot revoke admin privileges from the system admin account")
+	}
+
+	if err := s.db.DB.Model(&user).Update("is_admin", params.IsAdmin).Error; err != nil {
 		return "", fmt.Errorf("failed to update user: %w", err)
 	}
 

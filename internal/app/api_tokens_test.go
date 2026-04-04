@@ -89,17 +89,42 @@ func TestAPITokenOperations(t *testing.T) {
 			t.Errorf("Expected status 201, got %d. Body: %s", w.Code, w.Body.String())
 		}
 
-		var response APIToken
+		var response map[string]interface{}
 		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
-		if response.Name != "Test Token" {
-			t.Errorf("Expected name 'Test Token', got '%s'", response.Name)
+		if response["name"] != "Test Token" {
+			t.Errorf("Expected name 'Test Token', got '%v'", response["name"])
 		}
 
-		if len(response.Token) != 64 {
-			t.Errorf("Expected token length 64, got %d", len(response.Token))
+		if token, ok := response["token"].(string); !ok || len(token) != 64 {
+			t.Errorf("Expected token string of length 64, got %v", response["token"])
+		}
+
+		// Ensure list endpoint does NOT expose the token value
+		listReq := httptest.NewRequest(http.MethodGet, "/api/tokens", nil)
+		listW := httptest.NewRecorder()
+		r.ServeHTTP(listW, listReq)
+		listBody := listW.Body.String()
+		if listW.Code != http.StatusOK {
+			t.Errorf("List tokens: expected status 200, got %d", listW.Code)
+		}
+		// Verify no raw token values leak into the list response
+		if len(listBody) > 2 {
+			if tokenVal, ok := response["token"].(string); ok && len(tokenVal) == 64 {
+				// The 64-char hex token should not appear in the list response
+				found := false
+				for i := 0; i+64 <= len(listBody); i++ {
+					if listBody[i:i+64] == tokenVal {
+						found = true
+						break
+					}
+				}
+				if found {
+					t.Error("Token value must not be exposed in list response")
+				}
+			}
 		}
 	})
 
@@ -211,7 +236,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 	token := APIToken{
 		UserID: user.ID,
-		Token:  "test_token_12345678901234567890123456789012",
+		Token:  "test_token_12345678901234567890123456789012000000000000000000000",
 		Name:   "Test Auth Token",
 	}
 	if err := db.DB.Create(&token).Error; err != nil {
@@ -234,7 +259,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 	t.Run("auth_with_token", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012")
+		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012000000000000000000000")
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -283,7 +308,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 		// Make a request with the token
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012")
+		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012000000000000000000000")
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)

@@ -15,8 +15,9 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 
 onMounted(() => {
-  // Check authentication state on app load
-  authStore.checkAuth()
+  // Use idempotent init() instead of checkAuth() to avoid triggering a second
+  // /api/auth/me request when the router guard has already called init().
+  authStore.init()
   // Fetch app version
   appStore.fetchVersion()
   // Apply theme on mount

@@ -6,7 +6,7 @@ build: build-web build-server
 # Build the web UI
 build-web:
 	@echo "Building web UI..."
-	cd web && npm install && npm run build
+	cd web && npm ci && npm run build
 
 # Build the Go server with embedded web UI
 build-server: build-web

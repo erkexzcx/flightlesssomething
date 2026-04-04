@@ -97,7 +97,7 @@ function calculateDensityData(values, calculationMethod) {
     counts[rounded] = (counts[rounded] || 0) + 1
   })
   
-  const array = Object.keys(counts).map(key => [parseInt(key), counts[key]]).sort((a, b) => a[0] - b[0])
+  const array = Object.keys(counts).map(key => [parseInt(key, 10), counts[key]]).sort((a, b) => a[0] - b[0])
   
   return array
 }

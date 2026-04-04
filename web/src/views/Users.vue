@@ -386,12 +386,21 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+let scrollThrottleFrame = null
 function handleScroll() {
-  showScrollTop.value = window.scrollY > 300
+  if (scrollThrottleFrame) return
+  scrollThrottleFrame = window.requestAnimationFrame(() => {
+    showScrollTop.value = window.scrollY > 300
+    scrollThrottleFrame = null
+  })
 }
 
+let resizeTimer = null
 function handleResize() {
-  windowWidth.value = window.innerWidth
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    windowWidth.value = window.innerWidth
+  }, 150)
 }
 
 function handleSearch() {
@@ -484,6 +493,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleResize)
+  if (scrollThrottleFrame) window.cancelAnimationFrame(scrollThrottleFrame)
+  if (resizeTimer) clearTimeout(resizeTimer)
 })
 
 // Watch for route query changes (for browser back/forward)

@@ -3,12 +3,16 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -39,7 +43,7 @@ func Start(config *Config, version string) error {
 	}
 
 	// Ensure system admin account exists and is up to date
-	if err := EnsureSystemAdmin(db, config.AdminUsername, config.AdminPassword); err != nil {
+	if err = EnsureSystemAdmin(db, config.AdminUsername); err != nil {
 		return fmt.Errorf("failed to ensure system admin: %w", err)
 	}
 
@@ -51,7 +55,22 @@ func Start(config *Config, version string) error {
 
 	// Setup Gin
 	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// Security headers middleware
+	r.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	})
+
+	// Do not trust any forwarded IP headers to prevent rate limit bypass via X-Forwarded-For spoofing.
+	// If this app is behind a trusted reverse proxy, set this to the proxy's IP instead.
+	if err = r.SetTrustedProxies(nil); err != nil {
+		return fmt.Errorf("failed to configure trusted proxies: %w", err)
+	}
 
 	// Disable trailing slash redirect to prevent issues with SPA
 	r.RedirectTrailingSlash = false
@@ -78,7 +97,7 @@ func Start(config *Config, version string) error {
 	r.GET("/auth/login/callback", HandleLoginCallback(db))
 	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
 	r.POST("/auth/logout", HandleLogout(secureCookie))
-	r.GET("/api/auth/me", HandleGetCurrentUser)
+	r.GET("/api/auth/me", HandleGetCurrentUser(db))
 
 	// Public benchmark routes
 	r.GET("/api/benchmarks", HandleListBenchmarks(db))
@@ -87,8 +106,19 @@ func Start(config *Config, version string) error {
 	r.GET("/api/benchmarks/:id/runs/:runIndex", HandleGetBenchmarkRun(db))
 	r.GET("/api/benchmarks/:id/download", HandleDownloadBenchmarkData(db))
 
-	// Debug calc endpoint (public, for verifying backend calculations)
-	r.POST("/api/debugcalc", HandleDebugCalc())
+	// Debug calc endpoint (public, for verifying backend calculations) — rate limited per IP
+	debugCalcHandler := HandleDebugCalc()
+	r.POST("/api/debugcalc", func(c *gin.Context) {
+		if allowed, remaining := GetDebugCalcLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+		debugCalcHandler(c)
+	})
 
 	// Protected benchmark routes
 	authorized := r.Group("/api")
@@ -117,7 +147,18 @@ func Start(config *Config, version string) error {
 	mcp := r.Group("/mcp")
 	mcp.Use(MCPCors())
 	mcp.OPTIONS("", func(c *gin.Context) {}) // Required for gin to route OPTIONS to the middleware
-	mcp.POST("", HandleMCP(db, version))
+	mcpHandler := HandleMCP(db, version, extractPublicBaseURL(config.DiscordRedirectURL))
+	mcp.POST("", func(c *gin.Context) {
+		if allowed, remaining := GetMCPLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+		mcpHandler(c)
+	})
 	mcp.GET("", HandleMCPGet)
 	mcp.DELETE("", HandleMCPDelete)
 
@@ -128,5 +169,28 @@ func Start(config *Config, version string) error {
 	log.Printf("Data directory: %s\n", config.DataDir)
 	log.Printf("Benchmarks directory: %s\n", filepath.Join(config.DataDir, "benchmarks"))
 
-	return r.Run(config.Bind)
+	srv := &http.Server{
+		Addr:              config.Bind,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	lc := &net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", config.Bind)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", config.Bind, err)
+	}
+	return srv.Serve(ln)
+}
+
+// extractPublicBaseURL derives the public base URL (scheme + host) from the Discord redirect URL.
+func extractPublicBaseURL(discordRedirectURL string) string {
+	u, err := url.Parse(discordRedirectURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }

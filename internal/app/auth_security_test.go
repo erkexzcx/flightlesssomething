@@ -67,7 +67,7 @@ func TestBannedUserRejectedViaAPIToken(t *testing.T) {
 
 	// Create a user and token
 	user := createTestUser(db, "bannedtokenuser", false)
-	token := &APIToken{UserID: user.ID, Token: "banned-user-token-abcdef1234567890ab", Name: "Test Token"}
+	token := &APIToken{UserID: user.ID, Token: "banned-user-token-abcdef1234567890ab0000000000000000000000000000", Name: "Test Token"}
 	db.DB.Create(token)
 
 	t.Run("token_auth_works_for_active_user", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestDemotedAdminRejectedViaAPIToken(t *testing.T) {
 
 	// Create an admin user with token
 	user := createTestUser(db, "demotedadmintoken", true)
-	token := &APIToken{UserID: user.ID, Token: "demoted-admin-token-abcdef12345678", Name: "Admin Token"}
+	token := &APIToken{UserID: user.ID, Token: "demoted-admin-token-abcdef12345678000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(token)
 
 	t.Run("admin_token_access_works_before_demotion", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestNonAdminCannotAccessAdminRoutes(t *testing.T) {
 	admin.PUT("/users/:id/admin", HandleToggleUserAdmin(db))
 
 	user := createTestUser(db, "regularuser", false)
-	token := &APIToken{UserID: user.ID, Token: "regular-user-token-abcdef1234567890", Name: "User Token"}
+	token := &APIToken{UserID: user.ID, Token: "regular-user-token-abcdef123456789000000000000000000000000000000", Name: "User Token"}
 	db.DB.Create(token)
 
 	routes := []struct {
@@ -439,8 +439,8 @@ func TestBenchmarkOwnershipEnforcement(t *testing.T) {
 	benchmark := &Benchmark{UserID: owner.ID, Title: "Owner Benchmark", Description: "Test"}
 	db.DB.Create(benchmark)
 
-	ownerToken := &APIToken{UserID: owner.ID, Token: "owner-token-abcdef12345678901234", Name: "Owner Token"}
-	otherToken := &APIToken{UserID: other.ID, Token: "other-token-abcdef12345678901234", Name: "Other Token"}
+	ownerToken := &APIToken{UserID: owner.ID, Token: "owner-token-abcdef1234567890123400000000000000000000000000000000", Name: "Owner Token"}
+	otherToken := &APIToken{UserID: other.ID, Token: "other-token-abcdef1234567890123400000000000000000000000000000000", Name: "Other Token"}
 	db.DB.Create(ownerToken)
 	db.DB.Create(otherToken)
 
@@ -501,7 +501,7 @@ func TestAdminCanAccessOtherUsersBenchmarks(t *testing.T) {
 	benchmark := &Benchmark{UserID: owner.ID, Title: "Owned Benchmark", Description: "Test"}
 	db.DB.Create(benchmark)
 
-	adminToken := &APIToken{UserID: admin.ID, Token: "admin-bench-token-abcdef1234567890", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "admin-bench-token-abcdef1234567890000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	body := `{"title":"Admin Updated Title"}`
@@ -527,7 +527,7 @@ func TestMCPBannedUserRejectedForAuthTools(t *testing.T) {
 	user.IsBanned = true
 	db.DB.Save(user)
 
-	token := &APIToken{UserID: user.ID, Token: "banned-mcp-auth-token-abcdef12345", Name: "Banned Token"}
+	token := &APIToken{UserID: user.ID, Token: "banned-mcp-auth-token-abcdef123450000000000000000000000000000000", Name: "Banned Token"}
 	db.DB.Create(token)
 
 	authTools := []string{"list_api_tokens", "create_api_token"}
@@ -564,7 +564,7 @@ func TestMCPBannedUserCanStillAccessPublicTools(t *testing.T) {
 	user.IsBanned = true
 	db.DB.Save(user)
 
-	token := &APIToken{UserID: user.ID, Token: "banned-mcp-pub-token-abcdef12345a", Name: "Banned Token"}
+	token := &APIToken{UserID: user.ID, Token: "banned-mcp-pub-token-abcdef12345a0000000000000000000000000000000", Name: "Banned Token"}
 	db.DB.Create(token)
 
 	// list_benchmarks is public - should work (token is just ignored for public tools)
@@ -585,7 +585,7 @@ func TestMCPNonAdminCannotAccessAdminTools(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpnonadmintools", false)
-	token := &APIToken{UserID: user.ID, Token: "nonadmin-tools-token-abcdef123456", Name: "Non-Admin Token"}
+	token := &APIToken{UserID: user.ID, Token: "nonadmin-tools-token-abcdef1234560000000000000000000000000000000", Name: "Non-Admin Token"}
 	db.DB.Create(token)
 
 	adminTools := []string{"list_users", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
@@ -637,11 +637,11 @@ func TestMCPToolsListFilteredByAuthLevel(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcptoolslist", false)
-	userToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef1234567", Name: "User Token"}
+	userToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef1234567000000000000000000000000000000", Name: "User Token"}
 	db.DB.Create(userToken)
 
 	admin := createTestUser(db, "mcptoolslistadmin", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef123456", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef123456000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	adminOnlyTools := []string{"list_users", "delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
@@ -752,8 +752,8 @@ func TestAPITokenCannotDeleteOtherUsersToken(t *testing.T) {
 	user1 := createTestUser(db, "tokenowner1", false)
 	user2 := createTestUser(db, "tokenowner2", false)
 
-	token1 := &APIToken{UserID: user1.ID, Token: "user1-auth-token-abcdef1234567890ab", Name: "User1 Token"}
-	token2 := &APIToken{UserID: user2.ID, Token: "user2-auth-token-abcdef1234567890ab", Name: "User2 Token"}
+	token1 := &APIToken{UserID: user1.ID, Token: "user1-auth-token-abcdef1234567890ab00000000000000000000000000000", Name: "User1 Token"}
+	token2 := &APIToken{UserID: user2.ID, Token: "user2-auth-token-abcdef1234567890ab00000000000000000000000000000", Name: "User2 Token"}
 	db.DB.Create(token1)
 	db.DB.Create(token2)
 

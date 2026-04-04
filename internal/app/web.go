@@ -25,8 +25,17 @@ func setupSPA(r *gin.Engine) {
 
 	log.Printf("Web UI loaded successfully")
 
+	// Read index.html once at startup and cache it; avoids a heap allocation per request.
+	indexHTML, err := fs.ReadFile(distFS, "index.html")
+	if err != nil {
+		log.Printf("Error reading index.html: %v", err)
+		return
+	}
+
 	// Serve static assets (JS, CSS, images, etc.)
 	r.GET("/assets/*filepath", func(c *gin.Context) {
+		// Vite output filenames are content-hashed, so they can be cached indefinitely.
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		c.FileFromFS(c.Request.URL.Path, http.FS(distFS))
 	})
 
@@ -40,13 +49,8 @@ func setupSPA(r *gin.Engine) {
 
 	// Serve index.html for the root path
 	r.GET("/", func(c *gin.Context) {
-		data, err := fs.ReadFile(distFS, "index.html")
-		if err != nil {
-			log.Printf("Error reading index.html: %v", err)
-			c.String(http.StatusInternalServerError, "Error loading page")
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		c.Header("Cache-Control", "no-cache")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 
 	// For all other routes (SPA routes), serve index.html
@@ -54,18 +58,13 @@ func setupSPA(r *gin.Engine) {
 		path := c.Request.URL.Path
 
 		// Don't serve index.html for API routes
-		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/auth/") || strings.HasPrefix(path, "/health") {
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/auth/") || strings.HasPrefix(path, "/health") || path == "/mcp" || strings.HasPrefix(path, "/mcp/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
 
 		// Serve index.html for all other routes (Vue Router will handle them)
-		data, err := fs.ReadFile(distFS, "index.html")
-		if err != nil {
-			log.Printf("Error reading index.html: %v", err)
-			c.String(http.StatusInternalServerError, "Error loading page")
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		c.Header("Cache-Control", "no-cache")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 }

@@ -112,6 +112,10 @@ func computeDensityData(values []float64, p01, p97 float64) [][2]int {
 	counts := make(map[int]int)
 	for _, v := range values {
 		if v >= p01 && v <= p97 {
+			// Guard against values that would overflow int when rounded.
+			if v < math.MinInt32 || v > math.MaxInt32 {
+				continue
+			}
 			rounded := int(math.Round(v))
 			counts[rounded]++
 		}

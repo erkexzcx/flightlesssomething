@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,4 +270,108 @@ fps,frametime,cpu_load,gpu_load
 	// This test would require creating a multipart.FileHeader which is complex
 	// In a real scenario, you'd use httptest to create proper file uploads
 	t.Skip("Skipping file parsing test - requires complex multipart setup")
+}
+
+func TestTruncateStringUTF8(t *testing.T) {
+	// Multi-byte Unicode characters must not be cut in the middle
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "ASCII stays intact",
+			input: strings.Repeat("a", 150),
+			want:  strings.Repeat("a", 100) + "...",
+		},
+		{
+			name:  "multi-byte rune not split",
+			input: strings.Repeat("é", 110), // é is 2 bytes in UTF-8
+			want:  strings.Repeat("é", 100) + "...",
+		},
+		{
+			name:  "CJK characters not split",
+			input: strings.Repeat("中", 110), // 3 bytes each
+			want:  strings.Repeat("中", 100) + "...",
+		},
+		{
+			name:  "emoji not split",
+			input: strings.Repeat("🎮", 110), // 4 bytes each
+			want:  strings.Repeat("🎮", 100) + "...",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateString(tt.input)
+			if got != tt.want {
+				t.Errorf("truncateString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCSVSafeCell(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"normal text", "Linux", "Linux"},
+		{"equals prefix", "=SUM(A1)", "'=SUM(A1)"},
+		{"plus prefix", "+123", "'+123"},
+		{"minus prefix", "-1+1", "'-1+1"},
+		{"at prefix", "@user", "'@user"},
+		{"empty string", "", ""},
+		{"tab prefix is safe", "\tfoo", "\tfoo"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := csvSafeCell(tt.input)
+			if got != tt.want {
+				t.Errorf("csvSafeCell(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeFilenameNULBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"no nul bytes", "normal_file", "normal_file"},
+		{"nul byte in middle", "file\x00name", "filename"},
+		{"nul bytes at start and end", "\x00file\x00", "file"},
+		{"only nul bytes", "\x00\x00", "benchmark"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeFilename(tt.input)
+			if strings.Contains(got, "\x00") {
+				t.Errorf("sanitizeFilename(%q) = %q, still contains NUL bytes", tt.input, got)
+			}
+			if got != tt.expected {
+				t.Errorf("sanitizeFilename(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseDataCapacity(t *testing.T) {
+	// parseData must cap pre-alloc capacity at maxPerRunDataLines to prevent OOM
+	// from crafted CSV files that claim millions of lines.
+	headerMap := map[int]string{0: "fps", 1: "frametime"}
+	bd := &BenchmarkData{}
+
+	// Empty scanner simulates zero actual data lines; only the pre-alloc cap matters.
+	// The "no valid data" error is expected — we only care that the cap is bounded.
+	scanner := bufio.NewScanner(strings.NewReader(""))
+	if err := parseData(scanner, headerMap, bd, false, maxPerRunDataLines+1_000_000); err == nil {
+		t.Error("expected an error from parseData with empty scanner, got nil")
+	}
+
+	if cap(bd.DataFPS) > maxPerRunDataLines {
+		t.Errorf("DataFPS cap %d exceeds maxPerRunDataLines %d", cap(bd.DataFPS), maxPerRunDataLines)
+	}
 }

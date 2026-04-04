@@ -190,6 +190,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { api } from '../api/client'
 import { 
   calculateStats, 
   calculateFPSStatsFromFrametime 
@@ -375,19 +376,10 @@ async function verifyWithBackend() {
   backendError.value = null
   backendResults.value = null
   try {
-    const response = await fetch('/api/debugcalc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fps: parsedData.value.fpsValues,
-        frameTime: parsedData.value.frametimeValues
-      })
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      throw new Error(data.error || 'Backend verification failed')
-    }
-    backendResults.value = await response.json()
+    backendResults.value = await api.debugcalc(
+      parsedData.value.fpsValues,
+      parsedData.value.frametimeValues
+    )
   } catch (err) {
     backendError.value = err.message
   } finally {

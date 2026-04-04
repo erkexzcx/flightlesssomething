@@ -6,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxDebugCalcPoints = 100_000
+
 // HandleDebugCalc computes statistics from raw FPS/Frametime data for verification.
 // This allows the /debugcalc page to compare frontend and backend calculations.
 func HandleDebugCalc() gin.HandlerFunc {
@@ -22,6 +24,11 @@ func HandleDebugCalc() gin.HandlerFunc {
 
 		if len(req.FPS) == 0 && len(req.Frametime) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of fps or frameTime arrays must be provided"})
+			return
+		}
+
+		if len(req.FPS) > maxDebugCalcPoints || len(req.Frametime) > maxDebugCalcPoints {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "array exceeds maximum allowed size"})
 			return
 		}
 

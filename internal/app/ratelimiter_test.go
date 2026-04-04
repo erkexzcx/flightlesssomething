@@ -212,3 +212,45 @@ func TestInitRateLimiters(t *testing.T) {
 		t.Error("GetAdminLoginLimiter should return initialized limiter")
 	}
 }
+
+func TestRateLimiter_AllowWithRemaining(t *testing.T) {
+	rl := NewRateLimiter(3, 1*time.Second)
+
+	t.Run("allowed when under limit", func(t *testing.T) {
+		allowed, remaining := rl.AllowWithRemaining("awr-key-1")
+		if !allowed {
+			t.Error("First attempt should be allowed")
+		}
+		if remaining != 0 {
+			t.Errorf("Expected remaining=0 when allowed, got %v", remaining)
+		}
+	})
+
+	t.Run("blocked when limit reached, remaining is positive", func(t *testing.T) {
+		rl2 := NewRateLimiter(2, 10*time.Second)
+		rl2.Allow("awr-key-2")
+		rl2.Allow("awr-key-2")
+
+		allowed, remaining := rl2.AllowWithRemaining("awr-key-2")
+		if allowed {
+			t.Error("Third attempt should be blocked")
+		}
+		if remaining <= 0 {
+			t.Errorf("Expected positive remaining time when blocked, got %v", remaining)
+		}
+	})
+
+	t.Run("atomic: result is consistent", func(t *testing.T) {
+		// AllowWithRemaining should never return allowed=true with remaining>0
+		rl3 := NewRateLimiter(1, 10*time.Second)
+		for i := 0; i < 5; i++ {
+			allowed, remaining := rl3.AllowWithRemaining("awr-key-3")
+			if allowed && remaining > 0 {
+				t.Errorf("Inconsistent result: allowed=true with remaining=%v", remaining)
+			}
+			if !allowed && remaining <= 0 {
+				t.Errorf("Inconsistent result: allowed=false with remaining=%v", remaining)
+			}
+		}
+	})
+}

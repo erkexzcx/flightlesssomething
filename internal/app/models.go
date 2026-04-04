@@ -34,8 +34,8 @@ type User struct {
 // APIToken represents an API token for a user
 type APIToken struct {
 	BaseModel
-	UserID     uint       `json:"user_id"`
-	Token      string     `gorm:"size:64;uniqueIndex" json:"token"`
+	UserID     uint       `gorm:"index" json:"user_id"`
+	Token      string     `gorm:"size:64;uniqueIndex" json:"-"`
 	Name       string     `gorm:"size:100" json:"name"`
 	LastUsedAt *time.Time `gorm:"default:null" json:"last_used_at"`
 
@@ -45,7 +45,7 @@ type APIToken struct {
 // Benchmark represents a benchmark record in the database
 type Benchmark struct {
 	BaseModel
-	UserID      uint   `json:"user_id"`
+	UserID      uint   `gorm:"index" json:"user_id"`
 	Title       string `gorm:"size:100" json:"title"`
 	Description string `gorm:"size:5000" json:"description"`
 
@@ -57,7 +57,7 @@ type Benchmark struct {
 	RunCount           int      `gorm:"-" json:"run_count,omitempty"`
 	RunLabels          []string `gorm:"-" json:"run_labels,omitempty"`
 
-	User User `gorm:"foreignKey:UserID;" json:"user"`
+	User User `gorm:"foreignKey:UserID;" json:"user,omitempty"`
 }
 
 // AfterFind is a GORM hook that is called after a record is found

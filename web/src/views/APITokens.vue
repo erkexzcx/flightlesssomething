@@ -219,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { api } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -241,6 +241,10 @@ const createError = ref(null)
 const showDeleteModal = ref(false)
 const tokenToDelete = ref(null)
 const deleting = ref(false)
+
+// Track copy timeouts to clear them on unmount and avoid stale reactive writes
+const copyTimeouts = []
+onUnmounted(() => copyTimeouts.forEach(clearTimeout))
 
 // MCP configuration
 const mcpAuthEnabled = ref(true)
@@ -316,9 +320,9 @@ async function copyToken(token, tokenId) {
   try {
     await navigator.clipboard.writeText(token)
     copiedTokens[tokenId] = true
-    setTimeout(() => {
+    copyTimeouts.push(setTimeout(() => {
       copiedTokens[tokenId] = false
-    }, 1000)
+    }, 1000))
   } catch (err) {
     console.error('Failed to copy token:', err)
   }
@@ -379,9 +383,9 @@ async function copyMCPConfig(type) {
     const text = type === 'vscode' ? vscodeConfig.value : claudeConfig.value
     await navigator.clipboard.writeText(text)
     copiedMCP[type] = true
-    setTimeout(() => {
+    copyTimeouts.push(setTimeout(() => {
       copiedMCP[type] = false
-    }, 1000)
+    }, 1000))
   } catch (err) {
     console.error('Failed to copy MCP config:', err)
   }

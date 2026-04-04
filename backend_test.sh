@@ -8,7 +8,7 @@ set -e
 SERVER_PORT=5000
 BASE_URL="http://localhost:${SERVER_PORT}"
 DATA_DIR="/tmp/fls-backend-test-data"
-SESSION_SECRET="test-secret-backend"
+SESSION_SECRET="test-secret-backend-must-be-at-least-32-chars"
 ADMIN_USER="backendadmin"
 ADMIN_PASS="backendpass123"
 

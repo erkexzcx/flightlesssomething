@@ -43,6 +43,12 @@ jobs:
             echo 'Stopping dev container...'
             docker stop ${DEV_CONTAINER} || true
 
+            # Guard against empty variable before destructive rm -rf
+            if [ -z '${DEV_DATA_DIR}' ]; then
+              echo 'ERROR: DEV_DATA_DIR is empty, aborting to prevent data loss'
+              exit 1
+            fi
+
             # Delete dev data directory
             echo 'Deleting dev data directory...'
             rm -rf ~/${DEV_DATA_DIR}

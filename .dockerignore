@@ -1,0 +1,14 @@
+.git
+.github
+README.md
+docs/
+server
+web/node_modules/
+web/dist/
+internal/app/web/
+internal/app/webfs_embed.go
+data/
+logs/
+*.sh
+.env
+.env.*
