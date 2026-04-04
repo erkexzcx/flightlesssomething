@@ -16,7 +16,7 @@ Session cookies are `HttpOnly`, `SameSite=Lax`, and optionally `Secure` (when th
 
 ### Admin Login
 
-`POST /auth/admin/login` accepts `{"username":"…","password":"…"}` and creates a session for the built-in admin account. This endpoint is rate-limited to **3 failed attempts per 10 minutes** (global lock).
+`POST /auth/admin/login` accepts `{"username":"…","password":"…"}` and creates a session for the built-in admin account. This endpoint is rate-limited to **3 attempts per 10 minutes** (global lock). The counter resets on a successful login.
 
 ### API Token (Bearer)
 
@@ -26,7 +26,7 @@ Authenticated users can create API tokens (up to 10 per user) via the web UI or 
 Authorization: Bearer <token>
 ```
 
-API tokens work for all authenticated REST endpoints and for the MCP server.
+Bearer tokens work for all authenticated REST endpoints (including admin endpoints) and for the MCP server.
 
 ### MCP Authentication
 
@@ -37,7 +37,16 @@ The MCP server (`POST /mcp`) uses the same Bearer token mechanism. The token is 
 | Scope | Limit | Window | Applies to |
 |---|---|---|---|
 | Benchmark uploads | 5 | 10 minutes | Non-admin users |
-| Admin login failures | 3 | 10 minutes | Global |
+| Admin login attempts | 3 | 10 minutes | Global (resets on successful login) |
+
+When a rate limit is exceeded, the server responds with `429 Too Many Requests`:
+
+```json
+{
+  "error": "rate limit exceeded: ...",
+  "retry_after_secs": 42
+}
+```
 
 ## REST API Endpoints
 
@@ -49,12 +58,13 @@ The MCP server (`POST /mcp`) uses the same Bearer token mechanism. The token is 
 | `GET` | `/auth/login` | Initiates Discord OAuth flow. |
 | `GET` | `/auth/login/callback` | Discord OAuth callback. |
 | `POST` | `/auth/admin/login` | Admin username/password login (rate-limited). |
+| `POST` | `/auth/logout` | Clears the session cookie. No auth is enforced — a no-op if called without an active session. |
+| `GET` | `/api/auth/me` | Returns session-based user info, or `401` if no active session. Session-only; Bearer tokens are not recognized by this endpoint. |
 | `GET` | `/api/benchmarks` | List/search benchmarks (paginated). |
 | `GET` | `/api/benchmarks/:id` | Get benchmark metadata. |
 | `GET` | `/api/benchmarks/:id/data` | Get pre-calculated statistics for all runs. |
 | `GET` | `/api/benchmarks/:id/runs/:runIndex` | Get pre-calculated statistics for a single run. |
 | `GET` | `/api/benchmarks/:id/download` | Download benchmark as a ZIP of CSVs. |
-| `GET` | `/api/auth/me` | Returns current user info or `401` if not authenticated. |
 | `POST` | `/api/debugcalc` | Compute statistics from raw FPS/frametime data (for verification). |
 
 ### Authenticated (session cookie or Bearer token)
@@ -63,7 +73,6 @@ These endpoints use the `RequireAuthOrToken` middleware — either a valid sessi
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/auth/logout` | End session (no-op if not authenticated). |
 | `POST` | `/api/benchmarks` | Create a benchmark (multipart form with CSV files). |
 | `PUT` | `/api/benchmarks/:id` | Update title, description, or run labels. |
 | `DELETE` | `/api/benchmarks/:id` | Delete a benchmark and its data files. |
@@ -75,9 +84,9 @@ These endpoints use the `RequireAuthOrToken` middleware — either a valid sessi
 
 For write operations on benchmarks (`PUT`, `DELETE`, `POST` runs), the caller must be either the benchmark owner or an admin.
 
-### Admin (session cookie + admin flag)
+### Admin (session cookie or Bearer token + admin flag)
 
-Admin endpoints require both an authenticated session and the `IsAdmin` flag. They use the `RequireAuth` and `RequireAdmin` middleware chain.
+Admin endpoints use `RequireAuthOrToken` followed by `RequireAdmin`. Both session cookies and Bearer tokens are accepted, provided the associated account has admin privileges.
 
 | Method | Path | Description |
 |---|---|---|
@@ -110,6 +119,22 @@ This enables browser-based MCP clients (such as the MCP Inspector) running on ar
 
 ## Endpoint Details
 
+### `GET /api/auth/me`
+
+Returns identity information for the currently authenticated session. This endpoint reads the session cookie directly and does **not** accept Bearer token authentication.
+
+**Response:** `200 OK`
+
+```json
+{
+  "user_id": 42,
+  "username": "alice",
+  "is_admin": false
+}
+```
+
+Returns `401` if no active session exists.
+
 ### `GET /api/benchmarks`
 
 List and search benchmarks with pagination and sorting.
@@ -120,8 +145,8 @@ List and search benchmarks with pagination and sorting.
 |---|---|---|---|
 | `page` | int | `1` | Page number. |
 | `per_page` | int | `10` | Results per page (1–100). |
-| `search` | string | — | Space-separated keywords (AND logic). |
-| `search_fields` | string | `title,description` | Comma-separated list of fields to search. Valid values: `title`, `description`, `user`, `run_name`, `specifications`. |
+| `search` | string | — | Space-separated keywords (AND logic). Each keyword is matched against all enabled `search_fields`. |
+| `search_fields` | string | `title,description` | Comma-separated fields to search. Valid values: `title`, `description`, `user`, `run_name`, `specifications`. |
 | `user_id` | int | — | Filter by user ID. |
 | `sort_by` | string | `created_at` | Sort field: `title`, `created_at`, `updated_at`. |
 | `sort_order` | string | `desc` | Sort direction: `asc`, `desc`. |
@@ -142,7 +167,7 @@ List and search benchmarks with pagination and sorting.
 
 Get a single benchmark's metadata including run count and labels.
 
-**Response:** `200 OK` — Benchmark object with `run_count` and `run_labels`.
+**Response:** `200 OK` — A Benchmark object (see [Data Objects](#data-objects)).
 
 ### `GET /api/benchmarks/:id/data`
 
@@ -187,7 +212,7 @@ Get pre-calculated statistics for a single run within a benchmark.
 
 Download all benchmark runs as a ZIP archive. Each run is exported as a separate CSV file inside the ZIP.
 
-**Response:** `200 OK` — `application/zip` attachment.
+**Response:** `200 OK` — `application/zip` attachment (`benchmark_<id>.zip`).
 
 ### `POST /api/benchmarks`
 
@@ -207,7 +232,7 @@ Create a new benchmark. Requires authentication.
 - Max 1,000,000 total data lines across all runs.
 - Rate limited to 5 uploads per 10 minutes (non-admins).
 
-**Response:** `201 Created` — The created benchmark object.
+**Response:** `201 Created` — The created Benchmark object (see [Data Objects](#data-objects)).
 
 ### `PUT /api/benchmarks/:id`
 
@@ -223,15 +248,23 @@ Update a benchmark's metadata and/or run labels. Only the owner or an admin can 
 }
 ```
 
-All fields are optional — only provided fields are updated.
+All fields are optional — only provided fields are updated. `labels` keys are run indices as strings; values are new label strings (max 100 characters each).
+
+**Response:** `200 OK` — The updated Benchmark object.
 
 ### `DELETE /api/benchmarks/:id`
 
 Delete a benchmark and all its data files. Only the owner or an admin can delete.
 
+**Response:** `200 OK`
+
+```json
+{ "message": "benchmark deleted" }
+```
+
 ### `POST /api/benchmarks/:id/runs`
 
-Add additional runs to an existing benchmark. Same multipart format as creation.
+Add additional runs to an existing benchmark. Requires authentication; rate limited to 5 uploads per 10 minutes (non-admins).
 
 **Content-Type:** `multipart/form-data`
 
@@ -239,11 +272,19 @@ Add additional runs to an existing benchmark. Same multipart format as creation.
 |---|---|---|---|
 | `files` | file(s) | Yes | Additional MangoHud CSV or Afterburner HML files. |
 
-The total data lines across existing + new runs must not exceed 1,000,000.
+The total data lines across existing and new runs must not exceed 1,000,000.
+
+**Response:** `200 OK` — The updated Benchmark object.
 
 ### `DELETE /api/benchmarks/:id/runs/:run_index`
 
 Delete a specific run from a benchmark. Cannot delete the last remaining run. Only the owner or an admin can delete.
+
+**Response:** `200 OK`
+
+```json
+{ "message": "run deleted successfully" }
+```
 
 ### `POST /api/debugcalc`
 
@@ -258,7 +299,7 @@ Compute statistics from raw FPS and/or frametime data. This public endpoint is u
 }
 ```
 
-At least one of `fps` or `frameTime` must be provided. If `frameTime` is provided it is always used to derive FPS statistics (the correct method). Both arrays are optional float64 arrays.
+At least one of `fps` or `frameTime` must be provided. When `frameTime` is provided, it is used to derive FPS statistics (the correct method); frametime stats are also returned. When only `fps` is provided, only FPS stats are included in the response.
 
 **Response:** `200 OK`
 
@@ -279,7 +320,9 @@ Each stats object is a `MetricStats` (same structure as returned by benchmark da
 
 ### `GET /api/tokens`
 
-List all API tokens for the current user.
+List all API tokens for the current user. Returns full token objects including the token string.
+
+**Response:** `200 OK` — Array of APIToken objects (see [Data Objects](#data-objects)).
 
 ### `POST /api/tokens`
 
@@ -293,11 +336,17 @@ Create a new API token.
 
 `name` is required (1–100 characters). Maximum 10 tokens per user.
 
-**Response:** `201 Created` — The created token object (including the token string, which is only shown once).
+**Response:** `201 Created` — The created APIToken object (see [Data Objects](#data-objects)). The `token` field contains the full 64-character hex string. Store it securely — this is the only time it is returned.
 
 ### `DELETE /api/tokens/:id`
 
 Delete an API token. Only the token owner can delete it.
+
+**Response:** `200 OK`
+
+```json
+{ "message": "token deleted" }
+```
 
 ### `GET /api/admin/users`
 
@@ -309,7 +358,21 @@ List users with optional search.
 |---|---|---|---|
 | `page` | int | `1` | Page number. |
 | `per_page` | int | `10` | Results per page (1–100). |
-| `search` | string | — | Search by username or Discord ID. |
+| `search` | string | — | Filter by username or Discord ID (partial match). |
+
+**Response:** `200 OK`
+
+```json
+{
+  "users": [ ... ],
+  "page": 1,
+  "per_page": 10,
+  "total": 20,
+  "total_pages": 2
+}
+```
+
+Each element is a User object (see [Data Objects](#data-objects)) with `benchmark_count` and `api_token_count` populated.
 
 ### `DELETE /api/admin/users/:id`
 
@@ -319,11 +382,23 @@ Delete a user. Cannot delete your own account.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `delete_data` | string | `false` | Set to `"true"` to also delete all benchmark data files. |
+| `delete_data` | bool | `false` | If `true`, also deletes all benchmark data files belonging to the user before removing the account. |
+
+**Response:** `200 OK`
+
+```json
+{ "message": "user deleted" }
+```
 
 ### `DELETE /api/admin/users/:id/benchmarks`
 
 Delete all benchmarks (and their data files) belonging to a user.
+
+**Response:** `200 OK`
+
+```json
+{ "message": "all user benchmarks deleted" }
+```
 
 ### `PUT /api/admin/users/:id/ban`
 
@@ -335,6 +410,8 @@ Ban or unban a user. Cannot ban your own account.
 { "banned": true }
 ```
 
+**Response:** `200 OK` — The updated User object.
+
 ### `PUT /api/admin/users/:id/admin`
 
 Grant or revoke admin privileges. Cannot revoke your own admin privileges.
@@ -344,6 +421,82 @@ Grant or revoke admin privileges. Cannot revoke your own admin privileges.
 ```json
 { "is_admin": true }
 ```
+
+**Response:** `200 OK` — The updated User object.
+
+---
+
+## Data Objects
+
+### Benchmark
+
+```json
+{
+  "id": 1,
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T10:30:00Z",
+  "created_at_humanized": "2 days ago",
+  "updated_at_humanized": "2 days ago",
+  "user_id": 42,
+  "title": "My Benchmark",
+  "description": "Markdown description",
+  "run_names": "Run A,Run B",
+  "specifications": "Linux,Intel i7-13700K,NVIDIA RTX 4090,32 GB",
+  "run_count": 2,
+  "run_labels": ["Run A", "Run B"],
+  "user": { "..." }
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | int | Benchmark ID. |
+| `created_at` / `updated_at` | string | ISO 8601 UTC timestamps. |
+| `created_at_humanized` / `updated_at_humanized` | string | Relative time strings (e.g. "2 days ago"). |
+| `user_id` | int | Owner's user ID. |
+| `title` | string | Max 100 characters. |
+| `description` | string | Markdown; max 5,000 characters. |
+| `run_names` | string | Comma-separated run labels, stored for search indexing. |
+| `specifications` | string | Concatenated unique system specs, stored for search indexing. |
+| `run_count` | int | Number of runs. Omitted when not loaded. |
+| `run_labels` | array of string | Run labels in order. Omitted when not loaded. |
+| `user` | object | Nested User object. |
+
+### User
+
+```json
+{
+  "id": 42,
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-15T10:30:00Z",
+  "discord_id": "123456789012345678",
+  "username": "alice",
+  "is_admin": false,
+  "is_banned": false,
+  "last_web_activity_at": "2025-01-15T09:00:00Z",
+  "last_api_activity_at": null,
+  "benchmark_count": 5,
+  "api_token_count": 2
+}
+```
+
+`benchmark_count` and `api_token_count` are only populated in admin list (`GET /api/admin/users`) responses. `last_web_activity_at` and `last_api_activity_at` may be `null`.
+
+### APIToken
+
+```json
+{
+  "id": 1,
+  "created_at": "2025-01-10T12:00:00Z",
+  "updated_at": "2025-01-10T12:00:00Z",
+  "user_id": 42,
+  "token": "a1b2c3d4...64hexcharacters",
+  "name": "my-token",
+  "last_used_at": "2025-01-15T08:00:00Z"
+}
+```
+
+The `token` field is the full 64-character hex string and is included in all API token list and creation responses.
 
 ---
 

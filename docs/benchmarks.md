@@ -177,6 +177,7 @@ You can also edit labels directly in the upload form.
 | Maximum data lines per single run | 500,000 |
 | Maximum benchmark title length | 100 characters |
 | Maximum description length | 5,000 characters |
+| Upload rate limit | 5 benchmarks per 10 minutes (non-admin users) |
 
 ## Captured Metrics
 
@@ -192,11 +193,18 @@ FlightlessSomething extracts the following metrics from your benchmark files:
 | CPU Power | `cpu_power` | — |
 | GPU Temp | `gpu_temp` | `GPU temperature` |
 | GPU Core Clock | `gpu_core_clock` | `Core clock` |
-| GPU Memory Clock | `gpu_mem_clock` | `Memory clock` |
-| GPU VRAM Used | `gpu_vram_used` | `Memory usage` |
+| GPU Memory Clock | `gpu_mem_clock` | `Memory clock` ¹ |
+| GPU VRAM Used | `gpu_vram_used` | `Memory usage` ² |
 | GPU Power | `gpu_power` | `Power` |
-| RAM Used | `ram_used` | `RAM usage` |
+| RAM Used | `ram_used` | `RAM usage` ² |
 | Swap Used | `swap_used` | — |
+
+**Afterburner value normalization:**
+
+Three Afterburner metrics are automatically converted so that Linux (MangoHud) and Windows (Afterburner) values are directly comparable:
+
+- ¹ **GPU Memory Clock** — Afterburner reports the *effective* GDDR clock (base clock × 2). The stored value is halved to match MangoHud's base-clock reporting (e.g., Afterburner `16000 MHz` → stored as `8000 MHz`).
+- ² **GPU VRAM Used** and **RAM Used** — Afterburner reports these in **MB**; the stored value is divided by 1024 to convert to **GB**, matching MangoHud's GB output.
 
 Not all metrics are required — FlightlessSomething will display charts only for metrics present in your files.
 

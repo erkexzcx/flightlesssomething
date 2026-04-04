@@ -28,7 +28,7 @@ Both backend (`internal/app/`, `cmd/`) and frontend (`web/`) code.
 
 6. **Rate limiting**: Non-admin write operations use the existing rate limiter. New upload or mutation endpoints that are comparable to existing rate-limited ones should also be rate-limited.
 
-7. **Audit logging**: State-changing operations (create, update, delete) call `logAudit()` with an appropriate action string and target — consistent with existing handlers. Check that no new handler silently skips audit logging when equivalent handlers log it.
+7. **Audit logging**: State-changing operations (create, update, delete) call the appropriate typed audit helper from `audit.go` — e.g. `LogBenchmarkCreated()`, `LogBenchmarkUpdated()`, `LogBenchmarkDeleted()`, `LogUserBanned()` — consistent with existing handlers. Check that no new handler silently skips audit logging when equivalent handlers log it.
 
 8. **Search minimum length**: When search/filter query params are implemented, they enforce a ≥3-character minimum, matching existing search handlers.
 

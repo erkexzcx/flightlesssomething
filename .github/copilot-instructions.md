@@ -110,6 +110,8 @@ flightlesssomething/
 | IsBanned | bool | Login blocked |
 | LastWebActivityAt | *time.Time | Nullable, updated on session auth |
 | LastAPIActivityAt | *time.Time | Nullable, updated on token auth |
+| BenchmarkCount | int | Computed (not persisted), populated in admin user listing |
+| APITokenCount | int | Computed (not persisted), populated in admin user listing |
 | Benchmarks | []Benchmark | Has-many, cascade delete |
 | APITokens | []APIToken | Has-many, cascade delete |
 
@@ -156,6 +158,8 @@ Audit log location: `{parentOfDataDir}/logs/audit.json` (sibling of data dir). R
 | GET | `/health` | inline | Health check (returns `{"status":"ok","version":"..."}`) |
 | GET | `/auth/login` | HandleLogin | Initiates Discord OAuth flow |
 | GET | `/auth/login/callback` | HandleLoginCallback | Discord OAuth callback |
+| POST | `/auth/admin/login` | HandleAdminLogin | Admin username/password login (rate-limited) |
+| POST | `/auth/logout` | HandleLogout | End session (clears session cookie) |
 | GET | `/api/benchmarks` | HandleListBenchmarks | List/search benchmarks (paginated) |
 | GET | `/api/benchmarks/:id` | HandleGetBenchmark | Get benchmark metadata |
 | GET | `/api/benchmarks/:id/data` | HandleGetBenchmarkData | Serve pre-calculated benchmark statistics as JSON |
@@ -167,8 +171,6 @@ Audit log location: `{parentOfDataDir}/logs/audit.json` (sibling of data dir). R
 ### Authenticated (Session or Bearer Token)
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
-| POST | `/auth/admin/login` | HandleAdminLogin | Admin username/password login |
-| POST | `/auth/logout` | HandleLogout | End session |
 | POST | `/api/benchmarks` | HandleCreateBenchmark | Upload benchmark (multipart form) |
 | PUT | `/api/benchmarks/:id` | HandleUpdateBenchmark | Update title/description/labels |
 | DELETE | `/api/benchmarks/:id` | HandleDeleteBenchmark | Delete benchmark and data files |
@@ -230,8 +232,8 @@ The MCP server does not support benchmark data upload, download, or deletion ope
 ## Benchmark Data Processing
 
 ### Supported Formats
-1. **MangoHud CSV** – Header starts with `os,cpu,gpu,ram,kernel,driver,cpuscheduler`
-2. **Afterburner HML** – Header starts with `Hardware monitoring log v`
+1. **MangoHud CSV** – First line is exactly `os,cpu,gpu,ram,kernel,driver,cpuscheduler`
+2. **Afterburner HML** – First line contains `, Hardware monitoring log v` (prefixed by a sequence number and timestamp)
 
 ### Metrics Extracted (13)
 FPS, Frametime, CPU Load, GPU Load, CPU Temp, CPU Power, GPU Temp, GPU Core Clock, GPU Mem Clock, GPU VRAM Used, GPU Power, RAM Used, Swap Used
@@ -292,7 +294,7 @@ This project has comprehensive testing at every level. **Everything must be test
 - **Pattern:** Table-driven tests with nested `t.Run()` subtests
 - **Database:** Isolated temp SQLite databases via `setupTestDB()` + `t.TempDir()`
 - **HTTP handlers:** `gin.TestMode` + `httptest.NewRecorder` with mock sessions
-- **Test helpers:** `internal/app/test_helpers.go` (setupTestDB, cleanupTestDB, createTestUser, createMultipartFileHeaders, setupTestRouter)
+- **Test helpers:** `internal/app/test_helpers.go` provides `setupTestDB` and `cleanupTestDB`; `createTestUser` is defined in `benchmarks_test.go`; `createMultipartFileHeaders` is in `testdata_parsing_test.go`; `setupTestRouter` is in `api_tokens_test.go`
 - **Run:** `go test -v -race ./...`
 - **Coverage:** `go test -v -race -coverprofile=coverage.out ./...`
 
@@ -353,7 +355,7 @@ Test files and what they cover:
 
 ## CI/CD Pipeline
 
-### test.yml (runs on PRs to main and pushes to main)
+### test.yml (runs on PRs to main, pushes to main, and manual `workflow_dispatch`)
 
 6 parallel/sequential jobs:
 
@@ -544,7 +546,7 @@ Every pull request **must** satisfy ALL of the following requirements:
 ### Multi-Stage Build
 1. **web-builder** (Node 25-alpine): `npm ci && npm run build` → produces `web/dist/`
 2. **builder** (Go 1.26-alpine): Copies `web/dist/`, generates embed file, `go build` with ldflags version
-3. **runtime** (Alpine 3.23): Copies binary + CA certs, exposes port 5000, data volume at `/data`
+3. **runtime** (Alpine 3.23): Copies binary + CA certs, exposes port 5000. No `VOLUME` declaration in Dockerfile; the `/data` volume is mounted via `docker-compose.yml`.
 
 ### Local Development
 ```bash
