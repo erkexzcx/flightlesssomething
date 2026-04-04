@@ -500,8 +500,13 @@ func storeBenchmarkMetadata(benchmarkData []*BenchmarkData, benchmarkID uint) er
 	}()
 
 	// Use gob encoding for metadata (no need for compression, it's tiny)
-	gobEncoder := gob.NewEncoder(metaFile)
-	return gobEncoder.Encode(metadata)
+	// Wrap in buffered writer to avoid many small syscalls from gob's framing
+	bufferedWriter := bufio.NewWriter(metaFile)
+	gobEncoder := gob.NewEncoder(bufferedWriter)
+	if err := gobEncoder.Encode(metadata); err != nil {
+		return err
+	}
+	return bufferedWriter.Flush()
 }
 
 // RetrieveBenchmarkData retrieves benchmark data from disk

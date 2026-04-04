@@ -105,7 +105,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			}
 		}()
 
-		body, err := io.ReadAll(res.Body)
+		body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20)) // limit Discord response to 1 MB
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read response"})
 			return

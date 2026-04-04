@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,12 @@ func Start(config *Config, version string) error {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
+	// Do not trust any forwarded IP headers to prevent rate limit bypass via X-Forwarded-For spoofing.
+	// If this app is behind a trusted reverse proxy, set this to the proxy's IP instead.
+	if err := r.SetTrustedProxies(nil); err != nil {
+		return fmt.Errorf("failed to configure trusted proxies: %w", err)
+	}
+
 	// Disable trailing slash redirect to prevent issues with SPA
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
@@ -88,8 +95,16 @@ func Start(config *Config, version string) error {
 	r.GET("/api/benchmarks/:id/runs/:runIndex", HandleGetBenchmarkRun(db))
 	r.GET("/api/benchmarks/:id/download", HandleDownloadBenchmarkData(db))
 
-	// Debug calc endpoint (public, for verifying backend calculations)
-	r.POST("/api/debugcalc", HandleDebugCalc())
+	// Debug calc endpoint (public, for verifying backend calculations) — rate limited per IP
+	debugCalcHandler := HandleDebugCalc()
+	r.POST("/api/debugcalc", func(c *gin.Context) {
+		if !GetDebugCalcLimiter().Allow(c.ClientIP()) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			c.Abort()
+			return
+		}
+		debugCalcHandler(c)
+	})
 
 	// Protected benchmark routes
 	authorized := r.Group("/api")
@@ -118,7 +133,7 @@ func Start(config *Config, version string) error {
 	mcp := r.Group("/mcp")
 	mcp.Use(MCPCors())
 	mcp.OPTIONS("", func(c *gin.Context) {}) // Required for gin to route OPTIONS to the middleware
-	mcp.POST("", HandleMCP(db, version))
+	mcp.POST("", HandleMCP(db, version, extractPublicBaseURL(config.DiscordRedirectURL)))
 	mcp.GET("", HandleMCPGet)
 	mcp.DELETE("", HandleMCPDelete)
 
@@ -130,4 +145,13 @@ func Start(config *Config, version string) error {
 	log.Printf("Benchmarks directory: %s\n", filepath.Join(config.DataDir, "benchmarks"))
 
 	return r.Run(config.Bind)
+}
+
+// extractPublicBaseURL derives the public base URL (scheme + host) from the Discord redirect URL.
+func extractPublicBaseURL(discordRedirectURL string) string {
+	u, err := url.Parse(discordRedirectURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }

@@ -16,6 +16,9 @@ func HandleListUsers(db *DBInstance) gin.HandlerFunc {
 		if err != nil || page < 1 {
 			page = 1
 		}
+		if page > 10000 {
+			page = 10000
+		}
 		perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "10"))
 		if err != nil || perPage < 1 || perPage > 100 {
 			perPage = 10

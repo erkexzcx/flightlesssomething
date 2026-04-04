@@ -219,6 +219,14 @@ export const api = {
       })
     },
   },
+
+  // Debug calc endpoint
+  async debugcalc(fps, frameTime) {
+    return fetchJSON('/api/debugcalc', {
+      method: 'POST',
+      body: JSON.stringify({ fps, frameTime }),
+    })
+  },
 }
 
 export { APIError }

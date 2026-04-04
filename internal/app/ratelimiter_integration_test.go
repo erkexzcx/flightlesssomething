@@ -301,3 +301,57 @@ func TestRateLimitExpiration(t *testing.T) {
 		t.Error("Should be allowed after window expired")
 	}
 }
+
+func TestDebugCalcRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Initialize rate limiters
+	InitRateLimiters()
+
+	// Reset state from any previous test runs
+	GetDebugCalcLimiter().Reset("192.0.2.1")
+
+	// Create router with rate-limited debugcalc handler
+	r := gin.New()
+	debugCalcHandler := HandleDebugCalc()
+	r.POST("/api/debugcalc", func(c *gin.Context) {
+		if !GetDebugCalcLimiter().Allow(c.ClientIP()) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			c.Abort()
+			return
+		}
+		debugCalcHandler(c)
+	})
+
+	validBody := `{"fps":[60.0,61.0,59.0]}`
+
+	// First 30 requests should succeed
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/debugcalc", strings.NewReader(validBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Request %d: expected status %d, got %d", i+1, http.StatusOK, w.Code)
+		}
+	}
+
+	// 31st request should be rate limited
+	req := httptest.NewRequest(http.MethodPost, "/api/debugcalc", strings.NewReader(validBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("31st request: expected status %d, got %d", http.StatusTooManyRequests, w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse rate limit response: %v", err)
+	}
+	if _, ok := response["error"]; !ok {
+		t.Error("Rate limit response should contain error field")
+	}
+}

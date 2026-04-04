@@ -325,9 +325,6 @@ import { formatRelativeDate } from '../utils/dateFormatter'
 marked.setOptions({
   breaks: true,
   gfm: true,
-  // Disable HTML for security
-  mangle: false,
-  headerIds: false,
 })
 
 // Use a custom renderer extension to add security attributes to links

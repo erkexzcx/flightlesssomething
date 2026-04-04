@@ -152,6 +152,7 @@ var (
 	// Global rate limiters
 	benchmarkUploadLimiter *RateLimiter
 	adminLoginLimiter      *RateLimiter
+	debugCalcLimiter       *RateLimiter
 	cleanupOnce            sync.Once
 )
 
@@ -162,6 +163,9 @@ func InitRateLimiters() {
 
 	// 3 failed admin login attempts locks for 10 minutes (globally)
 	adminLoginLimiter = NewRateLimiter(3, 10*time.Minute)
+
+	// 30 debug calc requests per minute per IP
+	debugCalcLimiter = NewRateLimiter(30, time.Minute)
 
 	// Start cleanup goroutine (only once)
 	// Note: This goroutine runs for the lifetime of the application.
@@ -177,6 +181,9 @@ func InitRateLimiters() {
 				if adminLoginLimiter != nil {
 					adminLoginLimiter.CleanupExpired()
 				}
+				if debugCalcLimiter != nil {
+					debugCalcLimiter.CleanupExpired()
+				}
 			}
 		}()
 	})
@@ -190,4 +197,9 @@ func GetBenchmarkUploadLimiter() *RateLimiter {
 // GetAdminLoginLimiter returns the global admin login limiter
 func GetAdminLoginLimiter() *RateLimiter {
 	return adminLoginLimiter
+}
+
+// GetDebugCalcLimiter returns the global debug calc rate limiter
+func GetDebugCalcLimiter() *RateLimiter {
+	return debugCalcLimiter
 }

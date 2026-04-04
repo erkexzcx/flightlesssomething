@@ -25,6 +25,13 @@ func setupSPA(r *gin.Engine) {
 
 	log.Printf("Web UI loaded successfully")
 
+	// Read index.html once at startup and cache it; avoids a heap allocation per request.
+	indexHTML, err := fs.ReadFile(distFS, "index.html")
+	if err != nil {
+		log.Printf("Error reading index.html: %v", err)
+		return
+	}
+
 	// Serve static assets (JS, CSS, images, etc.)
 	r.GET("/assets/*filepath", func(c *gin.Context) {
 		c.FileFromFS(c.Request.URL.Path, http.FS(distFS))
@@ -40,13 +47,7 @@ func setupSPA(r *gin.Engine) {
 
 	// Serve index.html for the root path
 	r.GET("/", func(c *gin.Context) {
-		data, err := fs.ReadFile(distFS, "index.html")
-		if err != nil {
-			log.Printf("Error reading index.html: %v", err)
-			c.String(http.StatusInternalServerError, "Error loading page")
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 
 	// For all other routes (SPA routes), serve index.html
@@ -60,12 +61,6 @@ func setupSPA(r *gin.Engine) {
 		}
 
 		// Serve index.html for all other routes (Vue Router will handle them)
-		data, err := fs.ReadFile(distFS, "index.html")
-		if err != nil {
-			log.Printf("Error reading index.html: %v", err)
-			c.String(http.StatusInternalServerError, "Error loading page")
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 }

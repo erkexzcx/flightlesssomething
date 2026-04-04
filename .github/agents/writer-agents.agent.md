@@ -17,6 +17,7 @@ You are the agent definitions writer for FlightlessSomething. You maintain the c
 
 Current agents (as of last update):
 - `maintainer.agent.md` — Repo Maintainer (user-invocable, orchestrates all others)
+- `bug-purgatory.agent.md` — Bug Purgatory (user-invocable, autonomous hunt-and-fix loop)
 - `pentester.agent.md` — Pentester (adversarial code analysis)
 - `consistency.agent.md` — Consistency (convention and migration checker, full-stack)
 - `sec-go.agent.md` — Go Sec

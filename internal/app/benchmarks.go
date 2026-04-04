@@ -18,6 +18,9 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		if err != nil || page < 1 {
 			page = 1
 		}
+		if page > 10000 {
+			page = 10000
+		}
 		perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "10"))
 		if err != nil || perPage < 1 || perPage > 100 {
 			perPage = 10
@@ -53,8 +56,18 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 				}
 			}
 
+			// Limit search query length and keyword count to prevent SQL complexity DoS
+			const maxSearchLength = 200
+			const maxKeywords = 10
+			if len(search) > maxSearchLength {
+				search = search[:maxSearchLength]
+			}
+
 			// Split search query into keywords
 			keywords := strings.Fields(search)
+			if len(keywords) > maxKeywords {
+				keywords = keywords[:maxKeywords]
+			}
 
 			// For each keyword, search in enabled fields
 			// All keywords must match (AND logic), but each keyword can match any enabled field (OR logic)
@@ -145,11 +158,16 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		// Populate run count and labels for each benchmark concurrently
 		// Thread safety: Each goroutine writes to a different index in the slice.
 		// In Go, writing to different indices of a slice is safe without synchronization.
+		// A semaphore limits concurrent file opens to avoid exhausting file descriptors.
+		const maxConcurrentMetaReads = 20
+		sem := make(chan struct{}, maxConcurrentMetaReads)
 		var wg sync.WaitGroup
 		for i := range benchmarks {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
 				count, labels, err := GetBenchmarkRunCount(benchmarks[idx].ID)
 				if err == nil {
 					benchmarks[idx].RunCount = count
@@ -273,6 +291,11 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no files uploaded"})
 			return
 		}
+		defer func() {
+			if removeErr := form.RemoveAll(); removeErr != nil {
+				fmt.Printf("Warning: failed to remove multipart temp files: %v\n", removeErr)
+			}
+		}()
 
 		files := form.File["files"]
 		if len(files) == 0 {
@@ -580,19 +603,6 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
-		// Check if user is banned (admins can still delete)
-		if !adminFlag {
-			var user User
-			if err := db.DB.First(&user, uid).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-				return
-			}
-			if user.IsBanned {
-				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
-				return
-			}
-		}
-
 		// Parse benchmark ID
 		benchmarkID, err := strconv.ParseUint(id, 10, 32)
 		if err != nil {
@@ -739,6 +749,11 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no files uploaded"})
 			return
 		}
+		defer func() {
+			if removeErr := form.RemoveAll(); removeErr != nil {
+				fmt.Printf("Warning: failed to remove multipart temp files: %v\n", removeErr)
+			}
+		}()
 
 		files := form.File["files"]
 		if len(files) == 0 {

@@ -1,7 +1,7 @@
 package app
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -470,14 +470,8 @@ func readBenchmarkDataForMigration(filePath string) ([]*BenchmarkData, error) {
 	}
 	defer zstdDecoder.Close()
 
-	var buffer bytes.Buffer
-	_, err = buffer.ReadFrom(zstdDecoder)
-	if err != nil {
-		return nil, err
-	}
-
 	var benchmarkData []*BenchmarkData
-	gobDecoder := gob.NewDecoder(&buffer)
+	gobDecoder := gob.NewDecoder(zstdDecoder)
 	err = gobDecoder.Decode(&benchmarkData)
 	return benchmarkData, err
 }
@@ -505,8 +499,12 @@ func createMetadataFileForMigration(dataDir string, benchmarkID uint, benchmarkD
 		}
 	}()
 
-	gobEncoder := gob.NewEncoder(metaFile)
-	return gobEncoder.Encode(metadata)
+	bufferedWriter := bufio.NewWriter(metaFile)
+	gobEncoder := gob.NewEncoder(bufferedWriter)
+	if err := gobEncoder.Encode(metadata); err != nil {
+		return err
+	}
+	return bufferedWriter.Flush()
 }
 
 // migrateFromV1ToV2 migrates from schema version 1 to version 2

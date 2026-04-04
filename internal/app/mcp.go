@@ -162,12 +162,13 @@ type BenchmarkDataSummary struct {
 type mcpServer struct {
 	db            *DBInstance
 	version       string
+	publicBaseURL string
 	tools         []mcpTool
 	toolAccessMap map[string]string
 }
 
-func newMCPServer(db *DBInstance, version string) *mcpServer {
-	s := &mcpServer{db: db, version: version}
+func newMCPServer(db *DBInstance, version, publicBaseURL string) *mcpServer {
+	s := &mcpServer{db: db, version: version, publicBaseURL: publicBaseURL}
 	s.tools = s.defineTools()
 	s.toolAccessMap = make(map[string]string, len(s.tools))
 	for _, t := range s.tools {
@@ -375,8 +376,8 @@ func (s *mcpServer) defineTools() []mcpTool {
 }
 
 // HandleMCP handles MCP JSON-RPC requests via POST
-func HandleMCP(db *DBInstance, version string) gin.HandlerFunc {
-	server := newMCPServer(db, version)
+func HandleMCP(db *DBInstance, version, publicBaseURL string) gin.HandlerFunc {
+	server := newMCPServer(db, version, publicBaseURL)
 	return func(c *gin.Context) {
 		// Validate Content-Type
 		contentType := c.GetHeader("Content-Type")
@@ -473,20 +474,26 @@ func HandleMCPDelete(c *gin.Context) {
 }
 
 func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	// Build base URL from request; only trust "http" or "https" from proxy header
-	// to prevent Host header injection via custom protocol schemes.
-	scheme := c.Request.Header.Get("X-Forwarded-Proto")
-	if scheme != "http" && scheme != "https" {
-		scheme = ""
-	}
-	if scheme == "" {
-		if c.Request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
+	// Use the configured public base URL when available to prevent Host header injection.
+	// Fall back to deriving it from the request only when no trusted URL is configured (e.g. dev/test).
+	var baseURL string
+	if s.publicBaseURL != "" {
+		baseURL = s.publicBaseURL
+	} else {
+		// Only trust "http" or "https" from proxy header to prevent custom-scheme injection.
+		scheme := c.Request.Header.Get("X-Forwarded-Proto")
+		if scheme != "http" && scheme != "https" {
+			scheme = ""
 		}
+		if scheme == "" {
+			if c.Request.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
+		}
+		baseURL = scheme + "://" + c.Request.Host
 	}
-	baseURL := scheme + "://" + c.Request.Host
 
 	// Build instructions with context
 	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. This MCP server does not support benchmark data upload, download, or deletion operations — these involve large CSV file transfers which are not suitable for the MCP protocol. Use the web UI at ` + baseURL + ` for uploading, downloading, or deleting benchmarks. API tokens can be managed via the web UI at ` + baseURL + `/api-tokens. All tools support an optional "jq" parameter for server-side filtering and transformation of results, reducing response size.
@@ -503,12 +510,17 @@ When writing jq filters: if the response shape is uncertain, call the tool once 
 Server base URL: ` + baseURL
 
 	// Add authenticated user context or anonymous mode notice
-	userID, _, isAdmin, authenticated := s.authenticateFromHeader(c)
-	if authenticated {
-		var user User
-		if err := s.db.DB.First(&user, userID).Error; err == nil {
-			instructions += fmt.Sprintf("\n\nAuthenticated user context:\n- User ID: %d\n- Username: %s\n- Admin: %v", user.ID, user.Username, isAdmin)
-		}
+	_, _, isAdmin, authenticated, authUser := s.authenticateFromHeader(c)
+	if authenticated && authUser != nil {
+		// Sanitize the username before embedding in instructions to prevent prompt injection
+		// via maliciously crafted Discord display names containing newlines or backticks.
+		safeName := strings.Map(func(r rune) rune {
+			if r == '\n' || r == '\r' || r == '`' {
+				return ' '
+			}
+			return r
+		}, authUser.Username)
+		instructions += fmt.Sprintf("\n\nAuthenticated user context:\n- User ID: %d\n- Username: %s\n- Admin: %v", authUser.ID, safeName, isAdmin)
 	} else {
 		instructions += "\n\nAnonymous mode: No API token provided. Only read-only operations (browsing and viewing benchmarks) are available. To access write operations, provide an API token via the Authorization header."
 	}
@@ -531,7 +543,7 @@ Server base URL: ` + baseURL
 }
 
 func (s *mcpServer) handleToolsList(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	_, _, isAdmin, authenticated := s.authenticateFromHeader(c)
+	_, _, isAdmin, authenticated, _ := s.authenticateFromHeader(c)
 
 	filtered := make([]mcpTool, 0, len(s.tools))
 	for _, tool := range s.tools {
@@ -566,7 +578,7 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 	}
 
 	// Determine authentication state
-	userID, username, isAdmin, authenticated := s.authenticateFromHeader(c)
+	userID, username, isAdmin, authenticated, _ := s.authenticateFromHeader(c)
 
 	// Check access level from tool definition (defense-in-depth: enforced even if tools/list was bypassed)
 	toolLevel := s.getToolAccessLevel(params.Name)
@@ -633,28 +645,28 @@ func (s *mcpServer) handleToolsCall(c *gin.Context, req *jsonrpcRequest) jsonrpc
 }
 
 // authenticateFromHeader checks the Authorization header for an API token
-// Returns (userID, username, isAdmin, authenticated)
-func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, bool) {
+// Returns (userID, username, isAdmin, authenticated, user)
+func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, bool, *User) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	const prefix = "Bearer "
 	if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	token := authHeader[len(prefix):]
 
 	var apiToken APIToken
 	if err := s.db.DB.Preload("User").Where("token = ?", token).First(&apiToken).Error; err != nil {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	// Check if user is banned
 	if apiToken.User.IsBanned {
-		return 0, "", false, false
+		return 0, "", false, false, nil
 	}
 
 	// Update last used timestamp
@@ -662,7 +674,7 @@ func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, 
 	s.db.DB.Model(&APIToken{}).Where("id = ?", apiToken.ID).Update("last_used_at", now)
 	s.db.DB.Model(&User{}).Where("id = ?", apiToken.UserID).Update("last_api_activity_at", now)
 
-	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true
+	return apiToken.UserID, apiToken.User.Username, apiToken.User.IsAdmin, true, &apiToken.User
 }
 
 func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
@@ -718,6 +730,7 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 
 	iter := query.RunWithContext(ctx, input)
 	var outputs []interface{}
+	const maxJQOutputItems = 10000
 	for {
 		v, ok := iter.Next()
 		if !ok {
@@ -727,6 +740,9 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 			return "", fmt.Errorf("jq evaluation error: %w", jqErr)
 		}
 		outputs = append(outputs, v)
+		if len(outputs) >= maxJQOutputItems {
+			return "", fmt.Errorf("jq: output exceeds maximum of %d items", maxJQOutputItems)
+		}
 	}
 
 	// If single result, return it directly; otherwise return as array
@@ -768,6 +784,9 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
+	if params.Page > 10000 {
+		params.Page = 10000
+	}
 	if params.PerPage < 1 || params.PerPage > 100 {
 		params.PerPage = 10
 	}
@@ -788,7 +807,16 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	}
 
 	if params.Search != "" {
+		// Limit search query length and keyword count to prevent SQL complexity DoS
+		const maxSearchLength = 200
+		const maxKeywords = 10
+		if len(params.Search) > maxSearchLength {
+			params.Search = params.Search[:maxSearchLength]
+		}
 		keywords := strings.Fields(params.Search)
+		if len(keywords) > maxKeywords {
+			keywords = keywords[:maxKeywords]
+		}
 		for _, keyword := range keywords {
 			keyword = strings.TrimSpace(keyword)
 			if keyword != "" {
@@ -827,11 +855,15 @@ func (s *mcpServer) toolListBenchmarks(args json.RawMessage) (string, error) {
 	}
 
 	// Populate run count and labels
+	const maxConcurrentMetaReads = 20
+	sem := make(chan struct{}, maxConcurrentMetaReads)
 	var wg sync.WaitGroup
 	for i := range benchmarks {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			count, labels, err := GetBenchmarkRunCount(benchmarks[idx].ID)
 			if err == nil {
 				benchmarks[idx].RunCount = count
@@ -1107,8 +1139,14 @@ func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
+	if params.Page > 10000 {
+		params.Page = 10000
+	}
 	if params.PerPage < 1 || params.PerPage > 100 {
 		params.PerPage = 10
+	}
+	if len(params.Search) > 200 {
+		params.Search = params.Search[:200]
 	}
 
 	query := s.db.DB.Model(&User{})
