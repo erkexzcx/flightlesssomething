@@ -39,29 +39,37 @@
               <div class="flex-grow-1">
                 <h5 class="card-title mb-2">{{ token.name }}</h5>
                 
-                <div class="input-group mb-2">
-                  <input 
-                    :type="visibleTokens[token.id] ? 'text' : 'password'" 
-                    class="form-control font-monospace" 
-                    :value="token.token" 
-                    readonly
-                  >
-                  <button 
-                    class="btn btn-outline-secondary" 
-                    type="button" 
-                    @click="toggleTokenVisibility(token.id)"
-                  >
-                    <i class="fa-solid" :class="visibleTokens[token.id] ? 'fa-eye-slash' : 'fa-eye'"></i>
-                  </button>
-                  <button 
-                    class="btn" 
-                    :class="copiedTokens[token.id] ? 'btn-success' : 'btn-outline-secondary'"
-                    type="button" 
-                    @click="copyToken(token.token, token.id)"
-                  >
-                    <i class="fa-solid" :class="copiedTokens[token.id] ? 'fa-check' : 'fa-copy'"></i>
-                  </button>
+                <div v-if="token.token" class="mb-2">
+                  <div class="alert alert-warning py-1 px-2 mb-2 small">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Copy this token now — it will not be shown again.
+                  </div>
+                  <div class="input-group">
+                    <input 
+                      :type="visibleTokens[token.id] ? 'text' : 'password'" 
+                      class="form-control font-monospace" 
+                      :value="token.token" 
+                      readonly
+                    >
+                    <button 
+                      class="btn btn-outline-secondary" 
+                      type="button" 
+                      @click="toggleTokenVisibility(token.id)"
+                    >
+                      <i class="fa-solid" :class="visibleTokens[token.id] ? 'fa-eye-slash' : 'fa-eye'"></i>
+                    </button>
+                    <button 
+                      class="btn" 
+                      :class="copiedTokens[token.id] ? 'btn-success' : 'btn-outline-secondary'"
+                      type="button" 
+                      @click="copyToken(token.token, token.id)"
+                    >
+                      <i class="fa-solid" :class="copiedTokens[token.id] ? 'fa-check' : 'fa-copy'"></i>
+                    </button>
+                  </div>
                 </div>
+                <p v-else class="text-muted small mb-2">
+                  <i class="fa-solid fa-lock"></i> Token value is not shown — it was only visible once at creation.
+                </p>
 
                 <div class="text-muted small">
                   <div><strong>Created:</strong> {{ formatDate(token.created_at) }}</div>
