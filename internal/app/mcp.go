@@ -174,7 +174,7 @@ func newMCPServer(db *DBInstance, version string) *mcpServer {
 // It is added to every tool's InputSchema.
 var jqProperty = map[string]interface{}{
 	"type":        "string",
-	"description": "Optional jq expression to filter/transform the JSON result server-side. Reduces response size and avoids unnecessary context usage. Example: '.benchmarks[] | {id, title}' or '.runs[0].metrics.fps | {avg, p01, p99}'",
+	"description": "Optional jq expression to filter/transform the JSON result server-side. Reduces response size. Response shapes vary by tool — check the tool description before writing filters. List tools return envelope objects (e.g. .benchmarks, .users), not bare arrays.",
 }
 
 func (s *mcpServer) defineTools() []mcpTool {
@@ -193,7 +193,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "list_benchmarks",
 			Title:       "List Benchmarks",
-			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description (markdown), user, run count, and timestamps. After listing, use get_benchmark_data to retrieve statistics for analysis.",
+			Description: "Search and list gaming benchmarks with pagination, search, and sorting. Returns benchmark metadata including title, description (markdown), user, run count, and timestamps. After listing, use get_benchmark_data to retrieve statistics for analysis. Response: {\"benchmarks\": [...], \"total\": N, \"page\": N, \"per_page\": N, \"total_pages\": N}. jq example: \".benchmarks | max_by(.run_count)\".",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -214,7 +214,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark",
 			Title:       "Get Benchmark Details",
-			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Note: get_benchmark_data also includes this metadata alongside statistics, so prefer get_benchmark_data when you need both metadata and stats.",
+			Description: "Get detailed information about a specific benchmark including title, description (markdown formatted), user, run count, run labels, and timestamps. Note: get_benchmark_data also includes this metadata alongside statistics, so prefer get_benchmark_data when you need both metadata and stats. Response: flat benchmark object with id, title, description, user (nested), run_count, run_labels, created_at, updated_at.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -230,7 +230,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark_data",
 			Title:       "Get Benchmark Statistics",
-			Description: "Get benchmark metadata and computed statistics for all runs in a single call. Returns the benchmark info (title, description, user, timestamps) alongside per-metric stats: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series. This is the primary tool for benchmark analysis — no need to call get_benchmark separately.",
+			Description: "Get benchmark metadata and computed statistics for all runs in a single call. Returns the benchmark info (title, description, user, timestamps) alongside per-metric stats: min, max, avg, median, p01, p05, p10, p25, p75, p90, p95, p97, p99, iqr, std_dev, variance, count. FPS stats are correctly derived from frametime data. Raw data points are omitted by default; set max_points > 0 to include downsampled time series. This is the primary tool for benchmark analysis — no need to call get_benchmark separately. Response: {\"benchmark\": {...}, \"runs\": [{\"label\": ..., \"metrics\": {\"fps\": {\"min\", \"max\", \"avg\", ...}, \"frametime\": {...}, ...}}]}. jq example: \".runs[] | {label, fps_avg: .metrics.fps.avg, fps_1pct: .metrics.fps.p01}\".",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id"},
@@ -247,7 +247,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "get_benchmark_run",
 			Title:       "Get Run Statistics",
-			Description: "Get computed statistics for a specific run within a benchmark. Same stats as get_benchmark_data but for a single run. Raw data points omitted by default.",
+			Description: "Get computed statistics for a specific run within a benchmark. Same stats as get_benchmark_data but for a single run. Raw data points omitted by default. Response: flat run object with label, spec_os, spec_cpu, spec_gpu, spec_ram, total_data_points, metrics: {fps, frametime, cpu_load, gpu_load, cpu_temp, gpu_temp, ...}.",
 			InputSchema: map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id", "run_index"},
@@ -284,7 +284,7 @@ func (s *mcpServer) defineTools() []mcpTool {
 		{
 			Name:        "list_users",
 			Title:       "List Users",
-			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges.",
+			Description: "List all users with pagination and optional search. Admin only. Requires authentication via API token with admin privileges. Response: {\"users\": [...], \"total\": N, \"page\": N, \"per_page\": N, \"total_pages\": N}.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -480,6 +480,15 @@ func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrp
 
 	// Build instructions with context
 	instructions := `FlightlessSomething is a gaming benchmark storage service. You can browse, search, and analyze benchmarks using the provided tools. Benchmark descriptions are markdown formatted. When asked about a benchmark, use get_benchmark_data to retrieve its metadata and performance statistics in a single call — do not call get_benchmark separately unless you only need metadata without statistics. The list_benchmarks tool supports filtering by username directly, so you don't need to resolve user IDs first. This MCP server does not support benchmark data upload, download, or deletion operations — these involve large CSV file transfers which are not suitable for the MCP protocol. Use the web UI at ` + baseURL + ` for uploading, downloading, or deleting benchmarks. API tokens can be managed via the web UI at ` + baseURL + `/api-tokens. All tools support an optional "jq" parameter for server-side filtering and transformation of results, reducing response size.
+
+Response shapes (important — list tools return envelopes, not bare arrays):
+- list_benchmarks: {"benchmarks": [...], "total": N, "page": N, "per_page": N, "total_pages": N}
+- list_users: {"users": [...], "total": N, "page": N, "per_page": N, "total_pages": N}
+- get_benchmark_data: {"benchmark": {...}, "runs": [{label, spec_*, metrics: {fps, frametime, cpu_load, gpu_load, ...}}]}
+- get_benchmark, update_benchmark: flat benchmark object (id, title, description, user, run_count, run_labels, created_at, updated_at)
+- get_benchmark_run, ban_user, toggle_user_admin: flat object
+
+When writing jq filters: if the response shape is uncertain, call the tool once without jq first to inspect the structure, then apply targeted filters.
 
 Server base URL: ` + baseURL
 

@@ -18,20 +18,20 @@
       <div class="benchmark-header mb-3">
         <!-- Title and metadata -->
         <div class="benchmark-title-section">
-          <h2>{{ benchmark.Title }}</h2>
+          <h2>{{ benchmark.title }}</h2>
           <p class="text-muted">
             By 
             <router-link 
-              v-if="benchmark.User"
-              :to="{ path: '/benchmarks', query: { user_id: benchmark.User.ID } }"
+              v-if="benchmark.user"
+              :to="{ path: '/benchmarks', query: { user_id: benchmark.user.id } }"
               class="username-link"
             >
-              <strong>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></strong>
+              <strong>{{ benchmark.user.username }}<span v-if="benchmark.user.is_admin" class="admin-asterisk" title="Admin">*</span></strong>
             </router-link>
             <strong v-else>Unknown</strong> •
-            Created {{ formatRelativeDate(benchmark.CreatedAt) }}
-            <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt">
-              • Updated {{ formatRelativeDate(benchmark.UpdatedAt) }}
+            Created {{ formatRelativeDate(benchmark.created_at) }}
+            <span v-if="benchmark.updated_at !== benchmark.created_at">
+              • Updated {{ formatRelativeDate(benchmark.updated_at) }}
             </span>
           </p>
         </div>
@@ -215,7 +215,7 @@
       </div>
 
       <!-- Description -->
-      <div v-if="!editMode && benchmark.Description" class="card mb-3">
+      <div v-if="!editMode && benchmark.description" class="card mb-3">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h5 class="card-title mb-0">Description</h5>
@@ -385,13 +385,13 @@ let loadAbortController = null
 
 const isOwner = computed(() => {
   if (!authStore.isAuthenticated || !benchmark.value) return false
-  return benchmark.value.UserID === authStore.user?.user_id || authStore.isAdmin
+  return benchmark.value.user_id === authStore.user?.user_id || authStore.isAdmin
 })
 
 const renderedDescription = computed(() => {
-  if (!benchmark.value?.Description) return ''
+  if (!benchmark.value?.description) return ''
   // Parse markdown and sanitize HTML
-  const rawHtml = marked.parse(benchmark.value.Description)
+  const rawHtml = marked.parse(benchmark.value.description)
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr'],
     ALLOWED_ATTR: ['href', 'rel', 'target'],
@@ -400,12 +400,12 @@ const renderedDescription = computed(() => {
 
 // Smart collapsible check based on multiple criteria
 function checkIfDescriptionShouldCollapse() {
-  if (!benchmark.value?.Description) {
+  if (!benchmark.value?.description) {
     shouldShowCollapseButton.value = false
     return
   }
   
-  const description = benchmark.value.Description
+  const description = benchmark.value.description
   
   // Criterion 1: Character count > 300 (existing behavior)
   if (description.length > 300) {
@@ -432,7 +432,7 @@ function checkIfDescriptionShouldCollapse() {
 }
 
 // Watch for changes to benchmark description
-watch(() => benchmark.value?.Description, () => {
+watch(() => benchmark.value?.description, () => {
   checkIfDescriptionShouldCollapse()
 }, { immediate: true })
 
@@ -449,8 +449,8 @@ async function loadBenchmark() {
     benchmark.value = await api.benchmarks.get(id)
     
     // Initialize edit form values
-    editTitle.value = benchmark.value.Title
-    editDescription.value = benchmark.value.Description || ''
+    editTitle.value = benchmark.value.title
+    editDescription.value = benchmark.value.description || ''
     
     // Hide the main loading spinner before loading data to show progress bars
     loading.value = false
@@ -504,16 +504,16 @@ function toggleEditMode() {
     cancelEdit()
   } else {
     editMode.value = true
-    editTitle.value = benchmark.value.Title
-    editDescription.value = benchmark.value.Description || ''
+    editTitle.value = benchmark.value.title
+    editDescription.value = benchmark.value.description || ''
     editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   }
 }
 
 function cancelEdit() {
   editMode.value = false
-  editTitle.value = benchmark.value.Title
-  editDescription.value = benchmark.value.Description || ''
+  editTitle.value = benchmark.value.title
+  editDescription.value = benchmark.value.description || ''
   editLabels.value = benchmarkData.value ? benchmarkData.value.map(d => d.label || '') : []
   selectedFiles.value = []
   if (fileInput.value) {
@@ -558,7 +558,7 @@ async function handleDeleteRun() {
     showDeleteRunModal.value = false
     
     const deletedIndex = runToDelete.value
-    await api.benchmarks.deleteRun(benchmark.value.ID, deletedIndex)
+    await api.benchmarks.deleteRun(benchmark.value.id, deletedIndex)
     
     // Remove the deleted run locally instead of reloading all data
     if (benchmarkData.value) {
@@ -567,7 +567,7 @@ async function handleDeleteRun() {
     editLabels.value = editLabels.value.filter((_, i) => i !== deletedIndex)
     
     // Update metadata
-    benchmark.value = await api.benchmarks.get(benchmark.value.ID)
+    benchmark.value = await api.benchmarks.get(benchmark.value.id)
     totalRuns.value = benchmark.value.run_count || 0
     
     // Reset state
@@ -609,11 +609,11 @@ async function handleUpdate() {
     let needsDataReload = false
     
     // Update benchmark metadata (title, description, labels)
-    const updated = await api.benchmarks.update(benchmark.value.ID, data)
+    const updated = await api.benchmarks.update(benchmark.value.id, data)
     
     // Update local benchmark metadata
-    benchmark.value.Title = updated.Title
-    benchmark.value.Description = updated.Description
+    benchmark.value.title = updated.title
+    benchmark.value.description = updated.description
     
     // If labels were updated, we need to reload data
     if (data.labels) {
@@ -633,7 +633,7 @@ async function handleUpdate() {
         formData.append('files', renamedFile)
       })
       
-      await api.benchmarks.addRuns(benchmark.value.ID, formData)
+      await api.benchmarks.addRuns(benchmark.value.id, formData)
       
       // Clear selected files
       selectedFiles.value = []
@@ -648,10 +648,10 @@ async function handleUpdate() {
     // Reload benchmark data only once if needed
     if (needsDataReload) {
       // Reload benchmark metadata first to get updated run_count
-      benchmark.value = await api.benchmarks.get(benchmark.value.ID)
+      benchmark.value = await api.benchmarks.get(benchmark.value.id)
       
       // Then reload the benchmark data with the correct run_count
-      await loadBenchmarkData(benchmark.value.ID)
+      await loadBenchmarkData(benchmark.value.id)
     }
     
     editMode.value = false
@@ -671,7 +671,7 @@ async function handleDelete() {
     deleting.value = true
     showDeleteModal.value = false
     
-    await api.benchmarks.delete(benchmark.value.ID)
+    await api.benchmarks.delete(benchmark.value.id)
     
     // Navigate back to benchmarks list
     router.push('/benchmarks')
@@ -682,7 +682,7 @@ async function handleDelete() {
 }
 
 function downloadBenchmark() {
-  const url = `/api/benchmarks/${benchmark.value.ID}/download`
+  const url = `/api/benchmarks/${benchmark.value.id}/download`
   window.open(url, '_blank')
 }
 

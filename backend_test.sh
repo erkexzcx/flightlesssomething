@@ -161,13 +161,13 @@ RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X POST \
     -F "description=Comprehensive backend test" \
     -F "files=@testdata/mangohud/run1.csv" \
     "${BASE_URL}/api/benchmarks")
-BENCHMARK_ID=$(echo "$RESPONSE" | jq -r '.ID')
+BENCHMARK_ID=$(echo "$RESPONSE" | jq -r '.id')
 if [ "$BENCHMARK_ID" != "null" ] && [ -n "$BENCHMARK_ID" ]; then
     log_info "✓ Created benchmark with ID: $BENCHMARK_ID"
     # Verify all fields
-    TITLE=$(echo "$RESPONSE" | jq -r '.Title')
-    DESCRIPTION=$(echo "$RESPONSE" | jq -r '.Description')
-    USER_ID=$(echo "$RESPONSE" | jq -r '.UserID')
+    TITLE=$(echo "$RESPONSE" | jq -r '.title')
+    DESCRIPTION=$(echo "$RESPONSE" | jq -r '.description')
+    USER_ID=$(echo "$RESPONSE" | jq -r '.user_id')
     log_info "  Title: $TITLE"
     log_info "  Description: $DESCRIPTION"
     log_info "  UserID: $USER_ID"
@@ -179,11 +179,11 @@ fi
 # Test 6: Get benchmark
 log_info "Test 6: Get benchmark"
 RESPONSE=$(curl -s "${BASE_URL}/api/benchmarks/${BENCHMARK_ID}")
-FETCHED_TITLE=$(echo "$RESPONSE" | jq -r '.Title')
+FETCHED_TITLE=$(echo "$RESPONSE" | jq -r '.title')
 if [ "$FETCHED_TITLE" == "Backend Test Benchmark" ]; then
     log_info "✓ Get benchmark passed"
     # Verify user info is populated
-    USERNAME_IN_BENCH=$(echo "$RESPONSE" | jq -r '.User.Username')
+    USERNAME_IN_BENCH=$(echo "$RESPONSE" | jq -r '.user.username')
     log_info "  Benchmark owner: $USERNAME_IN_BENCH"
 else
     log_error "✗ Get benchmark failed: $RESPONSE"
@@ -221,7 +221,7 @@ RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X PUT \
     -H "Content-Type: application/json" \
     -d '{"title":"Updated Backend Benchmark","description":"Updated description"}' \
     "${BASE_URL}/api/benchmarks/${BENCHMARK_ID}")
-UPDATED_TITLE=$(echo "$RESPONSE" | jq -r '.Title')
+UPDATED_TITLE=$(echo "$RESPONSE" | jq -r '.title')
 if [ "$UPDATED_TITLE" == "Updated Backend Benchmark" ]; then
     log_info "✓ Update benchmark passed"
 else
@@ -236,8 +236,8 @@ BENCHMARK_COUNT=$(echo "$RESPONSE" | jq '.benchmarks | length')
 if [ "$BENCHMARK_COUNT" -eq 1 ]; then
     log_info "✓ List benchmarks with data"
     FIRST_BENCHMARK=$(echo "$RESPONSE" | jq '.benchmarks[0]')
-    B_TITLE=$(echo "$FIRST_BENCHMARK" | jq -r '.Title')
-    B_RUN_COUNT=$(echo "$FIRST_BENCHMARK" | jq -r '.RunCount')
+    B_TITLE=$(echo "$FIRST_BENCHMARK" | jq -r '.title')
+    B_RUN_COUNT=$(echo "$FIRST_BENCHMARK" | jq -r '.run_count')
     log_info "  Benchmark: $B_TITLE (Runs: $B_RUN_COUNT)"
 else
     log_error "✗ Expected 1 benchmark, got $BENCHMARK_COUNT"
@@ -282,7 +282,7 @@ RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X POST \
     -H "Content-Type: application/json" \
     -d '{"name":"Backend Test Token"}' \
     "${BASE_URL}/api/tokens")
-TOKEN=$(echo "$RESPONSE" | jq -r '.Token')
+TOKEN=$(echo "$RESPONSE" | jq -r '.token')
 if [ "$TOKEN" != "null" ] && [ -n "$TOKEN" ]; then
     log_info "✓ Create API token passed"
     log_info "  Token length: ${#TOKEN}"
@@ -315,7 +315,7 @@ fi
 
 # Test 15: Delete API token
 log_info "Test 15: Delete API token"
-TOKEN_ID=$(echo "$RESPONSE" | jq -r '.[0].ID')
+TOKEN_ID=$(echo "$RESPONSE" | jq -r '.[0].id')
 DELETE_RESPONSE=$(curl -s -b "$SESSION_COOKIE" -X DELETE \
     "${BASE_URL}/api/tokens/${TOKEN_ID}")
 if echo "$DELETE_RESPONSE" | jq -e '.message == "token deleted"' > /dev/null 2>&1; then

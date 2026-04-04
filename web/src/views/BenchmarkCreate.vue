@@ -248,7 +248,7 @@ async function handleSubmit() {
     const result = await api.benchmarks.create(formData)
     
     // Navigate to the created benchmark
-    router.push(`/benchmarks/${result.ID}`)
+    router.push(`/benchmarks/${result.id}`)
   } catch (err) {
     error.value = err.message || 'Failed to upload benchmark'
     uploading.value = false

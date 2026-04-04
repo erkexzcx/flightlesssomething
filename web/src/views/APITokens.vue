@@ -32,42 +32,42 @@
     </div>
 
     <div v-else class="row g-3">
-      <div v-for="token in tokens" :key="token.ID" class="col-12">
+      <div v-for="token in tokens" :key="token.id" class="col-12">
         <div class="card">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <div class="flex-grow-1">
-                <h5 class="card-title mb-2">{{ token.Name }}</h5>
+                <h5 class="card-title mb-2">{{ token.name }}</h5>
                 
                 <div class="input-group mb-2">
                   <input 
-                    :type="visibleTokens[token.ID] ? 'text' : 'password'" 
+                    :type="visibleTokens[token.id] ? 'text' : 'password'" 
                     class="form-control font-monospace" 
-                    :value="token.Token" 
+                    :value="token.token" 
                     readonly
                   >
                   <button 
                     class="btn btn-outline-secondary" 
                     type="button" 
-                    @click="toggleTokenVisibility(token.ID)"
+                    @click="toggleTokenVisibility(token.id)"
                   >
-                    <i class="fa-solid" :class="visibleTokens[token.ID] ? 'fa-eye-slash' : 'fa-eye'"></i>
+                    <i class="fa-solid" :class="visibleTokens[token.id] ? 'fa-eye-slash' : 'fa-eye'"></i>
                   </button>
                   <button 
                     class="btn" 
-                    :class="copiedTokens[token.ID] ? 'btn-success' : 'btn-outline-secondary'"
+                    :class="copiedTokens[token.id] ? 'btn-success' : 'btn-outline-secondary'"
                     type="button" 
-                    @click="copyToken(token.Token, token.ID)"
+                    @click="copyToken(token.token, token.id)"
                   >
-                    <i class="fa-solid" :class="copiedTokens[token.ID] ? 'fa-check' : 'fa-copy'"></i>
+                    <i class="fa-solid" :class="copiedTokens[token.id] ? 'fa-check' : 'fa-copy'"></i>
                   </button>
                 </div>
 
                 <div class="text-muted small">
-                  <div><strong>Created:</strong> {{ formatDate(token.CreatedAt) }}</div>
+                  <div><strong>Created:</strong> {{ formatDate(token.created_at) }}</div>
                   <div>
                     <strong>Last used:</strong> 
-                    {{ token.LastUsedAt ? formatDate(token.LastUsedAt) : 'Never' }}
+                    {{ token.last_used_at ? formatDate(token.last_used_at) : 'Never' }}
                   </div>
                 </div>
               </div>
@@ -199,7 +199,7 @@
             <button type="button" class="btn-close" @click="showDeleteModal = false"></button>
           </div>
           <div class="modal-body">
-            <p>Are you sure you want to delete the token <strong>{{ tokenToDelete?.Name }}</strong>?</p>
+            <p>Are you sure you want to delete the token <strong>{{ tokenToDelete?.name }}</strong>?</p>
             <p class="text-danger mb-0">This action cannot be undone. Any scripts using this token will stop working.</p>
           </div>
           <div class="modal-footer">
@@ -358,7 +358,7 @@ async function deleteToken() {
   deleting.value = true
   
   try {
-    await api.tokens.delete(tokenToDelete.value.ID)
+    await api.tokens.delete(tokenToDelete.value.id)
     await loadTokens()
     showDeleteModal.value = false
     tokenToDelete.value = null

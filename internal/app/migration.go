@@ -121,13 +121,13 @@ func setSchemaVersion(db *gorm.DB, version int) error {
 // migrateFromOldDatabaseFile migrates data from the old database.db file to the new flightlesssomething.db
 func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error {
 	log.Printf("Starting migration from %s...", oldDBPath)
-	
+
 	// Open the old database
 	oldDB, err := gorm.Open(sqlite.Open(oldDBPath), &gorm.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to open old database: %w", err)
 	}
-	
+
 	// Close old database connection when done
 	sqlDB, err := oldDB.DB()
 	if err != nil {
@@ -138,7 +138,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 			log.Printf("Warning: failed to close old database: %v", closeErr)
 		}
 	}()
-	
+
 	// Migrate users
 	log.Println("Migrating users from old database...")
 	var oldUsers []OldUser
@@ -157,7 +157,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 		log.Printf("  Migrating user: %s (ID: %d, Discord: %s)", oldUser.Username, oldUser.ID, oldUser.DiscordID)
 
 		newUser := User{
-			Model: gorm.Model{
+			BaseModel: BaseModel{
 				ID:        oldUser.ID, // Preserve original ID to maintain benchmark relationships
 				CreatedAt: oldUser.CreatedAt,
 				UpdatedAt: oldUser.UpdatedAt,
@@ -214,7 +214,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 		}
 
 		newBenchmark := Benchmark{
-			Model: gorm.Model{
+			BaseModel: BaseModel{
 				ID:        oldBenchmark.ID, // Preserve original ID to maintain data file associations
 				CreatedAt: oldBenchmark.CreatedAt,
 				UpdatedAt: oldBenchmark.UpdatedAt,
@@ -317,7 +317,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 		}
 
 		newUser := User{
-			Model: gorm.Model{
+			BaseModel: BaseModel{
 				ID:        oldUser.ID, // Preserve original ID to maintain benchmark relationships
 				CreatedAt: oldUser.CreatedAt,
 				UpdatedAt: oldUser.UpdatedAt,
@@ -382,7 +382,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 		}
 
 		newBenchmark := Benchmark{
-			Model: gorm.Model{
+			BaseModel: BaseModel{
 				ID:        oldBenchmark.ID, // Preserve original ID to maintain data file associations
 				CreatedAt: oldBenchmark.CreatedAt,
 				UpdatedAt: oldBenchmark.UpdatedAt,
@@ -513,21 +513,21 @@ func createMetadataFileForMigration(dataDir string, benchmarkID uint, benchmarkD
 // This migration populates the RunNames and Specifications fields for all existing benchmarks
 func migrateFromV1ToV2(db *gorm.DB) error {
 	log.Println("Populating RunNames and Specifications for existing benchmarks...")
-	
+
 	// Get all benchmarks
 	var benchmarks []Benchmark
 	if err := db.Find(&benchmarks).Error; err != nil {
 		return fmt.Errorf("failed to fetch benchmarks: %w", err)
 	}
 	log.Printf("Found %d benchmarks to update", len(benchmarks))
-	
+
 	successCount := 0
 	errorCount := 0
-	
+
 	for i := range benchmarks {
 		benchmark := &benchmarks[i]
 		log.Printf("  [%d/%d] Updating benchmark: %s (ID: %d)", i+1, len(benchmarks), benchmark.Title, benchmark.ID)
-		
+
 		// Read benchmark data
 		benchmarkData, err := RetrieveBenchmarkData(benchmark.ID)
 		if err != nil {
@@ -535,10 +535,10 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 			errorCount++
 			continue
 		}
-		
+
 		// Extract searchable metadata
 		runNames, specifications := ExtractSearchableMetadata(benchmarkData)
-		
+
 		// Update benchmark record using UpdateColumns to preserve UpdatedAt timestamp
 		if err := db.Model(benchmark).UpdateColumns(map[string]interface{}{
 			"run_names":      runNames,
@@ -548,20 +548,20 @@ func migrateFromV1ToV2(db *gorm.DB) error {
 			errorCount++
 			continue
 		}
-		
+
 		log.Printf("    Successfully updated (runs: %d, specs fields: %d chars)", len(benchmarkData), len(specifications))
 		successCount++
 	}
-	
+
 	log.Println("\n=== Migration Summary (v1 → v2) ===")
 	log.Printf("Benchmarks updated: %d", successCount)
 	log.Printf("Benchmarks failed: %d", errorCount)
 	log.Println("=====================================")
-	
+
 	if errorCount > 0 {
 		log.Printf("WARNING: %d benchmarks failed to update, but migration will continue", errorCount)
 	}
-	
+
 	log.Println("Migration from v1 to v2 completed successfully!")
 	return nil
 }
