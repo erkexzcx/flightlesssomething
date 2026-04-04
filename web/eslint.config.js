@@ -30,6 +30,7 @@ export default [
         Blob: 'readonly',
         TextDecoder: 'readonly',
         Worker: 'readonly',
+        AbortController: 'readonly',
         // Web Worker globals
         self: 'readonly',
         // Node globals
