@@ -1,7 +1,13 @@
 package app
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
 )
 
 func TestExtractPublicBaseURL(t *testing.T) {
@@ -49,5 +55,52 @@ func TestExtractPublicBaseURL(t *testing.T) {
 				t.Errorf("extractPublicBaseURL(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	InitRateLimiters()
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	})
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	headers := []struct {
+		name  string
+		value string
+	}{
+		{"X-Content-Type-Options", "nosniff"},
+		{"X-Frame-Options", "DENY"},
+		{"Referrer-Policy", "strict-origin-when-cross-origin"},
+	}
+
+	for _, h := range headers {
+		got := w.Header().Get(h.name)
+		if got != h.value {
+			t.Errorf("Header %s = %q, want %q", h.name, got, h.value)
+		}
 	}
 }

@@ -2104,6 +2104,9 @@ function handleTabClick(tabName) {
     return
   }
 
+  // Mark as rendered immediately to prevent duplicate renders from rapid double-clicks
+  renderedTabs.value[tabName] = true
+
   // Use nextTick to ensure DOM is ready
   nextTick(() => {
     switch (tabName) {
@@ -2121,9 +2124,9 @@ function handleTabClick(tabName) {
         break
       default:
         console.warn(`Unknown tab name: ${tabName}`)
+        renderedTabs.value[tabName] = false
         return
     }
-    renderedTabs.value[tabName] = true
   })
 }
 

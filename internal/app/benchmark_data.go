@@ -92,6 +92,9 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 	if capacity < 0 {
 		capacity = 0 // Safety check
 	}
+	if capacity > maxPerRunDataLines {
+		capacity = maxPerRunDataLines // Cap to prevent oversized allocations from crafted files
+	}
 
 	benchmarkData.DataFPS = make([]float64, 0, capacity)
 	benchmarkData.DataFrameTime = make([]float64, 0, capacity)

@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { api, APIError } from '../api/client'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const isAuthenticated = ref(false)
-  const isAdmin = ref(false)
+  const isAdmin = computed(() => user.value?.isAdmin ?? false)
   const initialized = ref(false)
   const loading = ref(false)
   const error = ref(null)
@@ -28,12 +28,10 @@ export const useAuthStore = defineStore('auth', () => {
           username: data.username,
           isAdmin: data.is_admin,
         }
-        isAdmin.value = data.is_admin || false
       } else {
         // Invalid response data
         isAuthenticated.value = false
         user.value = null
-        isAdmin.value = false
       }
     } catch (err) {
       // Only treat 401 Unauthorized as "not authenticated"
@@ -41,7 +39,6 @@ export const useAuthStore = defineStore('auth', () => {
       if (err instanceof APIError && err.status === 401) {
         isAuthenticated.value = false
         user.value = null
-        isAdmin.value = false
       }
       // Silently ignore other errors to prevent spurious logout on transient failures
     } finally {
@@ -75,7 +72,6 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = err.message || 'Login failed'
       isAuthenticated.value = false
       user.value = null
-      isAdmin.value = false
       throw err
     } finally {
       loading.value = false
@@ -94,7 +90,8 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       isAuthenticated.value = false
       user.value = null
-      isAdmin.value = false
+      _initPromise = null
+      initialized.value = false
       loading.value = false
     }
   }

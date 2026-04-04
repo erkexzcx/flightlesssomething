@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
@@ -354,5 +355,23 @@ func TestSanitizeFilenameNULBytes(t *testing.T) {
 				t.Errorf("sanitizeFilename(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestParseDataCapacity(t *testing.T) {
+	// parseData must cap pre-alloc capacity at maxPerRunDataLines to prevent OOM
+	// from crafted CSV files that claim millions of lines.
+	headerMap := map[int]string{0: "fps", 1: "frametime"}
+	bd := &BenchmarkData{}
+
+	// Empty scanner simulates zero actual data lines; only the pre-alloc cap matters.
+	// The "no valid data" error is expected — we only care that the cap is bounded.
+	scanner := bufio.NewScanner(strings.NewReader(""))
+	if err := parseData(scanner, headerMap, bd, false, maxPerRunDataLines+1_000_000); err == nil {
+		t.Error("expected an error from parseData with empty scanner, got nil")
+	}
+
+	if cap(bd.DataFPS) > maxPerRunDataLines {
+		t.Errorf("DataFPS cap %d exceeds maxPerRunDataLines %d", cap(bd.DataFPS), maxPerRunDataLines)
 	}
 }

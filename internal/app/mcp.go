@@ -668,9 +668,10 @@ func (s *mcpServer) authenticateFromHeader(c *gin.Context) (uint, string, bool, 
 
 	token := authHeader[len(prefix):]
 
-	// Reject tokens that are too short before hitting the database
-	const minTokenLength = 32
-	if len(token) < minTokenLength {
+	// Reject tokens that are too short before hitting the database.
+	// Note: The REST API middleware enforces len == 64; here we use len < 32
+	// as a fast-path rejection. The database query still enforces exact matching.
+	if len(token) < 32 {
 		return 0, "", false, false, nil
 	}
 
@@ -1391,8 +1392,7 @@ func (s *mcpServer) toolBanUser(args json.RawMessage, adminUserID uint, adminUse
 		return "", fmt.Errorf("cannot ban the system admin account")
 	}
 
-	user.IsBanned = params.Banned
-	if err := s.db.DB.Save(&user).Error; err != nil {
+	if err := s.db.DB.Model(&user).Update("is_banned", params.Banned).Error; err != nil {
 		return "", fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -1436,8 +1436,7 @@ func (s *mcpServer) toolToggleUserAdmin(args json.RawMessage, adminUserID uint, 
 		return "", fmt.Errorf("cannot revoke admin privileges from the system admin account")
 	}
 
-	user.IsAdmin = params.IsAdmin
-	if err := s.db.DB.Save(&user).Error; err != nil {
+	if err := s.db.DB.Model(&user).Update("is_admin", params.IsAdmin).Error; err != nil {
 		return "", fmt.Errorf("failed to update user: %w", err)
 	}
 

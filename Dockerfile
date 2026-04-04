@@ -57,6 +57,9 @@ FROM alpine:3.23
 # Install CA certificates for HTTPS/TLS connections (Discord OAuth, etc.)
 RUN apk add --no-cache ca-certificates
 
+# Create a non-root user to run the application
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 
 # Copy binary from builder
@@ -68,6 +71,9 @@ EXPOSE 5000
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget -qO- http://localhost:5000/health || exit 1
+
+# Run as non-root user
+USER appuser
 
 # Run the application
 ENTRYPOINT ["/app/server"]

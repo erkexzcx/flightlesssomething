@@ -35,7 +35,7 @@ type User struct {
 type APIToken struct {
 	BaseModel
 	UserID     uint       `gorm:"index" json:"user_id"`
-	Token      string     `gorm:"size:64;uniqueIndex" json:"token"`
+	Token      string     `gorm:"size:64;uniqueIndex" json:"-"`
 	Name       string     `gorm:"size:100" json:"name"`
 	LastUsedAt *time.Time `gorm:"default:null" json:"last_used_at"`
 

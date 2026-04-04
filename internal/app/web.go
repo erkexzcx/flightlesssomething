@@ -34,6 +34,8 @@ func setupSPA(r *gin.Engine) {
 
 	// Serve static assets (JS, CSS, images, etc.)
 	r.GET("/assets/*filepath", func(c *gin.Context) {
+		// Vite output filenames are content-hashed, so they can be cached indefinitely.
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		c.FileFromFS(c.Request.URL.Path, http.FS(distFS))
 	})
 
@@ -47,6 +49,7 @@ func setupSPA(r *gin.Engine) {
 
 	// Serve index.html for the root path
 	r.GET("/", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 
@@ -61,6 +64,7 @@ func setupSPA(r *gin.Engine) {
 		}
 
 		// Serve index.html for all other routes (Vue Router will handle them)
+		c.Header("Cache-Control", "no-cache")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 }

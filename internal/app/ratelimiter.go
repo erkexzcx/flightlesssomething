@@ -208,6 +208,7 @@ var (
 	benchmarkUploadLimiter *RateLimiter
 	adminLoginLimiter      *RateLimiter
 	debugCalcLimiter       *RateLimiter
+	mcpLimiter             *RateLimiter
 	cleanupOnce            sync.Once
 )
 
@@ -222,6 +223,9 @@ func InitRateLimiters() {
 	// 30 debug calc requests per minute per IP
 	debugCalcLimiter = NewRateLimiter(30, time.Minute)
 
+	// 120 MCP requests per minute per IP
+	mcpLimiter = NewRateLimiter(120, time.Minute)
+
 	// Start cleanup goroutine (only once)
 	// Note: This goroutine runs for the lifetime of the application.
 	// It will be terminated naturally when the application shuts down.
@@ -231,6 +235,7 @@ func InitRateLimiters() {
 		bl := benchmarkUploadLimiter
 		al := adminLoginLimiter
 		dl := debugCalcLimiter
+		ml := mcpLimiter
 		go func() {
 			ticker := time.NewTicker(5 * time.Minute)
 			defer ticker.Stop()
@@ -238,6 +243,7 @@ func InitRateLimiters() {
 				bl.CleanupExpired()
 				al.CleanupExpired()
 				dl.CleanupExpired()
+				ml.CleanupExpired()
 			}
 		}()
 	})
@@ -256,4 +262,9 @@ func GetAdminLoginLimiter() *RateLimiter {
 // GetDebugCalcLimiter returns the global debug calc rate limiter
 func GetDebugCalcLimiter() *RateLimiter {
 	return debugCalcLimiter
+}
+
+// GetMCPLimiter returns the global MCP rate limiter
+func GetMCPLimiter() *RateLimiter {
+	return mcpLimiter
 }

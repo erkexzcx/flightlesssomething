@@ -3,13 +3,16 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -40,7 +43,7 @@ func Start(config *Config, version string) error {
 	}
 
 	// Ensure system admin account exists and is up to date
-	if err := EnsureSystemAdmin(db, config.AdminUsername); err != nil {
+	if err = EnsureSystemAdmin(db, config.AdminUsername); err != nil {
 		return fmt.Errorf("failed to ensure system admin: %w", err)
 	}
 
@@ -55,9 +58,17 @@ func Start(config *Config, version string) error {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
+	// Security headers middleware
+	r.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	})
+
 	// Do not trust any forwarded IP headers to prevent rate limit bypass via X-Forwarded-For spoofing.
 	// If this app is behind a trusted reverse proxy, set this to the proxy's IP instead.
-	if err := r.SetTrustedProxies(nil); err != nil {
+	if err = r.SetTrustedProxies(nil); err != nil {
 		return fmt.Errorf("failed to configure trusted proxies: %w", err)
 	}
 
@@ -136,7 +147,18 @@ func Start(config *Config, version string) error {
 	mcp := r.Group("/mcp")
 	mcp.Use(MCPCors())
 	mcp.OPTIONS("", func(c *gin.Context) {}) // Required for gin to route OPTIONS to the middleware
-	mcp.POST("", HandleMCP(db, version, extractPublicBaseURL(config.DiscordRedirectURL)))
+	mcpHandler := HandleMCP(db, version, extractPublicBaseURL(config.DiscordRedirectURL))
+	mcp.POST("", func(c *gin.Context) {
+		if allowed, remaining := GetMCPLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+		mcpHandler(c)
+	})
 	mcp.GET("", HandleMCPGet)
 	mcp.DELETE("", HandleMCPDelete)
 
@@ -147,7 +169,21 @@ func Start(config *Config, version string) error {
 	log.Printf("Data directory: %s\n", config.DataDir)
 	log.Printf("Benchmarks directory: %s\n", filepath.Join(config.DataDir, "benchmarks"))
 
-	return r.Run(config.Bind)
+	srv := &http.Server{
+		Addr:              config.Bind,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	lc := &net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", config.Bind)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", config.Bind, err)
+	}
+	return srv.Serve(ln)
 }
 
 // extractPublicBaseURL derives the public base URL (scheme + host) from the Discord redirect URL.

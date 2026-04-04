@@ -230,15 +230,15 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
-		// Ensure admin flag is set
-		if !adminUser.IsAdmin {
-			db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("is_admin", true)
-		}
-
-		// Prevent banned admin from logging in
+		// Prevent banned admin from logging in before making any DB changes
 		if adminUser.IsBanned {
 			c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
 			return
+		}
+
+		// Ensure admin flag is set
+		if !adminUser.IsAdmin {
+			db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("is_admin", true)
 		}
 
 		// Update last web activity

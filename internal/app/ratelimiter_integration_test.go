@@ -355,3 +355,59 @@ func TestDebugCalcRateLimit(t *testing.T) {
 		t.Error("Rate limit response should contain error field")
 	}
 }
+
+func TestMCPRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	InitRateLimiters()
+
+	// Reset state from any previous test runs
+	GetMCPLimiter().Reset("192.0.2.1")
+
+	r := gin.New()
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+
+	mcp := r.Group("/mcp")
+	mcp.Use(MCPCors())
+	mcp.OPTIONS("", func(c *gin.Context) {})
+	mcpHandler := HandleMCP(db, "test", "")
+	mcp.POST("", func(c *gin.Context) {
+		if allowed, remaining := GetMCPLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+		mcpHandler(c)
+	})
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	// Allow up to limit
+	limiter := GetMCPLimiter()
+	for limiter.Allow("192.0.2.1") {
+		// drain the window
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("Expected 429 when rate limit exceeded, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse rate limit response: %v", err)
+	}
+	if _, ok := response["retry_after_secs"]; !ok {
+		t.Error("Rate limit response should contain retry_after_secs field")
+	}
+}

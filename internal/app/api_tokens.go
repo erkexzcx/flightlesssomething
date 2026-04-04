@@ -73,7 +73,16 @@ func HandleCreateAPIToken(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, apiToken)
+		// Return token value only at creation time — it is excluded from all other responses.
+		c.JSON(http.StatusCreated, gin.H{
+			"id":           apiToken.ID,
+			"user_id":      apiToken.UserID,
+			"name":         apiToken.Name,
+			"token":        apiToken.Token,
+			"last_used_at": apiToken.LastUsedAt,
+			"created_at":   apiToken.CreatedAt,
+			"updated_at":   apiToken.UpdatedAt,
+		})
 	}
 }
 
