@@ -47,9 +47,9 @@ RUN mkdir -p internal/app/web && \
         echo '}'; \
     } > internal/app/webfs_embed.go
 
-# Build the application with version from git
-RUN VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
-    CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -tags netgo -o server ./cmd/server
+# Build the application with version
+ARG VERSION=dev
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -tags netgo -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:3.23
