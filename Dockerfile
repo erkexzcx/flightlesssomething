@@ -1,5 +1,5 @@
 # Web UI build stage
-FROM node:25-alpine AS web-builder
+FROM node:22-alpine AS web-builder
 
 WORKDIR /build
 
@@ -7,7 +7,7 @@ WORKDIR /build
 COPY web ./
 
 # Install dependencies and build
-RUN npm ci --prefer-offline --no-audit
+RUN npm ci --prefer-offline
 RUN npm run build
 
 # Go build stage
@@ -64,6 +64,10 @@ COPY --from=builder /build/server .
 
 # Expose port
 EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:5000/health || exit 1
 
 # Run the application
 ENTRYPOINT ["/app/server"]

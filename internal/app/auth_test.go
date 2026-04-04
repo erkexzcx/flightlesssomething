@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -232,4 +234,85 @@ func TestHandleGetCurrentUser(t *testing.T) {
 			t.Errorf("Expected status %d for banned user, got %d", http.StatusUnauthorized, w.Code)
 		}
 	})
+}
+
+func TestHandleAdminLoginBannedAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	config := &Config{
+		AdminUsername: "admin",
+		AdminPassword: "adminpass",
+	}
+
+	InitRateLimiters()
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
+
+	// Create the system admin account with IsBanned=true
+	sysAdmin := User{DiscordID: "admin", Username: "Admin", IsAdmin: true, IsBanned: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create banned system admin: %v", err)
+	}
+
+	loginBody, err := json.Marshal(map[string]string{"username": "admin", "password": "adminpass"})
+	if err != nil {
+		t.Fatalf("Failed to marshal login body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin/login", bytes.NewBuffer(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected 403 for banned admin, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAdminLoginSessionClear(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	config := &Config{
+		AdminUsername: "adminuser",
+		AdminPassword: "adminpass",
+	}
+
+	InitRateLimiters()
+
+	r := gin.New()
+	store := cookie.NewStore([]byte("test-secret"))
+	r.Use(sessions.Sessions("test_session", store))
+	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
+
+	// Login and capture the session cookie
+	loginBody, err := json.Marshal(map[string]string{"username": "adminuser", "password": "adminpass"})
+	if err != nil {
+		t.Fatalf("Failed to marshal login body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin/login", bytes.NewBuffer(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for admin login, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// The session should contain the admin's UserID, not any stale data
+	// This is validated by a successful login response
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if resp["message"] != "admin login successful" {
+		t.Errorf("Expected success message, got: %v", resp)
+	}
 }

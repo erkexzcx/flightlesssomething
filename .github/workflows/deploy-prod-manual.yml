@@ -29,10 +29,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull Docker image from GHCR
+        env:
+          IMAGE_VERSION: ${{ inputs.version }}
         run: |
           # Pull the image from GHCR
-          docker pull ghcr.io/${{ github.repository }}:${{ inputs.version }}
-          docker tag ghcr.io/${{ github.repository }}:${{ inputs.version }} flightlesssomething:prod-release
+          docker pull "ghcr.io/${{ github.repository }}:${IMAGE_VERSION}"
+          docker tag "ghcr.io/${{ github.repository }}:${IMAGE_VERSION}" flightlesssomething:prod-release
           docker save flightlesssomething:prod-release | gzip > image.tar.gz
 
       - name: Deploy to prod server

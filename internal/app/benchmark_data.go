@@ -117,6 +117,10 @@ func parseData(scanner *bufio.Scanner, headerMap map[int]string, benchmarkData *
 			if err != nil {
 				continue
 			}
+			// Reject non-finite values: they corrupt statistics and cause json.Marshal to fail
+			if math.IsNaN(val) || math.IsInf(val, 0) {
+				continue
+			}
 
 			switch colName {
 			case "fps", "Framerate":
@@ -360,7 +364,8 @@ func readSingleBenchmarkFile(fileHeader *multipart.FileHeader) (*BenchmarkData, 
 		suffix = ".hml"
 	}
 
-	benchmarkData.Label = strings.TrimSuffix(fileHeader.Filename, suffix)
+	// Cap label length and strip any NUL bytes that could poison ZIP entry names
+	benchmarkData.Label = truncateString(strings.TrimSuffix(fileHeader.Filename, suffix))
 	return benchmarkData, nil
 }
 
@@ -398,10 +403,13 @@ func ReadBenchmarkCSVContent(content, label string) (*BenchmarkData, error) {
 	return benchmarkData, nil
 }
 
-// truncateString truncates the input string to maxStringLength characters
+// truncateString truncates the input string to maxStringLength rune-codepoints.
+// Using rune-length prevents splitting multi-byte UTF-8 sequences, which would
+// produce invalid UTF-8 strings and silent data corruption on JSON serialisation.
 func truncateString(s string) string {
-	if len(s) > maxStringLength {
-		return s[:maxStringLength] + "..."
+	runes := []rune(s)
+	if len(runes) > maxStringLength {
+		return string(runes[:maxStringLength]) + "..."
 	}
 	return s
 }
@@ -595,7 +603,14 @@ func retrieveBenchmarkDataLegacy(benchmarkID uint) ([]*BenchmarkData, error) {
 	var benchmarkData []*BenchmarkData
 	gobDecoder := gob.NewDecoder(zstdDecoder)
 	err = gobDecoder.Decode(&benchmarkData)
-	return benchmarkData, err
+	if err != nil {
+		return nil, err
+	}
+	// Guard against corrupted or tampered files claiming an absurd number of runs
+	if len(benchmarkData) > maxRunsPerBenchmark {
+		return nil, fmt.Errorf("file contains too many runs: %d", len(benchmarkData))
+	}
+	return benchmarkData, nil
 }
 
 // GetBenchmarkRunCount returns the count of runs and their labels for a benchmark
@@ -827,6 +842,10 @@ func RetrievePreCalculatedStats(benchmarkID uint) ([]*PreCalculatedRun, error) {
 	if err := gobDecoder.Decode(&stats); err != nil {
 		return nil, fmt.Errorf("failed to decode stats: %w", err)
 	}
+	// Guard against corrupted or tampered .stats files claiming an absurd number of runs
+	if len(stats) > maxRunsPerBenchmark {
+		return nil, fmt.Errorf("stats file contains too many runs: %d", len(stats))
+	}
 
 	return stats, nil
 }
@@ -917,6 +936,11 @@ func ExportBenchmarkDataAsZip(benchmarkID uint, writer io.Writer) error {
 	}
 
 	runCount = header.RunCount
+
+	// Guard against corrupt/tampered run count before iterating
+	if runCount < 0 || runCount > maxRunsPerBenchmark {
+		return fmt.Errorf("invalid run count in file header: %d", runCount)
+	}
 
 	if runCount == 0 {
 		return errors.New("no benchmark data to export")
@@ -1019,8 +1043,9 @@ var filenameReplacer = strings.NewReplacer(
 
 // sanitizeFilename removes or replaces characters that are not safe for filenames
 func sanitizeFilename(filename string) string {
-	// First trim whitespace
+	// First trim whitespace and strip NUL bytes (can poison ZIP entry names)
 	filename = strings.TrimSpace(filename)
+	filename = strings.ReplaceAll(filename, "\x00", "")
 
 	sanitized := filenameReplacer.Replace(filename)
 
@@ -1030,6 +1055,19 @@ func sanitizeFilename(filename string) string {
 	}
 
 	return sanitized
+}
+
+// csvSafeCell prefixes formula-injection trigger characters (=, +, -, @) with a single
+// quote so that spreadsheet applications treat the cell as plain text. This prevents
+// CSV formula injection attacks when exported files are opened in Excel or LibreOffice.
+func csvSafeCell(s string) string {
+	if s != "" {
+		switch s[0] {
+		case '=', '+', '-', '@':
+			return "'" + s
+		}
+	}
+	return s
 }
 
 // writeBenchmarkDataAsCSV writes benchmark data to a writer in MangoHud CSV format
@@ -1050,15 +1088,17 @@ func writeBenchmarkDataAsCSV(data *BenchmarkData, writer io.Writer) error {
 		return err
 	}
 
-	// Write the specs line
+	// Write the specs line.
+	// Apply csvSafeCell to all user-supplied text fields to prevent formula injection
+	// when the exported CSV is opened in spreadsheet applications.
 	specsLine := []string{
-		data.SpecOS,
-		data.SpecCPU,
-		data.SpecGPU,
+		csvSafeCell(data.SpecOS),
+		csvSafeCell(data.SpecCPU),
+		csvSafeCell(data.SpecGPU),
 		convertRAMToKB(data.SpecRAM),
-		data.SpecLinuxKernel,
+		csvSafeCell(data.SpecLinuxKernel),
 		"", // driver (we don't store this separately)
-		data.SpecLinuxScheduler,
+		csvSafeCell(data.SpecLinuxScheduler),
 	}
 	if err := csvWriter.Write(specsLine); err != nil {
 		return err
@@ -1185,6 +1225,11 @@ func RetrieveBenchmarkRun(benchmarkID uint, runIndex int) (*BenchmarkData, error
 	// New format detected
 	if header.Version != storageFormatVersion {
 		return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
+
+	// Guard against corrupt/tampered run count before using it as a bound
+	if header.RunCount < 0 || header.RunCount > maxRunsPerBenchmark {
+		return nil, fmt.Errorf("invalid run count in file header: %d", header.RunCount)
 	}
 
 	// Check if runIndex is valid

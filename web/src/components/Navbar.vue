@@ -32,7 +32,7 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="https://github.com/erkexzcx/flightlesssomething" target="_blank">
+            <a class="nav-link" href="https://github.com/erkexzcx/flightlesssomething" target="_blank" rel="noopener noreferrer">
               <i class="fa-brands fa-github"></i> Source
             </a>
           </li>

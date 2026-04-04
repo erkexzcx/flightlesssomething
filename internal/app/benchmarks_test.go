@@ -203,7 +203,7 @@ func TestHandleGetBenchmark(t *testing.T) {
 		}
 	})
 
-	t.Run("returns 404 for invalid id", func(t *testing.T) {
+	t.Run("returns 400 for invalid id", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/api/benchmarks/invalid", nil)
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
@@ -211,8 +211,8 @@ func TestHandleGetBenchmark(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %d", w.Code)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
 		}
 	})
 }
@@ -614,4 +614,109 @@ func TestHandleListBenchmarksSearch(t *testing.T) {
 			t.Errorf("Expected 5 benchmarks with empty search, got %d", len(benchmarksList))
 		}
 	})
+
+	t.Run("short keyword under 3 chars is ignored", func(t *testing.T) {
+		// "ru" is only 2 chars — should be ignored, returning all benchmarks
+		req, err := http.NewRequest("GET", "/api/benchmarks?search=ru", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var response map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		benchmarksList, ok := response["benchmarks"].([]interface{})
+		if !ok {
+			t.Fatal("Expected benchmarks array in response")
+		}
+		// Short keyword skipped, returns all benchmarks
+		if len(benchmarksList) != 5 {
+			t.Errorf("Expected all 5 benchmarks when keyword is too short, got %d", len(benchmarksList))
+		}
+	})
+}
+
+func TestHandleUpdateBenchmarkInvalidID(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	router := setupTestRouter()
+	user := createTestUser(db, "updateuser", false)
+	router.PUT("/api/benchmarks/:id", func(c *gin.Context) {
+		c.Set("UserID", user.ID)
+		c.Set("IsAdmin", false)
+		HandleUpdateBenchmark(db)(c)
+	})
+
+	req, err := http.NewRequest("PUT", "/api/benchmarks/notanumber", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid benchmark ID, got %d", w.Code)
+	}
+}
+
+func TestHandleDeleteBenchmarkInvalidID(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	router := setupTestRouter()
+	user := createTestUser(db, "deleteuser", false)
+	router.DELETE("/api/benchmarks/:id", func(c *gin.Context) {
+		c.Set("UserID", user.ID)
+		c.Set("IsAdmin", false)
+		HandleDeleteBenchmark(db)(c)
+	})
+
+	req, err := http.NewRequest("DELETE", "/api/benchmarks/notanumber", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid benchmark ID, got %d", w.Code)
+	}
+}
+
+func TestHandleGetBenchmarkRunNegativeIndex(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	err := InitBenchmarksDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to initialize benchmarks directory: %v", err)
+	}
+
+	router := setupTestRouter()
+	router.GET("/api/benchmarks/:id/runs/:runIndex", HandleGetBenchmarkRun(db))
+
+	user := createTestUser(db, "runindexuser", false)
+	benchmark := &Benchmark{Title: "Test", UserID: user.ID}
+	db.DB.Create(benchmark)
+
+	req, err := http.NewRequest("GET", "/api/benchmarks/"+strconv.FormatUint(uint64(benchmark.ID), 10)+"/runs/-1", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for negative run index, got %d", w.Code)
+	}
 }

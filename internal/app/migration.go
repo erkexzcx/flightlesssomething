@@ -154,7 +154,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 
 	// Migrate each user
 	for _, oldUser := range oldUsers {
-		log.Printf("  Migrating user: %s (ID: %d, Discord: %s)", oldUser.Username, oldUser.ID, oldUser.DiscordID)
+		log.Printf("  Migrating user ID: %d", oldUser.ID)
 
 		newUser := User{
 			BaseModel: BaseModel{
@@ -168,7 +168,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 			IsBanned:  false,
 		}
 		if err := newDB.Create(&newUser).Error; err != nil {
-			return fmt.Errorf("failed to create user %s: %w", oldUser.Username, err)
+			return fmt.Errorf("failed to create user ID %d: %w", oldUser.ID, err)
 		}
 		log.Printf("    Migrated successfully")
 	}
@@ -192,7 +192,7 @@ func migrateFromOldDatabaseFile(newDB *gorm.DB, dataDir, oldDBPath string) error
 
 	for i := range oldBenchmarks {
 		oldBenchmark := &oldBenchmarks[i]
-		log.Printf("  [%d/%d] Migrating benchmark: %s (ID: %d)", i+1, len(oldBenchmarks), oldBenchmark.Title, oldBenchmark.ID)
+		log.Printf("  [%d/%d] Migrating benchmark ID: %d", i+1, len(oldBenchmarks), oldBenchmark.ID)
 
 		// Truncate description if too long
 		description := oldBenchmark.Description
@@ -306,7 +306,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 
 	// Migrate each user
 	for _, oldUser := range oldUsers {
-		log.Printf("  Migrating user: %s (ID: %d, Discord: %s)", oldUser.Username, oldUser.ID, oldUser.DiscordID)
+		log.Printf("  Migrating user ID: %d", oldUser.ID)
 
 		// Check if user already exists (in case of re-run)
 		var existingUser User
@@ -328,7 +328,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 			IsBanned:  false,
 		}
 		if err := db.Create(&newUser).Error; err != nil {
-			return fmt.Errorf("failed to create user %s: %w", oldUser.Username, err)
+			return fmt.Errorf("failed to create user ID %d: %w", oldUser.ID, err)
 		}
 		log.Printf("    Migrated successfully")
 	}
@@ -351,7 +351,7 @@ func migrateFromOldSchema(db *gorm.DB, dataDir string) error {
 
 	for i := range oldBenchmarks {
 		oldBenchmark := &oldBenchmarks[i]
-		log.Printf("  [%d/%d] Migrating benchmark: %s (ID: %d)", i+1, len(oldBenchmarks), oldBenchmark.Title, oldBenchmark.ID)
+		log.Printf("  [%d/%d] Migrating benchmark ID: %d", i+1, len(oldBenchmarks), oldBenchmark.ID)
 
 		// Check if benchmark already exists (in case of re-run)
 		var existingBenchmark Benchmark

@@ -40,7 +40,7 @@ func Start(config *Config, version string) error {
 	}
 
 	// Ensure system admin account exists and is up to date
-	if err := EnsureSystemAdmin(db, config.AdminUsername, config.AdminPassword); err != nil {
+	if err := EnsureSystemAdmin(db, config.AdminUsername); err != nil {
 		return fmt.Errorf("failed to ensure system admin: %w", err)
 	}
 
@@ -98,8 +98,11 @@ func Start(config *Config, version string) error {
 	// Debug calc endpoint (public, for verifying backend calculations) — rate limited per IP
 	debugCalcHandler := HandleDebugCalc()
 	r.POST("/api/debugcalc", func(c *gin.Context) {
-		if !GetDebugCalcLimiter().Allow(c.ClientIP()) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+		if allowed, remaining := GetDebugCalcLimiter().AllowWithRemaining(c.ClientIP()); !allowed {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":            "rate limit exceeded",
+				"retry_after_secs": int(remaining.Seconds()),
+			})
 			c.Abort()
 			return
 		}

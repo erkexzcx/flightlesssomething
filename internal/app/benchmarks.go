@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,8 +29,13 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 		query := db.DB.Preload("User")
 
 		// Optional filters
-		if userID := c.Query("user_id"); userID != "" {
-			query = query.Where("user_id = ?", userID)
+		if userIDStr := c.Query("user_id"); userIDStr != "" {
+			if parsedUID, parseErr := strconv.ParseUint(userIDStr, 10, 64); parseErr == nil {
+				query = query.Where("user_id = ?", parsedUID)
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
+				return
+			}
 		}
 		if search := c.Query("search"); search != "" {
 			// Get search fields from query parameter (comma-separated)
@@ -73,30 +77,37 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 			// All keywords must match (AND logic), but each keyword can match any enabled field (OR logic)
 			for _, keyword := range keywords {
 				keyword = strings.TrimSpace(keyword)
+				// Enforce minimum keyword length to avoid full-table LIKE scans
+				if len(keyword) < 3 {
+					continue
+				}
 				if keyword != "" {
+					// Escape LIKE wildcards to prevent pattern injection
+					escapedKeyword := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(keyword)
+
 					// Build OR conditions for this keyword across enabled fields
 					var orConditions []string
 					var orValues []interface{}
 
 					if enabledFields["title"] {
-						orConditions = append(orConditions, "benchmarks.title LIKE ?")
-						orValues = append(orValues, "%"+keyword+"%")
+						orConditions = append(orConditions, "benchmarks.title LIKE ? ESCAPE '\\'")
+						orValues = append(orValues, "%"+escapedKeyword+"%")
 					}
 					if enabledFields["description"] {
-						orConditions = append(orConditions, "benchmarks.description LIKE ?")
-						orValues = append(orValues, "%"+keyword+"%")
+						orConditions = append(orConditions, "benchmarks.description LIKE ? ESCAPE '\\'")
+						orValues = append(orValues, "%"+escapedKeyword+"%")
 					}
 					if enabledFields["user"] {
-						orConditions = append(orConditions, "EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ?)")
-						orValues = append(orValues, "%"+keyword+"%")
+						orConditions = append(orConditions, "EXISTS (SELECT 1 FROM users WHERE users.id = benchmarks.user_id AND users.username LIKE ? ESCAPE '\\')")
+						orValues = append(orValues, "%"+escapedKeyword+"%")
 					}
 					if enabledFields["run_name"] {
-						orConditions = append(orConditions, "benchmarks.run_names LIKE ?")
-						orValues = append(orValues, "%"+keyword+"%")
+						orConditions = append(orConditions, "benchmarks.run_names LIKE ? ESCAPE '\\'")
+						orValues = append(orValues, "%"+escapedKeyword+"%")
 					}
 					if enabledFields["specifications"] {
-						orConditions = append(orConditions, "benchmarks.specifications LIKE ?")
-						orValues = append(orValues, "%"+keyword+"%")
+						orConditions = append(orConditions, "benchmarks.specifications LIKE ? ESCAPE '\\'")
+						orValues = append(orValues, "%"+escapedKeyword+"%")
 					}
 
 					// Only apply search if at least one field is enabled
@@ -194,9 +205,14 @@ func HandleListBenchmarks(db *DBInstance) gin.HandlerFunc {
 func HandleGetBenchmark(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+		benchmarkID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+			return
+		}
 
 		var benchmark Benchmark
-		if err := db.DB.Preload("User").First(&benchmark, id).Error; err != nil {
+		if dbErr := db.DB.Preload("User").First(&benchmark, benchmarkID).Error; dbErr != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
 			return
 		}
@@ -266,8 +282,7 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		if !user.IsAdmin {
 			limiter := GetBenchmarkUploadLimiter()
 			userKey := fmt.Sprintf("user_%d", uid)
-			if !limiter.Allow(userKey) {
-				remaining := limiter.GetRemainingTime(userKey)
+			if allowed, remaining := limiter.AllowWithRemaining(userKey); !allowed {
 				c.JSON(http.StatusTooManyRequests, gin.H{
 					"error":            "rate limit exceeded: maximum 5 benchmarks per 10 minutes",
 					"retry_after_secs": int(remaining.Seconds()),
@@ -398,8 +413,14 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
+		benchmarkID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+			return
+		}
+
 		var benchmark Benchmark
-		if err := db.DB.First(&benchmark, id).Error; err != nil {
+		if err := db.DB.First(&benchmark, benchmarkID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
 			return
 		}
@@ -421,6 +442,12 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
+		// Guard against excessively large labels maps to prevent memory exhaustion
+		if len(req.Labels) > maxRunsPerBenchmark {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "too many labels provided"})
+			return
+		}
+
 		// Track what fields were changed for audit logging
 		var changes []string
 		if req.Title != "" {
@@ -435,11 +462,6 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		// Update labels if provided
 		if len(req.Labels) > 0 {
 			changes = append(changes, "labels")
-			benchmarkID, err := strconv.ParseUint(id, 10, 32)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
-				return
-			}
 			benchmarkData, err := RetrieveBenchmarkData(uint(benchmarkID))
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve benchmark data"})
@@ -474,8 +496,6 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 			benchmark.RunNames = runNames
 			benchmark.Specifications = specifications
 
-			// Trigger GC to reclaim memory from loaded benchmark data
-			runtime.GC()
 		}
 
 		if err := db.DB.Save(&benchmark).Error; err != nil {
@@ -517,8 +537,14 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
+		benchmarkID, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benchmark ID"})
+			return
+		}
+
 		var benchmark Benchmark
-		if err := db.DB.First(&benchmark, id).Error; err != nil {
+		if err := db.DB.First(&benchmark, benchmarkID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "benchmark not found"})
 			return
 		}
@@ -682,9 +708,6 @@ func HandleDeleteBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkRunDeleted(uid, usernameStr, benchmark.ID, benchmark.Title, idx, runLabel)
 
-		// Trigger GC to reclaim memory from loaded benchmark data
-		runtime.GC()
-
 		c.JSON(http.StatusOK, gin.H{"message": "run deleted successfully"})
 	}
 }
@@ -709,12 +732,18 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
+		// Get user to check admin status for rate limiting (IsBanned already checked by middleware)
+		var user User
+		if err := db.DB.First(&user, uid).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+			return
+		}
+
 		// Check rate limiting for benchmark uploads (skip for admins)
-		if !adminFlag {
+		if !user.IsAdmin {
 			limiter := GetBenchmarkUploadLimiter()
 			userKey := fmt.Sprintf("user_%d", uid)
-			if !limiter.Allow(userKey) {
-				remaining := limiter.GetRemainingTime(userKey)
+			if allowed, remaining := limiter.AllowWithRemaining(userKey); !allowed {
 				c.JSON(http.StatusTooManyRequests, gin.H{
 					"error":            "rate limit exceeded: maximum 5 benchmarks per 10 minutes",
 					"retry_after_secs": int(remaining.Seconds()),
@@ -789,6 +818,14 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		// Append new runs to existing data
 		existingData = append(existingData, newBenchmarkData...)
 
+		// Check total runs limit after combining
+		if len(existingData) > maxRunsPerBenchmark {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("total runs (%d) would exceed maximum allowed (%d)", len(existingData), maxRunsPerBenchmark),
+			})
+			return
+		}
+
 		// Check total data lines limit after combining
 		totalLines := CountTotalDataLines(existingData)
 		if totalLines > maxTotalDataLines {
@@ -825,9 +862,6 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		usernameStr := GetUsernameFromContext(c)
 		LogBenchmarkRunsAdded(uid, usernameStr, benchmark.ID, benchmark.Title, len(newBenchmarkData), len(existingData))
 
-		// Trigger GC to reclaim memory from loaded benchmark data
-		runtime.GC()
-
 		c.JSON(http.StatusOK, gin.H{
 			"message":         "runs added successfully",
 			"runs_added":      len(newBenchmarkData),
@@ -848,7 +882,7 @@ func HandleGetBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 
 		runIndexStr := c.Param("runIndex")
 		runIndex, err := strconv.Atoi(runIndexStr)
-		if err != nil {
+		if err != nil || runIndex < 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run index"})
 			return
 		}
@@ -863,7 +897,7 @@ func HandleGetBenchmarkRun(db *DBInstance) gin.HandlerFunc {
 		// Serve pre-calculated stats for a single run
 		run, err := RetrievePreCalculatedStatsRun(uint(benchmarkID), runIndex)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusNotFound, gin.H{"error": "run stats not available"})
 			return
 		}
 

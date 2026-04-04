@@ -55,7 +55,7 @@ func setupSPA(r *gin.Engine) {
 		path := c.Request.URL.Path
 
 		// Don't serve index.html for API routes
-		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/auth/") || strings.HasPrefix(path, "/health") {
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/auth/") || strings.HasPrefix(path, "/health") || path == "/mcp" || strings.HasPrefix(path, "/mcp/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}

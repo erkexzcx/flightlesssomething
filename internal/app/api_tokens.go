@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -80,7 +81,13 @@ func HandleCreateAPIToken(db *DBInstance) gin.HandlerFunc {
 func HandleDeleteAPIToken(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetUint("UserID")
-		tokenID := c.Param("id")
+		tokenIDStr := c.Param("id")
+
+		tokenID, err := strconv.ParseUint(tokenIDStr, 10, 64)
+		if err != nil || tokenID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+			return
+		}
 
 		// Verify the token belongs to the current user
 		var token APIToken
@@ -163,6 +170,14 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 		}
 
 		token := authHeader[len(prefix):]
+
+		// Validate token length before querying the database to reject clearly invalid tokens early
+		const expectedTokenLength = 64 // 32 random bytes encoded as hex
+		if len(token) != expectedTokenLength {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.Abort()
+			return
+		}
 
 		// Find the API token
 		var apiToken APIToken

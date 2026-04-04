@@ -392,6 +392,7 @@ const renderedDescription = computed(() => {
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr'],
     ALLOWED_ATTR: ['href', 'rel', 'target'],
+    FORBID_URI_SCHEMES: ['javascript', 'data', 'vbscript'],
   })
 })
 
@@ -680,7 +681,7 @@ async function handleDelete() {
 
 function downloadBenchmark() {
   const url = `/api/benchmarks/${benchmark.value.id}/download`
-  window.open(url, '_blank')
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 onMounted(() => {

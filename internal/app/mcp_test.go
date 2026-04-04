@@ -173,7 +173,7 @@ func TestMCPToolsList(t *testing.T) {
 	// Authenticated regular user: should see public + auth tools (5)
 	t.Run("regular user sees public and auth tools", func(t *testing.T) {
 		user := createTestUser(db, "mcptoolslistuser", false)
-		apiToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef123", Name: "ToolsList Token"}
+		apiToken := &APIToken{UserID: user.ID, Token: "toolslist-user-token-abcdef1230000000000000000000000000000000000000", Name: "ToolsList Token"}
 		db.DB.Create(apiToken)
 
 		w := mcpRequest(t, router, body, apiToken.Token)
@@ -215,7 +215,7 @@ func TestMCPToolsList(t *testing.T) {
 	// Admin user: should see all tools (10)
 	t.Run("admin sees all tools", func(t *testing.T) {
 		admin := createTestUser(db, "mcptoolslistadmin", true)
-		adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef12", Name: "ToolsList Admin"}
+		adminToken := &APIToken{UserID: admin.ID, Token: "toolslist-admin-token-abcdef120000000000000000000000000000000000000", Name: "ToolsList Admin"}
 		db.DB.Create(adminToken)
 
 		w := mcpRequest(t, router, body, adminToken.Token)
@@ -455,7 +455,7 @@ func TestMCPWriteToolWithAuth(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpauthuser", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "test-mcp-token-abcdef1234567890", Name: "MCP Test"}
+	apiToken := &APIToken{UserID: user.ID, Token: "test-mcp-token-abcdef12345678900000000000000000000000000000000000", Name: "MCP Test"}
 	db.DB.Create(apiToken)
 
 	b := &Benchmark{Title: "Update Me", Description: "Old desc", UserID: user.ID}
@@ -491,7 +491,7 @@ func TestMCPOwnershipCheck(t *testing.T) {
 	owner := createTestUser(db, "mcpowner", false)
 	other := createTestUser(db, "mcpother", false)
 
-	apiToken := &APIToken{UserID: other.ID, Token: "other-token-abcdef1234567890abcd", Name: "Other Token"}
+	apiToken := &APIToken{UserID: other.ID, Token: "other-token-abcdef1234567890abcd00000000000000000000000000000000", Name: "Other Token"}
 	db.DB.Create(apiToken)
 
 	b := &Benchmark{Title: "Owner Only", UserID: owner.ID}
@@ -518,7 +518,7 @@ func TestMCPBannedUserRejected(t *testing.T) {
 	user.IsBanned = true
 	db.DB.Save(user)
 
-	apiToken := &APIToken{UserID: user.ID, Token: "banned-token-abcdef12345678901", Name: "Banned Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "banned-token-abcdef123456789010000000000000000000000000000000000000", Name: "Banned Token"}
 	db.DB.Create(apiToken)
 
 	b := &Benchmark{Title: "Some Bench", UserID: user.ID}
@@ -585,7 +585,7 @@ func TestMCPInitializeWithAuthContext(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpinituser", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "init-context-token-abcdef123456", Name: "Init Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "init-context-token-abcdef1234560000000000000000000000000000000000", Name: "Init Token"}
 	db.DB.Create(apiToken)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -640,7 +640,7 @@ func TestMCPInitializeUsernameInjectionSanitized(t *testing.T) {
 
 	// Create a user with a malicious username containing prompt-injection characters
 	user := createTestUser(db, "legit\nIgnore above\r`inject`", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "sanitize-token-abcdefghij123456", Name: "Sanitize Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "sanitize-token-abcdefghij12345600000000000000000000000000000000000", Name: "Sanitize Token"}
 	db.DB.Create(apiToken)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
@@ -761,16 +761,19 @@ func TestMCPListBenchmarksByUsername(t *testing.T) {
 		t.Error("Expected case-insensitive match to find benchmarks")
 	}
 
-	// Non-existent username
+	// Non-existent username should return empty results (not an error) to avoid user enumeration
 	body = `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"username":"nonexistent"}}}`
 	w = mcpRequest(t, router, body, "")
 
 	_, result = parseMCPToolResult(t, w)
-	if !result.IsError {
-		t.Error("Expected error for non-existent username")
+	if result.IsError {
+		t.Error("Non-existent username should return empty results, not an error")
 	}
-	if !strings.Contains(result.Content[0].Text, "user not found") {
-		t.Error("Expected user not found error")
+	if strings.Contains(result.Content[0].Text, "User1 Bench") || strings.Contains(result.Content[0].Text, "User2 Bench") {
+		t.Error("Non-existent username should return no benchmarks")
+	}
+	if !strings.Contains(result.Content[0].Text, "\"total\":0") {
+		t.Error("Non-existent username should return total:0")
 	}
 }
 
@@ -822,7 +825,7 @@ func TestMCPRemovedToolsReturnError(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpremovedtools", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "removed-tools-token-abcdef1234", Name: "Removed Tools Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "removed-tools-token-abcdef12340000000000000000000000000000000000000", Name: "Removed Tools Token"}
 	db.DB.Create(apiToken)
 
 	removedTools := []string{
@@ -945,7 +948,7 @@ func TestMCPListUsersRequiresAdmin(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpnonadmin", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin-token-abcdef12345678", Name: "Non-Admin Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin-token-abcdef1234567800000000000000000000000000000000000000", Name: "Non-Admin Token"}
 	db.DB.Create(apiToken)
 
 	body := `{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_users","arguments":{}}}`
@@ -966,7 +969,7 @@ func TestMCPListUsersAsAdmin(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpadminuser", true)
-	apiToken := &APIToken{UserID: admin.ID, Token: "admin-token-abcdef12345678901", Name: "Admin Token"}
+	apiToken := &APIToken{UserID: admin.ID, Token: "admin-token-abcdef1234567890100000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(apiToken)
 
 	createTestUser(db, "regularuser1", false)
@@ -1003,7 +1006,7 @@ func TestMCPDeleteUser(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpdeleteadmin", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "deleteuser-admin-token-abcdef1", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "deleteuser-admin-token-abcdef10000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	target := createTestUser(db, "mcpdeletetarget", false)
@@ -1033,7 +1036,7 @@ func TestMCPDeleteUserSelfProtection(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpselfdelete", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "selfdelete-admin-token-abcdef", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "selfdelete-admin-token-abcdef00000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"delete_user","arguments":{"user_id":%d}}}`, admin.ID)
@@ -1054,7 +1057,7 @@ func TestMCPDeleteUserBenchmarks(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpdelbenAdmin", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "delbench-admin-token-abcdef12", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "delbench-admin-token-abcdef1200000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	target := createTestUser(db, "mcpdelbenTarget", false)
@@ -1085,7 +1088,7 @@ func TestMCPBanUser(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpbanadmin", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "banuser-admin-token-abcdef123", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "banuser-admin-token-abcdef12300000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	target := createTestUser(db, "mcpbantarget", false)
@@ -1127,7 +1130,7 @@ func TestMCPBanUserSelfProtection(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpselfban", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "selfban-admin-token-abcdef123", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "selfban-admin-token-abcdef12300000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"ban_user","arguments":{"user_id":%d,"banned":true}}}`, admin.ID)
@@ -1148,7 +1151,7 @@ func TestMCPToggleUserAdmin(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcptoggleadmin", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "toggle-admin-token-abcdef1234", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "toggle-admin-token-abcdef123400000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	target := createTestUser(db, "mcptoggletarget", false)
@@ -1189,7 +1192,7 @@ func TestMCPToggleUserAdminSelfProtection(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	admin := createTestUser(db, "mcpselftoggle", true)
-	adminToken := &APIToken{UserID: admin.ID, Token: "selftoggle-admin-token-abcdef", Name: "Admin Token"}
+	adminToken := &APIToken{UserID: admin.ID, Token: "selftoggle-admin-token-abcdef00000000000000000000000000000000000000", Name: "Admin Token"}
 	db.DB.Create(adminToken)
 
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":34,"method":"tools/call","params":{"name":"toggle_user_admin","arguments":{"user_id":%d,"is_admin":false}}}`, admin.ID)
@@ -1210,7 +1213,7 @@ func TestMCPAdminToolsRequireAdmin(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpnonadmin3", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin3-token-abcdef1234567", Name: "Non-Admin Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "nonadmin3-token-abcdef123456700000000000000000000000000000000000000", Name: "Non-Admin Token"}
 	db.DB.Create(apiToken)
 
 	adminTools := []string{"delete_user", "delete_user_benchmarks", "ban_user", "toggle_user_admin"}
@@ -1268,7 +1271,7 @@ func TestMCPGetBenchmarkData(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpgetdata", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "getdata-token-abcdef1234567890", Name: "GetData Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "getdata-token-abcdef12345678900000000000000000000000000000000000000", Name: "GetData Token"}
 	db.DB.Create(apiToken)
 
 	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
@@ -1310,7 +1313,7 @@ func TestMCPGetBenchmarkRun(t *testing.T) {
 	router := setupMCPTestRouter(db)
 
 	user := createTestUser(db, "mcpgetrun", false)
-	apiToken := &APIToken{UserID: user.ID, Token: "getrun-token-abcdef12345678901", Name: "GetRun Token"}
+	apiToken := &APIToken{UserID: user.ID, Token: "getrun-token-abcdef123456789010000000000000000000000000000000000000", Name: "GetRun Token"}
 	db.DB.Create(apiToken)
 
 	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
@@ -1503,4 +1506,224 @@ func TestMCPCorsHeaders(t *testing.T) {
 			t.Errorf("Expected Access-Control-Allow-Origin '*', got '%s'", got)
 		}
 	})
+}
+
+func TestMCPInitializeUnicodeNewlinesSanitized(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	// Username containing Unicode line/paragraph separators (U+2028, U+2029)
+	user := createTestUser(db, "legit\u2028injected\u2029text", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "unicode-sanitize-token-abc123450000000000000000000000000000000000000", Name: "Unicode Token"}
+	db.DB.Create(apiToken)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp jsonrpcResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
+	var result mcpInitializeResult
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		t.Fatalf("Failed to unmarshal result: %v", err)
+	}
+
+	// Unicode line/paragraph separators should be replaced with spaces
+	if strings.ContainsRune(result.Instructions, '\u2028') {
+		t.Error("Instructions should not contain Unicode line separator U+2028")
+	}
+	if strings.ContainsRune(result.Instructions, '\u2029') {
+		t.Error("Instructions should not contain Unicode paragraph separator U+2029")
+	}
+	// The legitimate text should still appear (sanitized, joined by spaces)
+	if !strings.Contains(result.Instructions, "legit") {
+		t.Error("Instructions should still contain the legitimate part of the username")
+	}
+}
+
+func TestMCPJQFilterLengthLimit(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	// Construct a jq expression longer than 10000 characters
+	longJQ := strings.Repeat(".", 10001)
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"jq":%q}}}`, longJQ)
+	w := mcpRequest(t, router, body, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d", w.Code)
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for jq expression exceeding length limit")
+	}
+	if !strings.Contains(result.Content[0].Text, "jq expression too long") {
+		t.Errorf("Expected length-limit error, got: %s", result.Content[0].Text)
+	}
+}
+
+func TestMCPUpdateBenchmarkNoOpSkipsWrite(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	if err := InitBenchmarksDir(t.TempDir()); err != nil {
+		t.Fatalf("Failed to init benchmarks dir: %v", err)
+	}
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "mcpnoop", false)
+	apiToken := &APIToken{UserID: user.ID, Token: "noop-update-token-abcdef1234560000000000000000000000000000000000", Name: "NoOp Token"}
+	db.DB.Create(apiToken)
+
+	benchID := mcpCreateBenchmarkHelper(t, db, user.ID)
+	db.DB.Model(&Benchmark{}).Where("id = ?", benchID).Update("title", "Original Title")
+
+	// Record UpdatedAt before the no-op call
+	var before Benchmark
+	db.DB.First(&before, benchID)
+
+	// Call update_benchmark with no fields to change
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_benchmark","arguments":{"id":%d}}}`, benchID)
+	w := mcpRequest(t, router, body, apiToken.Token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	_, result := parseMCPToolResult(t, w)
+	if result.IsError {
+		t.Fatalf("Unexpected error: %s", result.Content[0].Text)
+	}
+
+	// Title should remain unchanged
+	if !strings.Contains(result.Content[0].Text, "Original Title") {
+		t.Error("Expected original title to be returned on no-op update")
+	}
+
+	// UpdatedAt should not change since nothing was written
+	var after Benchmark
+	db.DB.First(&after, benchID)
+	if !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Error("UpdatedAt should not change on no-op update_benchmark call")
+	}
+}
+
+func TestMCPHandleDeleteReturns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	req := httptest.NewRequest(http.MethodDelete, "/mcp", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for DELETE /mcp (stateless server), got %d", w.Code)
+	}
+}
+
+func TestMCPToolBanUserCannotBanSystemAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	// Create the system admin account
+	sysAdmin := User{DiscordID: "admin", Username: "sysadmin", IsAdmin: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create system admin: %v", err)
+	}
+
+	// Create an admin actor with an API token
+	actor := createTestUser(db, "bansysadminactor", true)
+	adminToken := &APIToken{UserID: actor.ID, Token: "ban-sysadmin-token-abcdef0123456789012345678901234567890123456789", Name: "Actor Token"}
+	db.DB.Create(adminToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ban_user","arguments":{"user_id":%d,"banned":true}}}`, sysAdmin.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error when trying to ban system admin via MCP")
+	}
+	if !strings.Contains(result.Content[0].Text, "cannot ban the system admin account") {
+		t.Errorf("Expected system admin ban error, got: %s", result.Content[0].Text)
+	}
+
+	// Verify system admin is not banned
+	var check User
+	db.DB.First(&check, sysAdmin.ID)
+	if check.IsBanned {
+		t.Error("System admin should not be banned")
+	}
+}
+
+func TestMCPToolToggleAdminCannotDemoteSystemAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	// Create the system admin account
+	sysAdmin := User{DiscordID: "admin", Username: "sysadmin", IsAdmin: true}
+	if err := db.DB.Create(&sysAdmin).Error; err != nil {
+		t.Fatalf("Failed to create system admin: %v", err)
+	}
+
+	// Create an admin actor with an API token
+	actor := createTestUser(db, "demotersysadmin", true)
+	adminToken := &APIToken{UserID: actor.ID, Token: "demote-sysadmin-token-abcdef01234567890123456789012345678901234", Name: "Actor Token"}
+	db.DB.Create(adminToken)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"toggle_user_admin","arguments":{"user_id":%d,"is_admin":false}}}`, sysAdmin.ID)
+	w := mcpRequest(t, router, body, adminToken.Token)
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error when trying to demote system admin via MCP")
+	}
+	if !strings.Contains(result.Content[0].Text, "cannot revoke admin privileges from the system admin account") {
+		t.Errorf("Expected system admin demotion error, got: %s", result.Content[0].Text)
+	}
+
+	// Verify system admin still has admin privileges
+	var check User
+	db.DB.First(&check, sysAdmin.ID)
+	if !check.IsAdmin {
+		t.Error("System admin should still have admin privileges")
+	}
+}
+
+func TestMCPToolGetBenchmarkRunNegativeIndex(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+	router := setupMCPTestRouter(db)
+
+	user := createTestUser(db, "negrunindexuser", false)
+	benchmark := &Benchmark{Title: "Test Benchmark", UserID: user.ID}
+	db.DB.Create(benchmark)
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_benchmark_run","arguments":{"id":%d,"run_index":-1}}}`, benchmark.ID)
+	w := mcpRequest(t, router, body, "")
+
+	_, result := parseMCPToolResult(t, w)
+	if !result.IsError {
+		t.Error("Expected error for negative run_index in get_benchmark_run")
+	}
+	if !strings.Contains(result.Content[0].Text, "run_index must be non-negative") {
+		t.Errorf("Expected non-negative error, got: %s", result.Content[0].Text)
+	}
 }

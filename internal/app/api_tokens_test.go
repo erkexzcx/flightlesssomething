@@ -211,7 +211,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 	token := APIToken{
 		UserID: user.ID,
-		Token:  "test_token_12345678901234567890123456789012",
+		Token:  "test_token_12345678901234567890123456789012000000000000000000000",
 		Name:   "Test Auth Token",
 	}
 	if err := db.DB.Create(&token).Error; err != nil {
@@ -234,7 +234,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 	t.Run("auth_with_token", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012")
+		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012000000000000000000000")
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -283,7 +283,7 @@ func TestAPITokenAuthentication(t *testing.T) {
 
 		// Make a request with the token
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012")
+		req.Header.Set("Authorization", "Bearer test_token_12345678901234567890123456789012000000000000000000000")
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)

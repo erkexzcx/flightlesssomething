@@ -46,7 +46,9 @@ If the user provided a scope restriction (e.g. "Go only" or "focus on auth"), fi
 
 ---
 
-### Phase 1: Hunt (Always Parallel, One Invocation Per Subsystem Per Reviewer)
+### Phase 1: Hunt (ALWAYS PARALLEL — Every Round, No Exceptions)
+
+> **PARALLELIZATION IS MANDATORY.** Every time you enter Phase 1 — Round 1, Round 2, Round 3, every single round — you MUST invoke ALL applicable (reviewer, subsystem) pairs **simultaneously in one single `runSubagent` batch call**. Sequential invocation is forbidden. If you find yourself calling reviewers one at a time, stop and restart the phase correctly.
 
 For each subsystem, determine which reviewers are relevant using the matrix below, then invoke **all applicable (reviewer, subsystem) pairs simultaneously in a single parallel batch**:
 
@@ -74,6 +76,8 @@ Each invocation is focused — give the reviewer a specific subsystem scope and 
 > Perform a DEEP, EXHAUSTIVE audit of only this subsystem — every function, every data flow path, every edge case within this scope. Find as many issues as possible. Do not hold back, do not skim, do not skip anything you are unsure about. Report every vulnerability / concern / inefficiency you find regardless of severity. Nitpick mercilessly. Do NOT stray outside the listed files unless you need to read a dependency to understand context.
 
 **Prompt template for Round N (N ≥ 2) — per (reviewer, subsystem) pair:**
+
+> ⚠️ **REMINDER:** All (reviewer, subsystem) pairs for this round must be fired simultaneously in one parallel batch — do NOT send them sequentially.
 
 > You are reviewing one specific subsystem: **[Subsystem Name]**.
 > Focus exclusively on these files/directories: `[comma-separated file paths]`
@@ -151,7 +155,7 @@ Skipped:   X issues (list each with reason — breaking change / risky)
 → Starting Round N+1...
 ```
 
-Then return to Phase 1 with the updated prompt for each subsystem, listing the issues that were fixed in that specific subsystem so reviewers know what to skip.
+Then return to Phase 1. **Fire all (reviewer, subsystem) pairs in one parallel batch** — use the Round N template for each pair, listing the issues fixed in that specific subsystem so reviewers know what to skip. Do NOT go subsystem by subsystem sequentially.
 
 ---
 

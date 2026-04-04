@@ -1,10 +1,12 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -19,21 +21,21 @@ type DBInstance struct {
 //
 // Migration strategy (future-proof):
 // 1. Format 1 (v0.20 and earlier): database.db file with old schema
-//    - Detected by: database.db exists, flightlesssomething.db doesn't exist
-//    - Action: Migrate from database.db to flightlesssomething.db, delete database.db on success
+//   - Detected by: database.db exists, flightlesssomething.db doesn't exist
+//   - Action: Migrate from database.db to flightlesssomething.db, delete database.db on success
 //
 // 2. Format 2 (intermediate): flightlesssomething.db with old schema (no schema_versions table)
-//    - Detected by: flightlesssomething.db exists, no schema_versions table, has ai_summary column
-//    - Action: In-place schema upgrade, add schema_versions table with version 1
+//   - Detected by: flightlesssomething.db exists, no schema_versions table, has ai_summary column
+//   - Action: In-place schema upgrade, add schema_versions table with version 1
 //
 // 3. Format 3+ (current and future): flightlesssomething.db with schema_versions table
-//    - Detected by: schema_versions table exists with version number
-//    - Action: Check version number and apply incremental migrations as needed
-//    - Current version: 1
-//    - Future versions: Add migration logic for versions 2, 3, etc. in switch/case
+//   - Detected by: schema_versions table exists with version number
+//   - Action: Check version number and apply incremental migrations as needed
+//   - Current version: 1
+//   - Future versions: Add migration logic for versions 2, 3, etc. in switch/case
 func InitDB(dataDir string) (*DBInstance, error) {
 	dbPath := filepath.Join(dataDir, "flightlesssomething.db")
-	
+
 	// Check if we need to migrate from old database.db file (Format 1)
 	oldDBPath := filepath.Join(dataDir, "database.db")
 	needsOldFileMigration := false
@@ -44,11 +46,21 @@ func InitDB(dataDir string) (*DBInstance, error) {
 			log.Printf("Found old database.db, will migrate to flightlesssomething.db")
 		}
 	}
-	
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+
+	db, err := gorm.Open(sqlite.Open(dbPath+"?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	// Configure connection pool: SQLite supports only one writer at a time so cap
+	// open connections to 1 to prevent "database is locked" errors under load.
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxIdleTime(30 * time.Minute)
 
 	// Detect schema version (Format 2 vs Format 3+)
 	version, err := detectSchemaVersion(db)
@@ -99,7 +111,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 	if version > 0 && version < currentSchemaVersion {
 		// Handle incremental migrations for future versions (Format 3+ → newer Format 3+)
 		log.Printf("Database is at version %d, current version is %d. Running data migrations...", version, currentSchemaVersion)
-		
+
 		if version == 1 {
 			log.Println("Populating new fields for version 2...")
 			if err := migrateFromV1ToV2(db); err != nil {
@@ -112,7 +124,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 			log.Println("Successfully migrated to version 2")
 			version = 2 // Update local version for next migration step
 		}
-		
+
 		if version == 2 {
 			log.Println("Migrating benchmark storage format from V1 to V2...")
 			// This migration also regenerates metadata with JSON size during the process
@@ -172,13 +184,16 @@ func InitDB(dataDir string) (*DBInstance, error) {
 }
 
 // EnsureSystemAdmin ensures there is exactly one system admin account
-// and updates it with the current credentials from config
-func EnsureSystemAdmin(db *DBInstance, username, password string) error {
+// and updates it with the current credentials from config.
+// The admin password is only used at login time (compared from config); it is
+// never stored in the database, so no password parameter is needed here.
+func EnsureSystemAdmin(db *DBInstance, username string) error {
 	// First, check if there's already a system admin with discord_id = "admin"
 	var systemAdmin User
 	result := db.DB.Where("discord_id = ?", "admin").First(&systemAdmin)
 
-	if result.Error == nil {
+	switch {
+	case result.Error == nil:
 		// System admin exists, update username if changed
 		updated := false
 		if systemAdmin.Username != username {
@@ -194,7 +209,7 @@ func EnsureSystemAdmin(db *DBInstance, username, password string) error {
 				return fmt.Errorf("failed to update system admin: %w", err)
 			}
 		}
-	} else {
+	case errors.Is(result.Error, gorm.ErrRecordNotFound):
 		// System admin doesn't exist, create it
 		systemAdmin = User{
 			DiscordID: "admin",
@@ -204,6 +219,8 @@ func EnsureSystemAdmin(db *DBInstance, username, password string) error {
 		if err := db.DB.Create(&systemAdmin).Error; err != nil {
 			return fmt.Errorf("failed to create system admin: %w", err)
 		}
+	default:
+		return fmt.Errorf("failed to query system admin: %w", result.Error)
 	}
 
 	return nil

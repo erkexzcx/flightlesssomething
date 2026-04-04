@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -67,20 +66,32 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
 
+		// Check if Discord rejected the authorization (user denied, app disabled, etc.)
+		if errParam := c.Query("error"); errParam != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "authorization denied"})
+			return
+		}
+
 		savedState := session.Get("OAuthState")
 		if savedState == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 			return
 		}
 		stateStr, ok := savedState.(string)
-		if !ok || c.Query("state") != stateStr {
+		if !ok || subtle.ConstantTimeCompare([]byte(c.Query("state")), []byte(stateStr)) != 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 			return
 		}
-		// Clear the one-time OAuth state nonce now that it has been validated
+		// Clear the one-time OAuth state nonce now that it has been validated.
+		// Save the session immediately so the nonce is invalidated even if the
+		// downstream Exchange call fails — preserving the one-time-use guarantee.
 		session.Delete("OAuthState")
+		if err := session.Save(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save session"})
+			return
+		}
 
-		token, err := discordOAuthConfig.Exchange(context.Background(), c.Query("code"))
+		token, err := discordOAuthConfig.Exchange(c.Request.Context(), c.Query("code"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to exchange code"})
 			return
@@ -92,9 +103,9 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 			return
 		}
-		client := discordOAuthConfig.Client(context.Background(), token)
+		client := discordOAuthConfig.Client(c.Request.Context(), token)
 		res, err := client.Do(req)
-		if err != nil || res.StatusCode != 200 {
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
 			return
 		}
@@ -104,6 +115,10 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 				fmt.Printf("Warning: failed to close response body: %v\n", closeErr)
 			}
 		}()
+		if res.StatusCode != 200 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
+			return
+		}
 
 		body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20)) // limit Discord response to 1 MB
 		if err != nil {
@@ -150,6 +165,7 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 		now := time.Now()
 		db.DB.Model(&User{}).Where("id = ?", user.ID).Update("last_web_activity_at", now)
 
+		session.Clear()
 		session.Set("UserID", user.ID)
 		session.Set("Username", user.Username)
 		session.Set("IsAdmin", user.IsAdmin)
@@ -169,8 +185,7 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 		// from locking out all admins by exhausting a global slot.
 		limiter := GetAdminLoginLimiter()
 		clientIP := c.ClientIP()
-		if !limiter.Allow(clientIP) {
-			remaining := limiter.GetRemainingTime(clientIP)
+		if allowed, remaining := limiter.AllowWithRemaining(clientIP); !allowed {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":            "too many failed login attempts",
 				"retry_after_secs": int(remaining.Seconds()),
@@ -220,11 +235,18 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("is_admin", true)
 		}
 
+		// Prevent banned admin from logging in
+		if adminUser.IsBanned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
+			return
+		}
+
 		// Update last web activity
 		now := time.Now()
 		db.DB.Model(&User{}).Where("id = ?", adminUser.ID).Update("last_web_activity_at", now)
 
 		session := sessions.Default(c)
+		session.Clear()
 		session.Set("UserID", adminUser.ID)
 		session.Set("Username", adminUser.Username)
 		session.Set("IsAdmin", true)

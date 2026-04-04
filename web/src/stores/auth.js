@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '../api/client'
+import { api, APIError } from '../api/client'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const isAuthenticated = ref(false)
   const isAdmin = ref(false)
+  const initialized = ref(false)
   const loading = ref(false)
   const error = ref(null)
+  let _initPromise = null
 
   // Check authentication state by making an API call
   async function checkAuth() {
@@ -34,13 +36,28 @@ export const useAuthStore = defineStore('auth', () => {
         isAdmin.value = false
       }
     } catch (err) {
-      // If API call fails (e.g., 401 unauthorized), user is not authenticated
-      isAuthenticated.value = false
-      user.value = null
-      isAdmin.value = false
+      // Only treat 401 Unauthorized as "not authenticated"
+      // Network errors or server errors (500) should not log the user out
+      if (err instanceof APIError && err.status === 401) {
+        isAuthenticated.value = false
+        user.value = null
+        isAdmin.value = false
+      }
+      // Silently ignore other errors to prevent spurious logout on transient failures
     } finally {
       loading.value = false
     }
+  }
+
+  // Idempotent init — resolves once auth check completes.
+  // Call from router guards to avoid racing initial navigation with checkAuth.
+  function init() {
+    if (!_initPromise) {
+      _initPromise = checkAuth().finally(() => {
+        initialized.value = true
+      })
+    }
+    return _initPromise
   }
 
   async function loginAdmin(username, password) {
@@ -71,14 +88,13 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = null
       
       await api.auth.logout()
-      
-      isAuthenticated.value = false
-      user.value = null
-      isAdmin.value = false
     } catch (err) {
       error.value = err.message || 'Logout failed'
       throw err
     } finally {
+      isAuthenticated.value = false
+      user.value = null
+      isAdmin.value = false
       loading.value = false
     }
   }
@@ -91,9 +107,11 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     isAuthenticated,
     isAdmin,
+    initialized,
     loading,
     error,
     checkAuth,
+    init,
     loginAdmin,
     logout,
     loginDiscord,

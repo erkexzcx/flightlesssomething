@@ -54,6 +54,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Set theme
   function setTheme(newTheme) {
+    if (!validThemes.includes(newTheme)) return
     theme.value = newTheme
     localStorage.setItem('theme', newTheme)
     // Update the data-bs-theme attribute on the html element
@@ -68,12 +69,14 @@ export const useAppStore = defineStore('app', () => {
 
   // Set calculation method
   function setCalculationMethod(newMethod) {
+    if (!validCalculationMethods.includes(newMethod)) return
     calculationMethod.value = newMethod
     localStorage.setItem('calculationMethod', newMethod)
   }
 
   // Set comparison mode
   function setComparisonMode(newMode) {
+    if (!validComparisonModes.includes(newMode)) return
     comparisonMode.value = newMode
     localStorage.setItem('comparisonMode', newMode)
   }

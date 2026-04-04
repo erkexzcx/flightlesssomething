@@ -120,6 +120,6 @@ jobs:
             # Cleanup
             rm -f image.tar.gz
             
-            # Prune old images
-            docker image prune -af --filter 'until=24h' || true
+            # Prune dangling images
+            docker image prune -f --filter 'until=24h' || true
           "
