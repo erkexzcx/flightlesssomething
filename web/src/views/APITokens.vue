@@ -341,8 +341,13 @@ async function createToken() {
   createError.value = null
   
   try {
-    await api.tokens.create(newTokenName.value)
+    const newToken = await api.tokens.create(newTokenName.value)
     await loadTokens()
+    // Inject the token value (only returned at creation time) into the reloaded list entry
+    const created = tokens.value.find(t => t.id === newToken.id)
+    if (created) {
+      created.token = newToken.token
+    }
     closeCreateModal()
   } catch (err) {
     createError.value = err.message || 'Failed to create token'
@@ -409,7 +414,7 @@ function openInVSCode() {
     ]
   }
   const uri = `vscode:mcp/install?${encodeURIComponent(JSON.stringify(config))}`
-  window.open(uri, '_blank')
+  window.open(uri, '_blank', 'noopener,noreferrer')
 }
 </script>
 
