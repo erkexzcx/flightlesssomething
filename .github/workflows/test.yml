@@ -176,12 +176,12 @@ jobs:
           ./server \
             -bind="0.0.0.0:5000" \
             -data-dir="/tmp/e2e-data" \
-            -session-secret="e2e-test-secret" \
+            -session-secret="e2e-test-secret-key-that-is-at-least-32-chars" \
             -discord-client-id="test-id" \
             -discord-client-secret="test-secret" \
             -discord-redirect-url="http://localhost:5000/auth/login/callback" \
             -admin-username="e2eadmin" \
-            -admin-password="e2epass" &
+            -admin-password="e2epassword1" &
           sleep 5
 
       - name: Run Playwright tests
