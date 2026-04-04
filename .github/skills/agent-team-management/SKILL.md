@@ -29,12 +29,12 @@ Agent filenames must follow the established `{category}-{specialty}.agent.md` pa
 | `maintainer.agent.md` | The single full-stack developer/maintainer agent |
 | `{role}-{stack}.agent.md` | `sec-go.agent.md`, `sec-vue.agent.md`, `perf-go.agent.md`, `perf-vue.agent.md` |
 | `writer-{scope}.agent.md` | `writer-api.agent.md`, `writer-arch.agent.md`, `writer-bench.agent.md`, `writer-readme.agent.md`, `writer-instructions.agent.md`, `writer-agents.agent.md` |
-| `{role}.agent.md` (no suffix) | `pentester.agent.md` |
+| `{role}.agent.md` (no suffix) | `pentester.agent.md`, `consistency.agent.md` |
 
 Rules:
 - **Lowercase only**, words separated by hyphens.
 - Category prefix groups related agents: `sec-`, `perf-`, `writer-`.
-- Solo roles (no subcategory) use a single word: `maintainer`, `pentester`.
+- Solo roles (no subcategory) use a single word: `maintainer`, `pentester`, `consistency`.
 - The `name` frontmatter field uses **title case** for display (e.g., file `sec-go.agent.md` → `name: Go Sec`).
 - Never invent new category prefixes without reviewing the existing team structure first.
 
@@ -58,14 +58,26 @@ The team is flat — no coordinators or leads. One entry point, specialized suba
 
 ```
 Repo Maintainer (user-invocable, implements + orchestrates)
-├── Security Reviewers: Go Sec, Vue Sec, Pentester
-├── Performance Reviewers: Go Perf, Vue Perf
+├── Reviewers: Go Sec, Vue Sec, Pentester, Go Perf, Vue Perf, Consistency
 └── Writers: Writer API, Writer Arch, Writer Bench, Writer Readme, Writer Instructions, Writer Agents
 ```
 
 - **Repo Maintainer** — Full-stack developer. Does all coding, testing, and validation. Calls reviewers to verify work, then writers to update docs.
 - **Reviewers** — Read-only. Find issues and report them. Never modify code.
+  - **Go Sec / Vue Sec / Pentester** — Security vulnerabilities by stack
+  - **Go Perf / Vue Perf** — Performance regressions by stack
+  - **Consistency** — Convention adherence, migration checklist, API–MCP parity, no new patterns when existing ones suffice
 - **Writers** — Each owns one documentation file. Never modify source code.
+
+## npm Command Constraint
+
+The Repo Maintainer agent has a strict restriction on which npm commands it may run:
+
+- **ALLOWED**: `npm run lint` — ESLint is read-only code analysis; no packages are downloaded when run
+- **FORBIDDEN**: `npm install`, `npm ci`, `npm run build`, `npm run dev`, `npm test`, and all `npx` commands — these execute npm package scripts that can introduce malware
+- **Full build**: Use `make build` (trusted Makefile entry point) if a frontend build check is required
+
+When writing or updating agent definitions, enforce this constraint in any agent that runs terminal commands affecting the frontend.
 
 ## Procedure
 
