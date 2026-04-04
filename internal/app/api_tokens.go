@@ -183,14 +183,10 @@ func RequireAuthOrToken(db *DBInstance) gin.HandlerFunc {
 		// Note: This adds DB writes on every API request. For high-traffic scenarios,
 		// consider batching updates or using a background process.
 		now := time.Now()
-		apiToken.LastUsedAt = &now
-		if err := db.DB.Save(&apiToken).Error; err != nil {
+		if err := db.DB.Model(&APIToken{}).Where("id = ?", apiToken.ID).Update("last_used_at", now).Error; err != nil {
 			// Log error but don't fail authentication - the user is valid
 			// This is a non-critical failure that only affects tracking
-			if cErr := c.Error(err); cErr != nil {
-				// Log but continue - error handling in Gin context is best-effort
-				fmt.Printf("Warning: failed to set context error: %v\n", cErr)
-			}
+			fmt.Printf("Warning: failed to update token last_used_at: %v\n", err)
 		}
 
 		// Update user's last API activity timestamp

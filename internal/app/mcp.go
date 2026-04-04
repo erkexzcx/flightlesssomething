@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -159,14 +160,19 @@ type BenchmarkDataSummary struct {
 
 // mcpServer holds the MCP server state
 type mcpServer struct {
-	db      *DBInstance
-	version string
-	tools   []mcpTool
+	db            *DBInstance
+	version       string
+	tools         []mcpTool
+	toolAccessMap map[string]string
 }
 
 func newMCPServer(db *DBInstance, version string) *mcpServer {
 	s := &mcpServer{db: db, version: version}
 	s.tools = s.defineTools()
+	s.toolAccessMap = make(map[string]string, len(s.tools))
+	for _, t := range s.tools {
+		s.toolAccessMap[t.Name] = t.accessLevel
+	}
 	return s
 }
 
@@ -467,8 +473,12 @@ func HandleMCPDelete(c *gin.Context) {
 }
 
 func (s *mcpServer) handleInitialize(c *gin.Context, req *jsonrpcRequest) jsonrpcResponse {
-	// Build base URL from request
+	// Build base URL from request; only trust "http" or "https" from proxy header
+	// to prevent Host header injection via custom protocol schemes.
 	scheme := c.Request.Header.Get("X-Forwarded-Proto")
+	if scheme != "http" && scheme != "https" {
+		scheme = ""
+	}
 	if scheme == "" {
 		if c.Request.TLS != nil {
 			scheme = "https"
@@ -668,10 +678,8 @@ func (s *mcpServer) toolError(id json.RawMessage, msg string) jsonrpcResponse {
 
 // getToolAccessLevel returns the access level for a tool by name.
 func (s *mcpServer) getToolAccessLevel(name string) string {
-	for _, tool := range s.tools {
-		if tool.Name == name {
-			return tool.accessLevel
-		}
+	if level, ok := s.toolAccessMap[name]; ok {
+		return level
 	}
 	// Unknown tools default to admin level to fail safely
 	return toolAccessAdmin
@@ -688,7 +696,7 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		JQ string `json:"jq"`
 	}
 	if err := json.Unmarshal(args, &jqArgs); err != nil {
-		return result, nil //nolint:nilerr // args may not contain jq field; ignore unmarshal errors
+		return result, nil // args may not contain jq field; ignore unmarshal errors
 	}
 	if jqArgs.JQ == "" {
 		return result, nil
@@ -704,7 +712,11 @@ func applyJQFilter(args json.RawMessage, result string) (string, error) {
 		return "", fmt.Errorf("jq: failed to parse tool result as JSON: %w", parseErr)
 	}
 
-	iter := query.Run(input)
+	// Run jq with a timeout to prevent CPU exhaustion from adversarial expressions.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	iter := query.RunWithContext(ctx, input)
 	var outputs []interface{}
 	for {
 		v, ok := iter.Next()
@@ -1115,14 +1127,36 @@ func (s *mcpServer) toolListUsers(args json.RawMessage) (string, error) {
 		return "", fmt.Errorf("database error: %w", err)
 	}
 
-	for i := range users {
-		var benchCount int64
-		s.db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&benchCount)
-		users[i].BenchmarkCount = int(benchCount)
+	if len(users) > 0 {
+		userIDs := make([]uint, len(users))
+		for i := range users {
+			userIDs[i] = users[i].ID
+		}
 
-		var tokenCount int64
-		s.db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
-		users[i].APITokenCount = int(tokenCount)
+		var benchmarkCounts []struct {
+			UserID uint
+			Count  int64
+		}
+		s.db.DB.Model(&Benchmark{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&benchmarkCounts)
+		benchCountMap := make(map[uint]int64, len(benchmarkCounts))
+		for _, bc := range benchmarkCounts {
+			benchCountMap[bc.UserID] = bc.Count
+		}
+
+		var tokenCounts []struct {
+			UserID uint
+			Count  int64
+		}
+		s.db.DB.Model(&APIToken{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&tokenCounts)
+		tokenCountMap := make(map[uint]int64, len(tokenCounts))
+		for _, tc := range tokenCounts {
+			tokenCountMap[tc.UserID] = tc.Count
+		}
+
+		for i := range users {
+			users[i].BenchmarkCount = int(benchCountMap[users[i].ID])
+			users[i].APITokenCount = int(tokenCountMap[users[i].ID])
+		}
 	}
 
 	totalPages := int((total + int64(params.PerPage) - 1) / int64(params.PerPage))

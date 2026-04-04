@@ -44,16 +44,37 @@ func HandleListUsers(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Then count benchmarks for each user
-		for i := range users {
-			var count int64
-			db.DB.Model(&Benchmark{}).Where("user_id = ?", users[i].ID).Count(&count)
-			users[i].BenchmarkCount = int(count)
+		// Then count benchmarks for each user in two batch queries (one for benchmarks, one for tokens)
+		if len(users) > 0 {
+			userIDs := make([]uint, len(users))
+			for i := range users {
+				userIDs[i] = users[i].ID
+			}
 
-			// Count API tokens for each user
-			var tokenCount int64
-			db.DB.Model(&APIToken{}).Where("user_id = ?", users[i].ID).Count(&tokenCount)
-			users[i].APITokenCount = int(tokenCount)
+			var benchmarkCounts []struct {
+				UserID uint
+				Count  int64
+			}
+			db.DB.Model(&Benchmark{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&benchmarkCounts)
+			benchCountMap := make(map[uint]int64, len(benchmarkCounts))
+			for _, bc := range benchmarkCounts {
+				benchCountMap[bc.UserID] = bc.Count
+			}
+
+			var tokenCounts []struct {
+				UserID uint
+				Count  int64
+			}
+			db.DB.Model(&APIToken{}).Select("user_id, count(*) as count").Where("user_id IN ?", userIDs).Group("user_id").Scan(&tokenCounts)
+			tokenCountMap := make(map[uint]int64, len(tokenCounts))
+			for _, tc := range tokenCounts {
+				tokenCountMap[tc.UserID] = tc.Count
+			}
+
+			for i := range users {
+				users[i].BenchmarkCount = int(benchCountMap[users[i].ID])
+				users[i].APITokenCount = int(tokenCountMap[users[i].ID])
+			}
 		}
 
 		// Sort by benchmark count (top uploaders first)

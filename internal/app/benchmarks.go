@@ -237,14 +237,10 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Check if user is banned
+		// Get user to check admin status for rate limiting (IsBanned already checked by middleware)
 		var user User
 		if err := db.DB.First(&user, uid).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-			return
-		}
-		if user.IsBanned {
-			c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
 			return
 		}
 
@@ -281,6 +277,11 @@ func HandleCreateBenchmark(db *DBInstance) gin.HandlerFunc {
 		files := form.File["files"]
 		if len(files) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no files uploaded"})
+			return
+		}
+
+		if len(files) > maxFilesPerUpload {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("too many files: maximum %d files per upload", maxFilesPerUpload)})
 			return
 		}
 
@@ -371,19 +372,6 @@ func HandleUpdateBenchmark(db *DBInstance) gin.HandlerFunc {
 		if isAdmin != nil {
 			if af, ok := isAdmin.(bool); ok {
 				adminFlag = af
-			}
-		}
-
-		// Check if user is banned (admins can still update)
-		if !adminFlag {
-			var user User
-			if err := db.DB.First(&user, uid).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-				return
-			}
-			if user.IsBanned {
-				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
-				return
 			}
 		}
 
@@ -503,19 +491,6 @@ func HandleDeleteBenchmark(db *DBInstance) gin.HandlerFunc {
 		if isAdmin != nil {
 			if af, ok := isAdmin.(bool); ok {
 				adminFlag = af
-			}
-		}
-
-		// Check if user is banned (admins can still delete)
-		if !adminFlag {
-			var user User
-			if err := db.DB.First(&user, uid).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-				return
-			}
-			if user.IsBanned {
-				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
-				return
 			}
 		}
 
@@ -724,19 +699,6 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 			}
 		}
 
-		// Check if user is banned (admins can still add)
-		if !adminFlag {
-			var user User
-			if err := db.DB.First(&user, uid).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-				return
-			}
-			if user.IsBanned {
-				c.JSON(http.StatusForbidden, gin.H{"error": "your account has been banned"})
-				return
-			}
-		}
-
 		// Check rate limiting for benchmark uploads (skip for admins)
 		if !adminFlag {
 			limiter := GetBenchmarkUploadLimiter()
@@ -781,6 +743,11 @@ func HandleAddBenchmarkRuns(db *DBInstance) gin.HandlerFunc {
 		files := form.File["files"]
 		if len(files) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no files uploaded"})
+			return
+		}
+
+		if len(files) > maxFilesPerUpload {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("too many files: maximum %d files per upload", maxFilesPerUpload)})
 			return
 		}
 

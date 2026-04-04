@@ -51,7 +51,8 @@ func Start(config *Config, version string) error {
 
 	// Setup Gin
 	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
 
 	// Disable trailing slash redirect to prevent issues with SPA
 	r.RedirectTrailingSlash = false
@@ -78,7 +79,7 @@ func Start(config *Config, version string) error {
 	r.GET("/auth/login/callback", HandleLoginCallback(db))
 	r.POST("/auth/admin/login", HandleAdminLogin(config, db))
 	r.POST("/auth/logout", HandleLogout(secureCookie))
-	r.GET("/api/auth/me", HandleGetCurrentUser)
+	r.GET("/api/auth/me", HandleGetCurrentUser(db))
 
 	// Public benchmark routes
 	r.GET("/api/benchmarks", HandleListBenchmarks(db))

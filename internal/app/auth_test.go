@@ -142,17 +142,20 @@ func TestHandleGetCurrentUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("unauthenticated", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
 		w := httptest.NewRecorder()
-		c, r := gin.CreateTestContext(w)
+		_, r := gin.CreateTestContext(w)
 
 		// Setup sessions
 		store := cookie.NewStore([]byte("test-secret"))
 		r.Use(sessions.Sessions("test_session", store))
-		r.GET("/api/auth/me", HandleGetCurrentUser)
+		r.GET("/api/auth/me", HandleGetCurrentUser(db))
 
 		// Make request
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
-		r.ServeHTTP(w, c.Request)
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, w.Code)
@@ -160,8 +163,17 @@ func TestHandleGetCurrentUser(t *testing.T) {
 	})
 
 	t.Run("authenticated", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
+		// Create a real user in the DB
+		user := User{DiscordID: "disc-123", Username: "testuser", IsAdmin: false}
+		if err := db.DB.Create(&user).Error; err != nil {
+			t.Fatalf("failed to create test user: %v", err)
+		}
+
 		w := httptest.NewRecorder()
-		c, r := gin.CreateTestContext(w)
+		_, r := gin.CreateTestContext(w)
 
 		// Setup sessions
 		store := cookie.NewStore([]byte("test-secret"))
@@ -170,21 +182,54 @@ func TestHandleGetCurrentUser(t *testing.T) {
 		// Setup route and session data
 		r.GET("/api/auth/me", func(ctx *gin.Context) {
 			session := sessions.Default(ctx)
-			session.Set("UserID", uint(123))
-			session.Set("Username", "testuser")
+			session.Set("UserID", user.ID)
+			session.Set("Username", user.Username)
 			session.Set("IsAdmin", false)
 			if err := session.Save(); err != nil {
 				t.Errorf("Failed to save session: %v", err)
 			}
-			HandleGetCurrentUser(ctx)
+			HandleGetCurrentUser(db)(ctx)
 		})
 
 		// Make request
-		c.Request = httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
-		r.ServeHTTP(w, c.Request)
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+			t.Errorf("Expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("banned_user_session", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer cleanupTestDB(t, db)
+
+		// Create a banned user
+		user := User{DiscordID: "disc-banned", Username: "banneduser", IsBanned: true}
+		if err := db.DB.Create(&user).Error; err != nil {
+			t.Fatalf("failed to create test user: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		_, r := gin.CreateTestContext(w)
+
+		store := cookie.NewStore([]byte("test-secret"))
+		r.Use(sessions.Sessions("test_session", store))
+
+		r.GET("/api/auth/me", func(ctx *gin.Context) {
+			session := sessions.Default(ctx)
+			session.Set("UserID", user.ID)
+			if err := session.Save(); err != nil {
+				t.Errorf("Failed to save session: %v", err)
+			}
+			HandleGetCurrentUser(db)(ctx)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status %d for banned user, got %d", http.StatusUnauthorized, w.Code)
 		}
 	})
 }

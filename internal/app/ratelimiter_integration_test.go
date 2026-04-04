@@ -70,8 +70,8 @@ func TestAdminLoginRateLimit(t *testing.T) {
 		t.Error("Response should contain retry_after_secs field")
 	}
 
-	// Reset the rate limiter and test successful login
-	GetAdminLoginLimiter().Reset("admin_login")
+	// Reset the rate limiter for the test client IP (httptest uses 192.0.2.1) and test successful login
+	GetAdminLoginLimiter().Reset("192.0.2.1")
 
 	loginJSON = `{"username":"admin","password":"testpass"}`
 	req = httptest.NewRequest(http.MethodPost, "/auth/admin/login", strings.NewReader(loginJSON))

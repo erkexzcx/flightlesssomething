@@ -32,6 +32,7 @@ const (
 	maxTotalDataLines  = 1000000 // Total limit across all runs in a benchmark
 	maxPerRunDataLines = 500000  // Maximum data lines per single run
 	maxStringLength    = 100
+	maxFilesPerUpload  = 100 // Maximum number of files that can be uploaded in one request
 
 	// Storage format version for backward compatibility
 	storageFormatVersion = 2 // Version 2: Streaming-friendly format with individual run encoding
@@ -39,6 +40,10 @@ const (
 	// GC tuning constants for streaming operations
 	// These control how often runtime.GC() is called during streaming to aggressively reclaim memory
 	gcFrequencyExport = 5 // Trigger GC every N runs during ZIP export (more aggressive due to CSV overhead)
+
+	// Maximum plausible run count stored in a file header
+	// Prevents maliciously large pre-allocations from corrupted/tampered .bin files
+	maxRunsPerBenchmark = 10_000
 )
 
 var benchmarksDir string
@@ -542,6 +547,11 @@ func RetrieveBenchmarkData(benchmarkID uint) ([]*BenchmarkData, error) {
 		return retrieveBenchmarkDataLegacy(benchmarkID)
 	} else if header.Version != storageFormatVersion {
 		return nil, fmt.Errorf("unsupported storage format version: %d", header.Version)
+	}
+
+	// Guard against corrupt/tampered run count before allocating
+	if header.RunCount < 0 || header.RunCount > maxRunsPerBenchmark {
+		return nil, fmt.Errorf("invalid run count in file header: %d", header.RunCount)
 	}
 
 	// New format (version 2): read runs individually

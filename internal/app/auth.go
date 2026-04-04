@@ -165,12 +165,12 @@ func HandleLoginCallback(db *DBInstance) gin.HandlerFunc {
 // HandleAdminLogin handles admin login with username and password
 func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Rate-limit admin login attempts using Allow as the atomic gate.
-		// Allow records the attempt and checks the count in a single mutex-protected
-		// operation, preventing concurrent brute-force bypass.
+		// Rate-limit admin login attempts per source IP to prevent a single attacker
+		// from locking out all admins by exhausting a global slot.
 		limiter := GetAdminLoginLimiter()
-		if !limiter.Allow("admin_login") {
-			remaining := limiter.GetRemainingTime("admin_login")
+		clientIP := c.ClientIP()
+		if !limiter.Allow(clientIP) {
+			remaining := limiter.GetRemainingTime(clientIP)
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":            "too many failed login attempts",
 				"retry_after_secs": int(remaining.Seconds()),
@@ -196,8 +196,8 @@ func HandleAdminLogin(config *Config, db *DBInstance) gin.HandlerFunc {
 			return
 		}
 
-		// Successful login - reset the rate limiter
-		limiter.Reset("admin_login")
+		// Successful login - reset the rate limiter for this IP
+		limiter.Reset(clientIP)
 
 		// Get or create admin user
 		var adminUser User
@@ -259,21 +259,30 @@ func HandleLogout(secureCookie bool) gin.HandlerFunc {
 	}
 }
 
-// HandleGetCurrentUser returns the current user's session information
-func HandleGetCurrentUser(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("UserID")
+// HandleGetCurrentUser returns the current user's information, validated against the database.
+func HandleGetCurrentUser(db *DBInstance) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("UserID")
 
-	if userID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
-		return
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		// Re-validate against DB to catch banned/deleted/demoted users.
+		var user User
+		if err := db.DB.First(&user, userID).Error; err != nil || user.IsBanned {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"user_id":  user.ID,
+			"username": user.Username,
+			"is_admin": user.IsAdmin,
+		})
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"user_id":  userID,
-		"username": session.Get("Username"),
-		"is_admin": session.Get("IsAdmin"),
-	})
 }
 
 // RequireAdmin is a middleware that requires admin privileges.
