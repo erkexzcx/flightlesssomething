@@ -30,7 +30,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          install-mode: "goinstall"
+          install-mode: "binary"
           args: --timeout=5m
 
   lint-frontend:
@@ -123,9 +123,6 @@ jobs:
       - name: Make server executable
         run: chmod +x server
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Run backend integration tests
         env:
           PREBUILT_SERVER: ./server
@@ -159,8 +156,20 @@ jobs:
       - name: Make server executable
         run: chmod +x server
 
-      - name: Install Playwright browsers
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Install Playwright browsers and deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd web && npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd web && npx playwright install-deps chromium
 
       - name: Start server for E2E tests
         run: |

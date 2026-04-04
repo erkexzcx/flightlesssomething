@@ -38,7 +38,8 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
     onRunDownloadProgress,
     onRunDownloadComplete,
     onRunProcessComplete,
-    onError
+    onError,
+    signal,
   } = callbacks
 
   if (totalRuns === 0) {
@@ -59,7 +60,8 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
     // Download this run (pre-calculated data, much smaller than raw)
     const url = `/api/benchmarks/${benchmarkId}/runs/${runIndex}`
     const response = await fetch(url, {
-      credentials: 'include'
+      credentials: 'include',
+      signal,
     })
 
     if (!response.ok) {
@@ -113,10 +115,11 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
       try {
         await loadRun(runIndex)
       } catch (error) {
-        if (onError) {
+        // Ignore abort errors (navigation away); surface real errors via callback
+        if (error?.name !== 'AbortError' && onError) {
           onError(error, runIndex)
         }
-        throw error
+        // Don't re-throw: let remaining runs in this worker continue
       }
     }
   }
@@ -125,5 +128,6 @@ export async function loadBenchmarkRunsIncremental(benchmarkId, totalRuns, callb
   const workers = Array.from({ length: concurrency }, () => worker())
   await Promise.all(workers)
 
-  return processedRuns
+  // Filter out runs that failed to load (undefined slots)
+  return processedRuns.filter(Boolean)
 }

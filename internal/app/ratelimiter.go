@@ -36,22 +36,24 @@ func (rl *RateLimiter) Allow(key string) bool {
 	// Get existing attempts for this key
 	attempts := rl.entries[key]
 
-	// Remove expired attempts
-	validAttempts := make([]time.Time, 0)
+	// Remove expired attempts in-place (no allocation)
+	n := 0
 	for _, t := range attempts {
 		if t.After(cutoff) {
-			validAttempts = append(validAttempts, t)
+			attempts[n] = t
+			n++
 		}
 	}
+	attempts = attempts[:n]
 
 	// Check if rate limit exceeded
-	if len(validAttempts) >= rl.maxAttempts {
+	if len(attempts) >= rl.maxAttempts {
 		return false
 	}
 
 	// Record this attempt
-	validAttempts = append(validAttempts, now)
-	rl.entries[key] = validAttempts
+	attempts = append(attempts, now)
+	rl.entries[key] = attempts
 
 	return true
 }
@@ -130,17 +132,18 @@ func (rl *RateLimiter) CleanupExpired() {
 	cutoff := now.Add(-rl.window)
 
 	for key, attempts := range rl.entries {
-		validAttempts := make([]time.Time, 0)
+		n := 0
 		for _, t := range attempts {
 			if t.After(cutoff) {
-				validAttempts = append(validAttempts, t)
+				attempts[n] = t
+				n++
 			}
 		}
 
-		if len(validAttempts) == 0 {
+		if n == 0 {
 			delete(rl.entries, key)
 		} else {
-			rl.entries[key] = validAttempts
+			rl.entries[key] = attempts[:n]
 		}
 	}
 }

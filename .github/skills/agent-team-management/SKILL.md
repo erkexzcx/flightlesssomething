@@ -14,15 +14,11 @@ description: 'Manage the custom agent team (.agent.md files). Use when: creating
 
 ## Model Assignment (STRICT)
 
-This is a non-negotiable rule — always verify the `model` field matches the agent's role:
+All agents use the same model — no exceptions:
 
 | Agent Role | Model |
 |---|---|
-| **Coordinators and leads** (delegate work, never implement) | `model: Claude Opus 4.6 (copilot)` |
-| **Workers** (developers, reviewers, writers, QA, pentesters) | `model: Claude Sonnet 4.6 (copilot)` |
-
-- Coordinators/leads use Opus because they make complex delegation and synthesis decisions.
-- Workers use Sonnet — no fallback array, just the single model.
+| **All agents** (maintainer, reviewers, writers) | `model: Claude Sonnet 4.6 (copilot)` |
 
 ## File Naming Convention (STRICT)
 
@@ -30,17 +26,16 @@ Agent filenames must follow the established `{category}-{specialty}.agent.md` pa
 
 | Pattern | Examples |
 |---|---|
-| `{role}-{stack}.agent.md` | `dev-go.agent.md`, `dev-vue.agent.md`, `sec-go.agent.md`, `perf-vue.agent.md`, `qa-go.agent.md`, `qa-vue.agent.md` |
-| `lead-{domain}.agent.md` | `lead-dev.agent.md`, `lead-docs.agent.md`, `lead-perf.agent.md`, `lead-security.agent.md` |
+| `maintainer.agent.md` | The single full-stack developer/maintainer agent |
+| `{role}-{stack}.agent.md` | `sec-go.agent.md`, `sec-vue.agent.md`, `perf-go.agent.md`, `perf-vue.agent.md` |
 | `writer-{scope}.agent.md` | `writer-api.agent.md`, `writer-arch.agent.md`, `writer-bench.agent.md`, `writer-readme.agent.md`, `writer-instructions.agent.md`, `writer-agents.agent.md` |
-| `{role}.agent.md` (no suffix) | `coordinator.agent.md`, `pentester.agent.md`, `qa.agent.md`, `writer.agent.md` |
-| `{category}-{specialty}.agent.md` | `infra-dev.agent.md` |
+| `{role}.agent.md` (no suffix) | `pentester.agent.md`, `consistency.agent.md` |
 
 Rules:
 - **Lowercase only**, words separated by hyphens.
-- Category prefix groups related agents: `dev-`, `sec-`, `perf-`, `qa-`, `lead-`, `writer-`.
-- Solo roles (no subcategory) use a single word: `coordinator`, `pentester`, `qa`, `writer`.
-- The `name` frontmatter field uses **title case** for display (e.g., file `dev-go.agent.md` → `name: Go Dev`).
+- Category prefix groups related agents: `sec-`, `perf-`, `writer-`.
+- Solo roles (no subcategory) use a single word: `maintainer`, `pentester`, `consistency`.
+- The `name` frontmatter field uses **title case** for display (e.g., file `sec-go.agent.md` → `name: Go Sec`).
 - Never invent new category prefixes without reviewing the existing team structure first.
 
 ## Frontmatter Rules
@@ -54,14 +49,41 @@ Rules:
 
 - `description` — Must be keyword-rich with "Use when:" trigger phrases for subagent discovery.
 - `tools` — Minimal set. Only include what the role actually needs.
-- `user-invocable` — Set to `false` for agents that should only be called as subagents.
-- `name` — Use title case for display (e.g., "Go Dev", "Security Lead").
+- `user-invocable` — Only the Repo Maintainer is `true`. All other agents (reviewers, writers, pentester) are `false` — they are subagents only.
+- `name` — Use title case for display (e.g., "Go Sec", "Vue Perf").
+
+## Team Structure
+
+The team is flat — no coordinators or leads. One entry point, specialized subagents:
+
+```
+Repo Maintainer (user-invocable, implements + orchestrates)
+├── Reviewers: Go Sec, Vue Sec, Pentester, Go Perf, Vue Perf, Consistency
+└── Writers: Writer API, Writer Arch, Writer Bench, Writer Readme, Writer Instructions, Writer Agents
+```
+
+- **Repo Maintainer** — Full-stack developer. Does all coding, testing, and validation. Calls reviewers to verify work, then writers to update docs.
+- **Reviewers** — Read-only. Find issues and report them. Never modify code.
+  - **Go Sec / Vue Sec / Pentester** — Security vulnerabilities by stack
+  - **Go Perf / Vue Perf** — Performance regressions by stack
+  - **Consistency** — Convention adherence, migration checklist, API–MCP parity, no new patterns when existing ones suffice
+- **Writers** — Each owns one documentation file. Never modify source code.
+
+## npm Command Constraint
+
+The Repo Maintainer agent has a strict restriction on which npm commands it may run:
+
+- **ALLOWED**: `npm run lint` — ESLint is read-only code analysis; no packages are downloaded when run
+- **FORBIDDEN**: `npm install`, `npm ci`, `npm run build`, `npm run dev`, `npm test`, and all `npx` commands — these execute npm package scripts that can introduce malware
+- **Full build**: Use `make build` (trusted Makefile entry point) if a frontend build check is required
+
+When writing or updating agent definitions, enforce this constraint in any agent that runs terminal commands affecting the frontend.
 
 ## Procedure
 
 1. Read existing agents in `.github/agents/` to understand the current team structure
-2. Identify the agent's role: coordinator/lead vs. worker
-3. Assign the correct model per the strict rule above
+2. Identify the agent's role: maintainer, reviewer, or writer
+3. Assign the model: `Claude Sonnet 4.6 (copilot)` for all agents
 4. Write a keyword-rich description with "Use when:" triggers
 5. Define clear scope and constraints in the body
-6. Verify: no `agents: []`, correct model, focused role, no duplicate responsibilities
+6. Verify: no `agents: []`, correct model, focused role, no duplicate responsibilities, only maintainer is user-invocable

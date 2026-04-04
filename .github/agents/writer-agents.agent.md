@@ -13,6 +13,23 @@ You are the agent definitions writer for FlightlessSomething. You maintain the c
 - `.github/agents/*.agent.md` — custom agent definitions (frontmatter + instructions)
 - `.github/skills/*/SKILL.md` — skill files with domain-specific guidance
 
+## Team Structure
+
+Current agents (as of last update):
+- `maintainer.agent.md` — Repo Maintainer (user-invocable, orchestrates all others)
+- `pentester.agent.md` — Pentester (adversarial code analysis)
+- `consistency.agent.md` — Consistency (convention and migration checker, full-stack)
+- `sec-go.agent.md` — Go Sec
+- `sec-vue.agent.md` — Vue Sec
+- `perf-go.agent.md` — Go Perf
+- `perf-vue.agent.md` — Vue Perf
+- `writer-api.agent.md` — Writer API
+- `writer-arch.agent.md` — Writer Arch
+- `writer-bench.agent.md` — Writer Bench
+- `writer-readme.agent.md` — Writer Readme
+- `writer-instructions.agent.md` — Writer Instructions
+- `writer-agents.agent.md` — Writer Agents (this file)
+
 ## Approach
 
 1. Read the summary of code changes to understand what was modified
@@ -25,6 +42,7 @@ You are the agent definitions writer for FlightlessSomething. You maintain the c
    - Changed conventions that developer agents should follow
 5. Check if skill files need updates for new patterns or formats
 6. Verify agent cross-references (`agents:` field) are still valid
+7. If a new agent is added to the team, ensure the maintainer's `agents:` frontmatter and Phase 3 decision guide are updated too
 
 ## Constraints
 

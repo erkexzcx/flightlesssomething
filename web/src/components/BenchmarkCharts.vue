@@ -485,6 +485,23 @@ HighchartsFullScreen(Highcharts)
 // Use app store for calculation mode
 const appStore = useAppStore()
 
+// Track all Highcharts instances to properly destroy them on unmount or re-render.
+// Avoids the Highcharts global charts array leaking across benchmark navigations.
+const chartInstances = []
+
+function createHighchartsChart(element, options) {
+  const chart = Highcharts.chart(element, options)
+  chartInstances.push(chart)
+  return chart
+}
+
+function destroyCharts() {
+  for (const chart of chartInstances) {
+    try { chart?.destroy() } catch (_) { /* ignore */ }
+  }
+  chartInstances.length = 0
+}
+
 // Get theme-aware colors
 const getThemeColors = computed(() => {
   const isDark = appStore.theme === 'dark'
@@ -700,7 +717,7 @@ function renderFPSComparisonChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
 
-    Highcharts.chart(fpsAvgChart.value, {
+    createHighchartsChart(fpsAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Avg FPS comparison in %' },
@@ -762,7 +779,7 @@ function renderFPSComparisonChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(fpsAvgChart.value, {
+    createHighchartsChart(fpsAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Avg FPS comparison' },
@@ -815,7 +832,7 @@ function renderFPSComparisonChart() {
     const sortedCategories = sortedData.map(item => item.label)
     const sortedValues = sortedData.map(item => item.value)
 
-    Highcharts.chart(fpsAvgChart.value, {
+    createHighchartsChart(fpsAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Avg FPS comparison' },
@@ -891,7 +908,7 @@ function renderFrametimeComparisonChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
 
-    Highcharts.chart(frametimeAvgChart.value, {
+    createHighchartsChart(frametimeAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Avg Frametime comparison in %' },
@@ -954,7 +971,7 @@ function renderFrametimeComparisonChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(frametimeAvgChart.value, {
+    createHighchartsChart(frametimeAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Avg Frametime comparison' },
@@ -1052,7 +1069,7 @@ function createChart(element, title, description, unit, dataArrays, maxY = null)
     color: chartColors[index % chartColors.length]
   }))
   
-  Highcharts.chart(element, options)
+  createHighchartsChart(element, options)
 }
 
 function createBarChart(element, title, unit, categories, data, chartColors, maxY = null) {
@@ -1062,7 +1079,7 @@ function createBarChart(element, title, unit, categories, data, chartColors, max
   options.xAxis.categories = categories
   options.series = [{ name: title, data: data, colorByPoint: true, colors: chartColors }]
   
-  Highcharts.chart(element, options)
+  createHighchartsChart(element, options)
 }
 
 // Computed properties to cache data arrays - only recalculated when benchmarkData changes
@@ -1195,7 +1212,7 @@ function renderFPSTab() {
     const avgFPSData = stats.map(s => s.avg)
     const maxFPSData = stats.map(s => s.max)
 
-    Highcharts.chart(fpsMinMaxAvgChart.value, {
+    createHighchartsChart(fpsMinMaxAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Min/Avg/Max FPS' },
@@ -1222,7 +1239,7 @@ function renderFPSTab() {
       data: s.densityData
     }))
 
-    Highcharts.chart(fpsDensityChart.value, {
+    createHighchartsChart(fpsDensityChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'areaspline' },
       title: { ...chartOpts.title, text: 'FPS Density' },
@@ -1285,7 +1302,7 @@ function renderFPSStddevChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
     
-    Highcharts.chart(fpsStddevChart.value, {
+    createHighchartsChart(fpsStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Standard Deviation in %' },
@@ -1361,7 +1378,7 @@ function renderFPSStddevChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(fpsStddevChart.value, {
+    createHighchartsChart(fpsStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Standard Deviation' },
@@ -1412,7 +1429,7 @@ function renderFPSStddevChart() {
     const sortedCategories = sortedData.map(item => item.label)
     const sortedValues = sortedData.map(item => item.value)
 
-    Highcharts.chart(fpsStddevChart.value, {
+    createHighchartsChart(fpsStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Standard Deviation' },
@@ -1470,7 +1487,7 @@ function renderFPSVarianceChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
     
-    Highcharts.chart(fpsVarianceChart.value, {
+    createHighchartsChart(fpsVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Variance in %' },
@@ -1546,7 +1563,7 @@ function renderFPSVarianceChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(fpsVarianceChart.value, {
+    createHighchartsChart(fpsVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Variance' },
@@ -1597,7 +1614,7 @@ function renderFPSVarianceChart() {
     const sortedCategories = sortedData.map(item => item.label)
     const sortedValues = sortedData.map(item => item.value)
 
-    Highcharts.chart(fpsVarianceChart.value, {
+    createHighchartsChart(fpsVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'FPS Variance' },
@@ -1629,7 +1646,7 @@ function renderFrametimeTab() {
     const avgData = stats.map(s => s.avg)
     const maxData = stats.map(s => s.max)
 
-    Highcharts.chart(frametimeMinMaxAvgChart.value, {
+    createHighchartsChart(frametimeMinMaxAvgChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Min/Avg/Max Frametime' },
@@ -1656,7 +1673,7 @@ function renderFrametimeTab() {
       data: s.densityData
     }))
 
-    Highcharts.chart(frametimeDensityChart.value, {
+    createHighchartsChart(frametimeDensityChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'areaspline' },
       title: { ...chartOpts.title, text: 'Frametime Density' },
@@ -1719,7 +1736,7 @@ function renderFrametimeStddevChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
     
-    Highcharts.chart(frametimeStddevChart.value, {
+    createHighchartsChart(frametimeStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Standard Deviation in %' },
@@ -1795,7 +1812,7 @@ function renderFrametimeStddevChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(frametimeStddevChart.value, {
+    createHighchartsChart(frametimeStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Standard Deviation' },
@@ -1846,7 +1863,7 @@ function renderFrametimeStddevChart() {
     const sortedCategories = sortedData.map(item => item.label)
     const sortedValues = sortedData.map(item => item.value)
 
-    Highcharts.chart(frametimeStddevChart.value, {
+    createHighchartsChart(frametimeStddevChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Standard Deviation' },
@@ -1904,7 +1921,7 @@ function renderFrametimeVarianceChart() {
     const yAxisMin = minPercentage - padding
     const yAxisMax = maxPercentage + padding
     
-    Highcharts.chart(frametimeVarianceChart.value, {
+    createHighchartsChart(frametimeVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Variance in %' },
@@ -1980,7 +1997,7 @@ function renderFrametimeVarianceChart() {
     const yAxisMin = minDiff - padding
     const yAxisMax = maxDiff + padding
 
-    Highcharts.chart(frametimeVarianceChart.value, {
+    createHighchartsChart(frametimeVarianceChart.value, {
       ...chartOpts,
       chart: { ...chartOpts.chart, type: 'bar' },
       title: { ...chartOpts.title, text: 'Frametime Variance' },
@@ -2114,6 +2131,7 @@ function handleTabClick(tabName) {
 // Used by theme changes, DPI changes, and calculation method changes
 function reRenderAllTabs() {
   nextTick(() => {
+    destroyCharts()
     if (renderedTabs.value.fps) {
       renderFPSTab()
     }
@@ -2174,6 +2192,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  destroyCharts()
   window.removeEventListener('resize', updatePixelRatio)
   // Clear any pending timeout
   if (updatePixelRatioTimeout) {
@@ -2183,6 +2202,7 @@ onUnmounted(() => {
 
 watch(() => props.benchmarkData, () => {
   // Reset rendered tabs when data changes
+  destroyCharts()
   renderedTabs.value = {
     fps: false,
     frametime: false,
@@ -2197,7 +2217,7 @@ watch(() => props.benchmarkData, () => {
       renderedTabs.value.fps = true
     })
   }
-}, { deep: true })
+})
 
 // Watch for theme changes and re-render all rendered tabs
 watch(() => appStore.theme, () => {
