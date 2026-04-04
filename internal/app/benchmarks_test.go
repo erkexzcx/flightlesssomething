@@ -91,8 +91,8 @@ func TestHandleListBenchmarks(t *testing.T) {
 		if !ok {
 			t.Fatal("Expected benchmark to be map")
 		}
-		if firstBenchmark["Title"] != "Test Benchmark" {
-			t.Errorf("Expected 'Test Benchmark', got %v", firstBenchmark["Title"])
+		if firstBenchmark["title"] != "Test Benchmark" {
+			t.Errorf("Expected 'Test Benchmark', got %v", firstBenchmark["title"])
 		}
 	})
 

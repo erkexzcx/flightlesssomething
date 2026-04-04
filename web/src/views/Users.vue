@@ -55,37 +55,37 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in users" :key="user.ID">
-              <td>{{ user.ID }}</td>
+            <tr v-for="user in users" :key="user.id">
+              <td>{{ user.id }}</td>
               <td>
                 <router-link 
-                  :to="`/benchmarks?user_id=${user.ID}`" 
+                  :to="`/benchmarks?user_id=${user.id}`" 
                   class="text-decoration-none"
-                  :title="`View benchmarks by ${user.Username}`"
+                  :title="`View benchmarks by ${user.username}`"
                 >
-                  {{ user.Username }}
+                  {{ user.username }}
                 </router-link>
-                <span v-if="user.IsAdmin" class="badge bg-warning ms-1">Admin</span>
-                <span v-if="user.IsBanned" class="badge bg-danger ms-1">Banned</span>
+                <span v-if="user.is_admin" class="badge bg-warning ms-1">Admin</span>
+                <span v-if="user.is_banned" class="badge bg-danger ms-1">Banned</span>
               </td>
-              <td><small>{{ user.DiscordID }}</small></td>
+              <td><small>{{ user.discord_id }}</small></td>
               <td>{{ user.benchmark_count || 0 }}</td>
               <td>{{ user.api_token_count || 0 }}</td>
               <td>
-                <small class="text-muted" v-if="user.LastWebActivityAt">
-                  {{ formatRelativeDate(user.LastWebActivityAt, 'Never') }}
+                <small class="text-muted" v-if="user.last_web_activity_at">
+                  {{ formatRelativeDate(user.last_web_activity_at, 'Never') }}
                 </small>
                 <small class="text-muted" v-else>Never</small>
               </td>
               <td>
-                <small class="text-muted" v-if="user.LastAPIActivityAt">
-                  {{ formatRelativeDate(user.LastAPIActivityAt, 'Never') }}
+                <small class="text-muted" v-if="user.last_api_activity_at">
+                  {{ formatRelativeDate(user.last_api_activity_at, 'Never') }}
                 </small>
                 <small class="text-muted" v-else>Never</small>
               </td>
               <td>
                 <small class="text-muted">
-                  Joined {{ formatRelativeDate(user.CreatedAt) }}
+                  Joined {{ formatRelativeDate(user.created_at) }}
                 </small>
               </td>
               <td>
@@ -99,7 +99,7 @@
                     <i class="fa-solid fa-trash"></i> Del Benchmarks
                   </button>
                   <button
-                    v-if="!user.IsBanned"
+                    v-if="!user.is_banned"
                     class="btn btn-outline-warning"
                     @click="confirmBanUser(user)"
                     :disabled="isCurrentUser(user)"
@@ -117,7 +117,7 @@
                     <i class="fa-solid fa-check"></i> Unban
                   </button>
                   <button
-                    v-if="!user.IsAdmin"
+                    v-if="!user.is_admin"
                     class="btn btn-outline-primary"
                     @click="toggleAdmin(user, true)"
                     title="Make user an admin"
@@ -304,11 +304,11 @@ const paginationPages = computed(() => {
 // Helper function to check if a user is the current logged-in user
 const isCurrentUser = (user) => {
   // authStore.user.user_id is from the session API (snake_case)
-  // user.ID is from the users list API (PascalCase from GORM)
-  if (!authStore.user?.user_id || !user.ID) {
+  // user.id is from the users list API (snake_case)
+  if (!authStore.user?.user_id || !user.id) {
     return false
   }
-  return Number(authStore.user.user_id) === Number(user.ID)
+  return Number(authStore.user.user_id) === Number(user.id)
 }
 
 // Initialize state from URL query parameters
@@ -402,7 +402,7 @@ function handleSearch() {
 
 async function toggleAdmin(user, makeAdmin) {
   const action = makeAdmin ? 'make an admin' : 'remove admin privileges from'
-  const message = `Are you sure you want to ${action} user "${user.Username}"?`
+  const message = `Are you sure you want to ${action} user "${user.username}"?`
   
   if (!confirm(message)) {
     return
@@ -410,7 +410,7 @@ async function toggleAdmin(user, makeAdmin) {
 
   try {
     loading.value = true
-    await api.admin.toggleUserAdmin(user.ID, makeAdmin)
+    await api.admin.toggleUserAdmin(user.id, makeAdmin)
     await fetchUsers()
   } catch (err) {
     error.value = err.message || 'Failed to update admin privileges'
@@ -421,14 +421,14 @@ async function toggleAdmin(user, makeAdmin) {
 }
 
 async function confirmDeleteBenchmarks(user) {
-  if (!confirm(`Are you sure you want to delete ALL benchmarks for user "${user.Username}"? This cannot be undone.`)) {
+  if (!confirm(`Are you sure you want to delete ALL benchmarks for user "${user.username}"? This cannot be undone.`)) {
     return
   }
 
   try {
     loading.value = true
-    await api.admin.deleteUserBenchmarks(user.ID)
-    alert(`All benchmarks for user "${user.Username}" have been deleted.`)
+    await api.admin.deleteUserBenchmarks(user.id)
+    alert(`All benchmarks for user "${user.username}" have been deleted.`)
     await fetchUsers()
   } catch (err) {
     error.value = err.message || 'Failed to delete benchmarks'
@@ -439,14 +439,14 @@ async function confirmDeleteBenchmarks(user) {
 }
 
 async function confirmBanUser(user) {
-  if (!confirm(`Are you sure you want to BAN user "${user.Username}"? They will not be able to sign in or upload anything.`)) {
+  if (!confirm(`Are you sure you want to BAN user "${user.username}"? They will not be able to sign in or upload anything.`)) {
     return
   }
 
   try {
     loading.value = true
-    await api.admin.banUser(user.ID, true)
-    alert(`User "${user.Username}" has been banned.`)
+    await api.admin.banUser(user.id, true)
+    alert(`User "${user.username}" has been banned.`)
     await fetchUsers()
   } catch (err) {
     error.value = err.message || 'Failed to ban user'
@@ -457,14 +457,14 @@ async function confirmBanUser(user) {
 }
 
 async function confirmUnbanUser(user) {
-  if (!confirm(`Are you sure you want to UNBAN user "${user.Username}"?`)) {
+  if (!confirm(`Are you sure you want to UNBAN user "${user.username}"?`)) {
     return
   }
 
   try {
     loading.value = true
-    await api.admin.banUser(user.ID, false)
-    alert(`User "${user.Username}" has been unbanned.`)
+    await api.admin.banUser(user.id, false)
+    alert(`User "${user.username}" has been unbanned.`)
     await fetchUsers()
   } catch (err) {
     error.value = err.message || 'Failed to unban user'

@@ -140,36 +140,36 @@
     <div v-else-if="benchmarks.length > 0" class="list-group mt-1">
       <div
         v-for="benchmark in benchmarks"
-        :key="benchmark.ID"
+        :key="benchmark.id"
         class="list-group-item flex-column align-items-start benchmark-card"
         role="button"
         tabindex="0"
-        :aria-label="`View benchmark: ${benchmark.Title}`"
-        @click="navigateToBenchmark(benchmark.ID)"
-        @keypress.enter="navigateToBenchmark(benchmark.ID)"
+        :aria-label="`View benchmark: ${benchmark.title}`"
+        @click="navigateToBenchmark(benchmark.id)"
+        @keypress.enter="navigateToBenchmark(benchmark.id)"
       >
         <div class="d-flex w-100 justify-content-between align-items-center benchmark-first-row">
-          <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.Title }}</h5>
+          <h5 class="mb-1 text-truncate flex-grow-1" style="min-width: 0;">{{ benchmark.title }}</h5>
           <div class="benchmark-date-author">
             <small class="text-nowrap flex-shrink-0">
-              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
-                {{ formatRelativeDate(benchmark.UpdatedAt) }}
+              <span v-if="benchmark.updated_at !== benchmark.created_at" :title="`Created: ${formatRelativeDate(benchmark.created_at)}`">
+                {{ formatRelativeDate(benchmark.updated_at) }}
               </span>
               <span v-else>
-                {{ formatRelativeDate(benchmark.CreatedAt) }}
+                {{ formatRelativeDate(benchmark.created_at) }}
               </span>
             </small>
             <small class="text-nowrap benchmark-author-desktop">
-              by <template v-if="benchmark.User">
+              by <template v-if="benchmark.user">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
                   href="#" 
                   class="username-link" 
-                  @click.stop.prevent="filterByUser(benchmark.User)"
+                  @click.stop.prevent="filterByUser(benchmark.user)"
                 >
-                  <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                  <b>{{ benchmark.user.username }}<span v-if="benchmark.user.is_admin" class="admin-asterisk" title="Admin">*</span></b>
                 </a>
-                <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                <b v-else>{{ benchmark.user.username }}<span v-if="benchmark.user.is_admin" class="admin-asterisk" title="Admin">*</span></b>
               </template>
               <b v-else>Unknown</b>
             </small>
@@ -177,29 +177,29 @@
         </div>
         <div class="d-flex w-100 justify-content-between align-items-start benchmark-second-row">
           <p class="mb-1 text-truncate benchmark-description">
-            <small>{{ benchmark.Description || 'No description' }}</small>
+            <small>{{ benchmark.description || 'No description' }}</small>
           </p>
           <div class="benchmark-meta-group">
             <small v-if="benchmark.run_count" class="text-muted benchmark-metadata text-nowrap">
               {{ benchmark.run_count }} <i class="fa-solid fa-play"></i>
             </small>
             <small class="text-nowrap benchmark-date-mobile">
-              <span v-if="benchmark.UpdatedAt !== benchmark.CreatedAt" :title="`Created: ${formatRelativeDate(benchmark.CreatedAt)}`">
-                {{ formatRelativeDate(benchmark.UpdatedAt) }}
+              <span v-if="benchmark.updated_at !== benchmark.created_at" :title="`Created: ${formatRelativeDate(benchmark.created_at)}`">
+                {{ formatRelativeDate(benchmark.updated_at) }}
               </span>
               <span v-else>
-                {{ formatRelativeDate(benchmark.CreatedAt) }}
+                {{ formatRelativeDate(benchmark.created_at) }}
               </span>
-              by <template v-if="benchmark.User">
+              by <template v-if="benchmark.user">
                 <a 
                   v-if="!filterUserId && !route.query.user_id"
                   href="#" 
                   class="username-link" 
-                  @click.stop.prevent="filterByUser(benchmark.User)"
+                  @click.stop.prevent="filterByUser(benchmark.user)"
                 >
-                  <b>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                  <b>{{ benchmark.user.username }}<span v-if="benchmark.user.is_admin" class="admin-asterisk" title="Admin">*</span></b>
                 </a>
-                <b v-else>{{ benchmark.User.Username }}<span v-if="benchmark.User.IsAdmin" class="admin-asterisk" title="Admin">*</span></b>
+                <b v-else>{{ benchmark.user.username }}<span v-if="benchmark.user.is_admin" class="admin-asterisk" title="Admin">*</span></b>
               </template>
               <b v-else>Unknown</b>
             </small>
@@ -554,8 +554,8 @@ async function loadBenchmarks() {
         sortOrderParam
       )
       // Update filterUsername from response if we have benchmarks and don't already have username
-      if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].User) {
-        filterUsername.value = response.benchmarks[0].User.Username
+      if (!isMyBenchmarksPage.value && !filterUsername.value && response.benchmarks && response.benchmarks.length > 0 && response.benchmarks[0].user) {
+        filterUsername.value = response.benchmarks[0].user.username
       }
     } else {
       const enabledFields = getEnabledSearchFields()
@@ -648,13 +648,13 @@ function handleSearchFieldsChange() {
 }
 
 function filterByUser(user) {
-  if (user && user.ID) {
-    filterUserId.value = user.ID
-    filterUsername.value = user.Username
+  if (user && user.id) {
+    filterUserId.value = user.id
+    filterUsername.value = user.username
     searchQuery.value = ''
     currentPage.value = 1
     // Update URL to use user_id query parameter
-    router.push({ query: { user_id: user.ID } })
+    router.push({ query: { user_id: user.id } })
   }
 }
 

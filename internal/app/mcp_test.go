@@ -819,7 +819,7 @@ func TestMCPJQFilter(t *testing.T) {
 	})
 
 	t.Run("jq extracts specific fields", func(t *testing.T) {
-		body := `{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"jq":"[.benchmarks[] | .Title]"}}}`
+		body := `{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"list_benchmarks","arguments":{"jq":"[.benchmarks[] | .title]"}}}`
 		w := mcpRequest(t, router, body, "")
 
 		_, result := parseMCPToolResult(t, w)
@@ -865,7 +865,7 @@ func TestMCPJQFilter(t *testing.T) {
 		var bench Benchmark
 		db.DB.Where("title = ?", "JQ Test Bench").First(&bench)
 
-		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_benchmark","arguments":{"id":%d,"jq":".Title"}}}`, bench.ID)
+		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_benchmark","arguments":{"id":%d,"jq":".title"}}}`, bench.ID)
 		w := mcpRequest(t, router, body, "")
 
 		_, result := parseMCPToolResult(t, w)
@@ -1333,7 +1333,7 @@ func TestMCPJQFilterWithBenchmarkData(t *testing.T) {
 
 	t.Run("jq extracts benchmark title from data response", func(t *testing.T) {
 		db.DB.Model(&Benchmark{}).Where("id = ?", benchID).Update("title", "Helper Bench")
-		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"get_benchmark_data","arguments":{"id":%d,"jq":".benchmark.Title"}}}`, benchID)
+		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"get_benchmark_data","arguments":{"id":%d,"jq":".benchmark.title"}}}`, benchID)
 		w := mcpRequest(t, router, body, "")
 
 		_, result := parseMCPToolResult(t, w)
