@@ -84,6 +84,7 @@ func Start(config *Config, version string) error {
 		HttpOnly: true,
 		Secure:   secureCookie,
 		SameSite: http.SameSiteLaxMode,
+		MaxAge:   30 * 24 * 60 * 60, // 30 days
 	})
 	r.Use(sessions.Sessions("flightlesssomething_session", store))
 
