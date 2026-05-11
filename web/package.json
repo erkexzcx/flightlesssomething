@@ -30,7 +30,7 @@
     "@playwright/test": "^1.59.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "eslint": "^9.39.4",
-    "eslint-plugin-vue": "^10.8.0",
+    "eslint-plugin-vue": "^10.9.1",
     "vite": "^6.4.2"
   }
 }
