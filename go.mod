@@ -11,7 +11,7 @@ require (
 	github.com/peterbourgon/ff/v3 v3.4.0
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/sqlite v1.6.0
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 require (
