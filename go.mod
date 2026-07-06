@@ -7,7 +7,7 @@ require (
 	github.com/gin-contrib/sessions v1.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/itchyny/gojq v0.12.19
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.19.0
 	github.com/peterbourgon/ff/v3 v3.4.0
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/sqlite v1.6.0
