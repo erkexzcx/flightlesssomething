@@ -780,6 +780,10 @@ func ValidatePerRunDataLines(benchmarkData []*BenchmarkData) error {
 	return nil
 }
 
+// statsFormatVersion 2 stores fractional density bucket values. Schema migration 6
+// rebuilds the previous unversioned integer histograms from raw benchmark data.
+const statsFormatVersion = 2
+
 // StorePreCalculatedStats stores pre-calculated statistics to disk as zstd-compressed gob.
 // These are served directly by the REST API and MCP server.
 func StorePreCalculatedStats(stats []*PreCalculatedRun, benchmarkID uint) error {
@@ -803,7 +807,11 @@ func StorePreCalculatedStats(stats []*PreCalculatedRun, benchmarkID uint) error 
 	}
 
 	gobEncoder := gob.NewEncoder(zstdEncoder)
-	if err := gobEncoder.Encode(stats); err != nil {
+	err = gobEncoder.Encode(fileHeader{Version: statsFormatVersion, RunCount: len(stats)})
+	if err == nil {
+		err = gobEncoder.Encode(stats)
+	}
+	if err != nil {
 		if closeErr := zstdEncoder.Close(); closeErr != nil {
 			fmt.Printf("Warning: failed to close zstd encoder after stats encode error: %v\n", closeErr)
 		}
@@ -840,14 +848,24 @@ func RetrievePreCalculatedStats(benchmarkID uint) ([]*PreCalculatedRun, error) {
 	}
 	defer zstdDecoder.Close()
 
-	var stats []*PreCalculatedRun
 	gobDecoder := gob.NewDecoder(zstdDecoder)
+	var header fileHeader
+	if err := gobDecoder.Decode(&header); err != nil {
+		return nil, fmt.Errorf("failed to decode stats header: %w", err)
+	}
+	if header.Version != statsFormatVersion {
+		return nil, fmt.Errorf("unsupported stats format version: %d", header.Version)
+	}
+	if header.RunCount < 0 || header.RunCount > maxRunsPerBenchmark {
+		return nil, fmt.Errorf("invalid stats run count: %d", header.RunCount)
+	}
+	var stats []*PreCalculatedRun
 	if err := gobDecoder.Decode(&stats); err != nil {
 		return nil, fmt.Errorf("failed to decode stats: %w", err)
 	}
 	// Guard against corrupted or tampered .stats files claiming an absurd number of runs
-	if len(stats) > maxRunsPerBenchmark {
-		return nil, fmt.Errorf("stats file contains too many runs: %d", len(stats))
+	if len(stats) != header.RunCount {
+		return nil, fmt.Errorf("stats run count %d does not match header %d", len(stats), header.RunCount)
 	}
 
 	return stats, nil

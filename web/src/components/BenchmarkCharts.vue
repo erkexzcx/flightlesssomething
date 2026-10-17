@@ -1678,7 +1678,7 @@ function renderFrametimeTab() {
       chart: { ...chartOpts.chart, type: 'areaspline' },
       title: { ...chartOpts.title, text: 'Frametime Density' },
       xAxis: { ...chartOpts.xAxis, title: { text: 'Frametime (ms)', style: { color: colors.textColor } }, labels: { style: { color: colors.textColor } } },
-      tooltip: { ...chartOpts.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${Math.round(this.points[0].x)} ms` } },
+      tooltip: { ...chartOpts.tooltip, shared: true, formatter: function() { return `<b>${this.points[0].series.name}</b>: ${this.points[0].y} points at ~${this.points[0].x.toFixed(1)} ms` } },
       plotOptions: { areaspline: { fillOpacity: 0.5, marker: { enabled: false } } },
       legend: { ...chartOpts.legend, enabled: true },
       series: densityData

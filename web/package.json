@@ -12,7 +12,7 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "test:unit": "node tests/dateFormatter.test.js && node tests/filenameValidator.test.js"
+    "test:unit": "node tests/dateFormatter.test.js && node tests/filenameValidator.test.js && node tests/statsCalculations.test.js"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",
