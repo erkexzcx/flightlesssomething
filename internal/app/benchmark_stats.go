@@ -6,30 +6,31 @@ import (
 )
 
 const (
-	maxDownsamplePoints = 2000 // Default LTTB downsample threshold for series data
+	frameTimeDensityScale = 10   // Ten buckets per millisecond
+	maxDownsamplePoints   = 2000 // Default LTTB downsample threshold for series data
 )
 
 // MetricStats holds pre-calculated statistics for a single metric.
 // JSON tags match the frontend expectations (camelCase for WebUI consumption).
 type MetricStats struct {
-	Min      float64  `json:"min"`
-	Max      float64  `json:"max"`
-	Avg      float64  `json:"avg"`
-	Median   float64  `json:"median"`
-	P01      float64  `json:"p01"`
-	P05      float64  `json:"p05"`
-	P10      float64  `json:"p10"`
-	P25      float64  `json:"p25"`
-	P75      float64  `json:"p75"`
-	P90      float64  `json:"p90"`
-	P95      float64  `json:"p95"`
-	P97      float64  `json:"p97"`
-	P99      float64  `json:"p99"`
-	IQR      float64  `json:"iqr"`
-	StdDev   float64  `json:"stddev"`
-	Variance float64  `json:"variance"`
-	Count    int      `json:"count"`
-	Density  [][2]int `json:"density"` // [[roundedValue, count], ...]
+	Min      float64      `json:"min"`
+	Max      float64      `json:"max"`
+	Avg      float64      `json:"avg"`
+	Median   float64      `json:"median"`
+	P01      float64      `json:"p01"`
+	P05      float64      `json:"p05"`
+	P10      float64      `json:"p10"`
+	P25      float64      `json:"p25"`
+	P75      float64      `json:"p75"`
+	P90      float64      `json:"p90"`
+	P95      float64      `json:"p95"`
+	P97      float64      `json:"p97"`
+	P99      float64      `json:"p99"`
+	IQR      float64      `json:"iqr"`
+	StdDev   float64      `json:"stddev"`
+	Variance float64      `json:"variance"`
+	Count    int          `json:"count"`
+	Density  [][2]float64 `json:"density"` // [[roundedValue, count], ...]
 }
 
 // PreCalculatedRun stores all pre-calculated data for a single benchmark run.
@@ -108,22 +109,23 @@ func percentileFunc(method string) func([]float64, float64) float64 {
 }
 
 // computeDensityData computes a density histogram from values, filtering outliers outside p01-p97.
-func computeDensityData(values []float64, p01, p97 float64) [][2]int {
+func computeDensityData(values []float64, p01, p97, scale float64) [][2]float64 {
 	counts := make(map[int]int)
 	for _, v := range values {
 		if v >= p01 && v <= p97 {
 			// Guard against values that would overflow int when rounded.
-			if v < math.MinInt32 || v > math.MaxInt32 {
+			scaled := v * scale
+			if scaled < math.MinInt32 || scaled > math.MaxInt32 {
 				continue
 			}
-			rounded := int(math.Round(v))
+			rounded := int(math.Round(scaled))
 			counts[rounded]++
 		}
 	}
 
-	density := make([][2]int, 0, len(counts))
+	density := make([][2]float64, 0, len(counts))
 	for val, count := range counts {
-		density = append(density, [2]int{val, count})
+		density = append(density, [2]float64{float64(val) / scale, float64(count)})
 	}
 	sort.Slice(density, func(i, j int) bool {
 		return density[i][0] < density[j][0]
@@ -132,7 +134,7 @@ func computeDensityData(values []float64, p01, p97 float64) [][2]int {
 }
 
 // computeMetricStatsForMethod computes statistics for a single metric using the specified method.
-func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
+func computeMetricStatsForMethod(data []float64, method string, densityScale float64) *MetricStats {
 	n := len(data)
 	if n == 0 {
 		return nil
@@ -181,7 +183,7 @@ func computeMetricStatsForMethod(data []float64, method string) *MetricStats {
 	p99 := pFunc(sorted, 99)
 	iqr := p75 - p25
 
-	density := computeDensityData(data, p01, p97)
+	density := computeDensityData(data, p01, p97, densityScale)
 
 	return &MetricStats{
 		Min:      math.Round(minVal*100) / 100,
@@ -303,7 +305,7 @@ func computeFPSFromFrametimeForMethod(frametimeData []float64, method string) *M
 	medianFPS := pFunc(sortedFPS, 50)
 
 	// Density uses converted FPS values
-	density := computeDensityData(fpsValues, fpsP01, fpsP97)
+	density := computeDensityData(fpsValues, fpsP01, fpsP97, 1)
 
 	return &MetricStats{
 		Min:      math.Round(minFPS*100) / 100,
@@ -493,9 +495,13 @@ func computePreCalculatedRun(run *BenchmarkData) *PreCalculatedRun {
 		raw := buildSeriesData(m.data)
 		result.Series[m.key] = downsampleLTTB(raw, maxDownsamplePoints)
 
-		// Stats for both methods
-		result.Stats[m.key] = computeMetricStatsForMethod(m.data, "linear")
-		result.StatsMangoHud[m.key] = computeMetricStatsForMethod(m.data, "mangohud")
+		// Stats for both methods; only frametimes use sub-millisecond buckets.
+		densityScale := 1.0
+		if m.key == "FrameTime" {
+			densityScale = frameTimeDensityScale
+		}
+		result.Stats[m.key] = computeMetricStatsForMethod(m.data, "linear", densityScale)
+		result.StatsMangoHud[m.key] = computeMetricStatsForMethod(m.data, "mangohud", densityScale)
 	}
 
 	// FPS: compute from frametime when available, otherwise from raw FPS data
@@ -512,8 +518,8 @@ func computePreCalculatedRun(run *BenchmarkData) *PreCalculatedRun {
 		raw := buildSeriesData(run.DataFPS)
 		result.Series["FPS"] = downsampleLTTB(raw, maxDownsamplePoints)
 
-		result.Stats["FPS"] = computeMetricStatsForMethod(run.DataFPS, "linear")
-		result.StatsMangoHud["FPS"] = computeMetricStatsForMethod(run.DataFPS, "mangohud")
+		result.Stats["FPS"] = computeMetricStatsForMethod(run.DataFPS, "linear", 1)
+		result.StatsMangoHud["FPS"] = computeMetricStatsForMethod(run.DataFPS, "mangohud", 1)
 	}
 
 	return result

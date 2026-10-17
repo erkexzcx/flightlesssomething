@@ -313,3 +313,9 @@ The `docker-compose.yml` mounts two volumes:
 - `./logs:/logs` — Audit log directory (sibling of `/data`, as set by `InitAuditLog`)
 
 The `logs` volume must be mounted separately because audit logs are written to the **parent** of the data directory. Without this mount, audit logs would be lost when the container is removed.
+
+### Fractional frametime density (schema 6)
+
+Frametime histograms group samples into 0.1 ms buckets. Other metrics retain whole-unit buckets, and both percentile methods retain their p01–p97 outlier filtering. Density pairs contain a numeric bucket value and an integral sample count.
+
+Statistics files now use format version 2: a gob header containing the version and run count, followed by the pre-calculated runs with floating-point density pairs. On upgrading a schema-5 database, startup regenerates cached `.stats` files from the original `.bin` files before serving requests. Raw benchmark files are unchanged. This can take time for large libraries; a failed regeneration leaves schema 5 in place so the next startup retries. Back up the data directory before upgrading, as with other schema migrations.

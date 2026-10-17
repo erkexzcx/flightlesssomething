@@ -75,7 +75,7 @@ func TestPercentileLinearVsMangoHud(t *testing.T) {
 
 func TestComputeDensityData(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		result := computeDensityData(nil, 0, 100)
+		result := computeDensityData(nil, 0, 100, 1)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -83,7 +83,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("all outside range", func(t *testing.T) {
 		values := []float64{1, 2, 3}
-		result := computeDensityData(values, 10, 20)
+		result := computeDensityData(values, 10, 20, 1)
 		if len(result) != 0 {
 			t.Errorf("expected empty density, got %v", result)
 		}
@@ -91,7 +91,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("at boundaries", func(t *testing.T) {
 		values := []float64{10, 10, 20, 20}
-		result := computeDensityData(values, 10, 20)
+		result := computeDensityData(values, 10, 20, 1)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -105,7 +105,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("rounding", func(t *testing.T) {
 		values := []float64{10.3, 10.7, 10.5}
-		result := computeDensityData(values, 10, 11)
+		result := computeDensityData(values, 10, 11, 1)
 		if len(result) != 2 {
 			t.Fatalf("expected 2 density entries, got %d", len(result))
 		}
@@ -120,7 +120,7 @@ func TestComputeDensityData(t *testing.T) {
 
 	t.Run("sorted output", func(t *testing.T) {
 		values := []float64{30, 10, 20}
-		result := computeDensityData(values, 0, 50)
+		result := computeDensityData(values, 0, 50, 1)
 		for i := 1; i < len(result); i++ {
 			if result[i][0] < result[i-1][0] {
 				t.Errorf("density not sorted: %v", result)
@@ -131,27 +131,27 @@ func TestComputeDensityData(t *testing.T) {
 	t.Run("overflow values are skipped", func(t *testing.T) {
 		// Values outside int32 range must be skipped without panicking or producing corrupt keys.
 		values := []float64{1e20, 42, -1e20}
-		result := computeDensityData(values, -1e30, 1e30)
+		result := computeDensityData(values, -1e30, 1e30, 1)
 		// Only 42 survives the overflow check; the extreme values are dropped.
 		if len(result) != 1 {
 			t.Fatalf("expected 1 density entry (only 42), got %d: %v", len(result), result)
 		}
 		if result[0][0] != 42 {
-			t.Errorf("expected density key 42, got %d", result[0][0])
+			t.Errorf("expected density key 42, got %v", result[0][0])
 		}
 	})
 }
 
 func TestComputeMetricStatsForMethod(t *testing.T) {
 	t.Run("empty returns nil", func(t *testing.T) {
-		result := computeMetricStatsForMethod(nil, "linear")
+		result := computeMetricStatsForMethod(nil, "linear", 1)
 		if result != nil {
 			t.Errorf("expected nil for empty data, got %v", result)
 		}
 	})
 
 	t.Run("single element", func(t *testing.T) {
-		result := computeMetricStatsForMethod([]float64{42}, "linear")
+		result := computeMetricStatsForMethod([]float64{42}, "linear", 1)
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -168,7 +168,7 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 
 	t.Run("known values linear", func(t *testing.T) {
 		data := []float64{10, 20, 30, 40, 50}
-		result := computeMetricStatsForMethod(data, "linear")
+		result := computeMetricStatsForMethod(data, "linear", 1)
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -200,8 +200,8 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 
 	t.Run("mangohud method", func(t *testing.T) {
 		data := []float64{10, 20, 30, 40, 50}
-		resultLinear := computeMetricStatsForMethod(data, "linear")
-		resultMango := computeMetricStatsForMethod(data, "mangohud")
+		resultLinear := computeMetricStatsForMethod(data, "linear", 1)
+		resultMango := computeMetricStatsForMethod(data, "mangohud", 1)
 		if resultLinear == nil || resultMango == nil {
 			t.Fatal("expected non-nil results")
 		}
@@ -216,7 +216,7 @@ func TestComputeMetricStatsForMethod(t *testing.T) {
 
 	t.Run("rounding applied", func(t *testing.T) {
 		data := []float64{1.005, 2.005, 3.005}
-		result := computeMetricStatsForMethod(data, "linear")
+		result := computeMetricStatsForMethod(data, "linear", 1)
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -344,7 +344,7 @@ func TestComputeFPSFromFrametimeForMethod(t *testing.T) {
 		// Density values should be FPS-like (50, 100), not frametime-like (10, 20)
 		for _, d := range result.Density {
 			if d[0] < 40 {
-				t.Errorf("density value %d looks like frametime, expected FPS", d[0])
+				t.Errorf("density value %v looks like frametime, expected FPS", d[0])
 			}
 		}
 	})
@@ -588,7 +588,7 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 		Min: 50, Max: 120, Avg: 90, Median: 91,
 		P01: 55, P05: 60, P10: 65, P25: 75, P75: 105, P90: 110, P95: 113, P97: 115, P99: 118,
 		IQR: 30, StdDev: 10, Variance: 100,
-		Count: 500, Density: [][2]int{{55, 1}, {90, 10}, {115, 1}},
+		Count: 500, Density: [][2]float64{{55, 1}, {90, 10}, {115, 1}},
 	}
 	series := make([][2]float64, 100)
 	for i := range series {
@@ -713,4 +713,35 @@ func TestPreCalculatedRunToMCPSummary(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestPreCalculatedFrametimeDensityResolution(t *testing.T) {
+	values := make([]float64, 0, 152)
+	values = append(values, 0, 99)
+	for range 50 {
+		values = append(values, 3.14, 3.24, 3.34)
+	}
+	run := computePreCalculatedRun(&BenchmarkData{DataFrameTime: values, DataCPULoad: values})
+	for name, stats := range map[string]map[string]*MetricStats{"linear": run.Stats, "mangohud": run.StatsMangoHud} {
+		t.Run(name, func(t *testing.T) {
+			density := stats["FrameTime"].Density
+			if len(density) != 3 {
+				t.Fatalf("expected three distinct 0.1 ms buckets, got %v", density)
+			}
+			for i, want := range []float64{3.1, 3.2, 3.3} {
+				if !approxEqual(density[i][0], want, 1e-9) || density[i][1] != 50 {
+					t.Errorf("bucket %d = %v, want [%v 50]", i, density[i], want)
+				}
+			}
+			cpuDensity := stats["CPULoad"].Density
+			if len(cpuDensity) != 1 || cpuDensity[0][0] != 3 || cpuDensity[0][1] != 150 {
+				t.Errorf("other metrics must retain whole-unit buckets: %v", cpuDensity)
+			}
+			for _, bucket := range stats["FPS"].Density {
+				if bucket[0] != math.Round(bucket[0]) {
+					t.Errorf("FPS bucket must remain integral: %v", bucket)
+				}
+			}
+		})
+	}
 }

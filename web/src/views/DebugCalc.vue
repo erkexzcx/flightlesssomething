@@ -352,8 +352,8 @@ function calculate() {
       : calculateStats(data.fpsValues, 'mangohud-threshold')
 
     // Calculate Frametime statistics
-    const frametimeLinear = calculateStats(data.frametimeValues, 'linear-interpolation')
-    const frametimeMangoHud = calculateStats(data.frametimeValues, 'mangohud-threshold')
+    const frametimeLinear = calculateStats(data.frametimeValues, 'linear-interpolation', 10)
+    const frametimeMangoHud = calculateStats(data.frametimeValues, 'mangohud-threshold', 10)
 
     results.value = {
       fps: {

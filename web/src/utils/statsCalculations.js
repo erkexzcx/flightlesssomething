@@ -78,9 +78,10 @@ export function calculatePercentileMangoHudThreshold(sortedData, percentile) {
  * 
  * @param {Array<number>} values - Array of numeric values
  * @param {string} calculationMethod - Either 'linear-interpolation' or 'mangohud-threshold'
+ * @param {number} densityScale - Buckets per unit (10 for frametime, 1 otherwise)
  * @returns {Array<Array<number>>} Array of [value, count] pairs
  */
-function calculateDensityData(values, calculationMethod) {
+function calculateDensityData(values, calculationMethod, densityScale = 1) {
   if (!values || values.length === 0) return []
   
   const sorted = [...values].sort((a, b) => a - b)
@@ -93,11 +94,11 @@ function calculateDensityData(values, calculationMethod) {
   
   const counts = {}
   filtered.forEach(value => {
-    const rounded = Math.round(value)
+    const rounded = Math.round(value * densityScale) / densityScale
     counts[rounded] = (counts[rounded] || 0) + 1
   })
   
-  const array = Object.keys(counts).map(key => [parseInt(key, 10), counts[key]]).sort((a, b) => a[0] - b[0])
+  const array = Object.keys(counts).map(key => [Number(key), counts[key]]).sort((a, b) => a[0] - b[0])
   
   return array
 }
@@ -109,9 +110,10 @@ function calculateDensityData(values, calculationMethod) {
  * 
  * @param {Array<number>} values - Array of numeric values
  * @param {string} calculationMethod - Either 'linear-interpolation' or 'mangohud-threshold'
+ * @param {number} densityScale - Buckets per unit (10 for frametime, 1 otherwise)
  * @returns {Object} Statistics object with all percentiles matching backend MetricStats
  */
-export function calculateStats(values, calculationMethod = 'linear-interpolation') {
+export function calculateStats(values, calculationMethod = 'linear-interpolation', densityScale = 1) {
   if (!values || values.length === 0) {
     return { min: 0, max: 0, avg: 0, median: 0, p01: 0, p05: 0, p10: 0, p25: 0, p75: 0, p90: 0, p95: 0, p97: 0, p99: 0, iqr: 0, stddev: 0, variance: 0, count: 0, density: [] }
   }
@@ -154,7 +156,7 @@ export function calculateStats(values, calculationMethod = 'linear-interpolation
     stddev: stddev,
     variance: variance,
     count: values.length,
-    density: calculateDensityData(values, calculationMethod)
+    density: calculateDensityData(values, calculationMethod, densityScale)
   }
 }
 

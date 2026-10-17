@@ -23,8 +23,9 @@ const (
 	// - 3: Migrated benchmark storage format from V1 to V2 (streaming-friendly format) + regenerate metadata with JSON size
 	// - 4: Pre-calculate statistics for all benchmarks (.stats files) for instant loading
 	// - 5: Removed audit_logs table (audit logs moved to file-based JSON logging)
+	// - 6: Fractional frametime density buckets and versioned statistics files
 	// Future versions should increment this and add migration logic in InitDB
-	currentSchemaVersion = 5
+	currentSchemaVersion = 6
 	// Maximum description length in new schema
 	maxDescriptionLength = 5000
 )

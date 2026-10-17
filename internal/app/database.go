@@ -142,7 +142,7 @@ func InitDB(dataDir string) (*DBInstance, error) {
 
 		if version == 3 {
 			log.Println("Pre-calculating statistics for all benchmarks...")
-			if err := MigratePreCalculateStats(dataDir); err != nil {
+			if err := MigratePreCalculateStats(dataDir, false); err != nil {
 				return nil, fmt.Errorf("failed to pre-calculate benchmark stats: %w", err)
 			}
 			// Update version to 4 after successful migration
@@ -165,6 +165,17 @@ func InitDB(dataDir string) (*DBInstance, error) {
 				return nil, fmt.Errorf("failed to set schema version to 5: %w", err)
 			}
 			log.Println("Successfully migrated to version 5")
+			version = 5
+		}
+		if version == 5 {
+			log.Println("Regenerating statistics with 0.1 ms frametime density buckets...")
+			if err := MigratePreCalculateStats(dataDir, true); err != nil {
+				return nil, fmt.Errorf("failed to regenerate benchmark stats: %w", err)
+			}
+			if err := setSchemaVersion(db, 6); err != nil {
+				return nil, fmt.Errorf("failed to set schema version to 6: %w", err)
+			}
+			log.Println("Successfully migrated to version 6")
 		}
 	}
 

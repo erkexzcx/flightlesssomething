@@ -142,9 +142,10 @@ func isBenchmarkFormatV2(benchmarkID uint) (bool, error) {
 }
 
 // MigratePreCalculateStats pre-calculates statistics for all existing benchmarks
-// This creates .stats files from existing .bin raw data files
-func MigratePreCalculateStats(dataDir string) error {
-	log.Println("=== Starting Pre-Calculate Stats Migration (V3 → V4) ===")
+// This creates .stats files from existing .bin raw data files. When regenerate is
+// true, existing cached statistics are replaced without modifying raw data.
+func MigratePreCalculateStats(dataDir string, regenerate bool) error {
+	log.Println("=== Starting Pre-Calculate Stats Migration ===")
 
 	benchmarksDirPath := filepath.Join(dataDir, "benchmarks")
 	if _, err := os.Stat(benchmarksDirPath); os.IsNotExist(err) {
@@ -182,7 +183,7 @@ func MigratePreCalculateStats(dataDir string) error {
 
 		// Check if .stats file already exists
 		statsPath := filepath.Join(benchmarksDirPath, fmt.Sprintf("%d.stats", benchmarkID))
-		if _, err := os.Stat(statsPath); err == nil {
+		if _, err := os.Stat(statsPath); err == nil && !regenerate {
 			log.Printf("Benchmark %d: Stats file already exists - skipped", benchmarkID)
 			skipCount++
 			continue

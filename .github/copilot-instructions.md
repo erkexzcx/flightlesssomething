@@ -518,8 +518,8 @@ Every pull request **must** satisfy ALL of the following requirements:
 
 ### Database Migrations
 - Schema version tracked in `schema_versions` table
-- Current version: 5
-- Migrations: v0→v1 (remove ai_summary), v1→v2 (add search fields), v2→v3 (storage format V2 + metadata), v3→v4 (pre-calculated statistics .stats files), v4→v5 (dropped audit_logs table, moved to file-based logging)
+- Current version: 6
+- Migrations: v0→v1 (remove ai_summary), v1→v2 (add search fields), v2→v3 (storage format V2 + metadata), v3→v4 (pre-calculated statistics .stats files), v4→v5 (dropped audit_logs table, moved to file-based logging), v5→v6 (regenerate statistics with 0.1 ms frametime density buckets and a versioned stats header)
 - Detect old database formats and migrate automatically
 
 ### Benchmark Data Format V2

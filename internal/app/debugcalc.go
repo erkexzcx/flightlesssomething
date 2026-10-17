@@ -49,11 +49,11 @@ func HandleDebugCalc() gin.HandlerFunc {
 			result.MangoHud.FPS = computeFPSFromFrametimeForMethod(req.Frametime, "mangohud")
 
 			// Frametime stats
-			result.Linear.Frametime = computeMetricStatsForMethod(req.Frametime, "linear")
-			result.MangoHud.Frametime = computeMetricStatsForMethod(req.Frametime, "mangohud")
+			result.Linear.Frametime = computeMetricStatsForMethod(req.Frametime, "linear", frameTimeDensityScale)
+			result.MangoHud.Frametime = computeMetricStatsForMethod(req.Frametime, "mangohud", frameTimeDensityScale)
 		} else if len(req.FPS) > 0 {
-			result.Linear.FPS = computeMetricStatsForMethod(req.FPS, "linear")
-			result.MangoHud.FPS = computeMetricStatsForMethod(req.FPS, "mangohud")
+			result.Linear.FPS = computeMetricStatsForMethod(req.FPS, "linear", 1)
+			result.MangoHud.FPS = computeMetricStatsForMethod(req.FPS, "mangohud", 1)
 		}
 
 		c.JSON(http.StatusOK, result)

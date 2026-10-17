@@ -451,13 +451,13 @@ func TestInitDBWithMigration(t *testing.T) {
 			t.Error("audit_logs table should have been dropped after v4→v5 migration")
 		}
 
-		// Verify schema version is now 5
+		// Verify all migrations reach the current schema version
 		var version SchemaVersion
 		if queryErr := db.DB.Order("version DESC").First(&version).Error; queryErr != nil {
 			t.Fatalf("Failed to read schema version: %v", queryErr)
 		}
-		if version.Version != 5 {
-			t.Errorf("Expected schema version 5, got %d", version.Version)
+		if version.Version != currentSchemaVersion {
+			t.Errorf("Expected schema version %d, got %d", currentSchemaVersion, version.Version)
 		}
 	})
 

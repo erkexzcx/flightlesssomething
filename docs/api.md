@@ -191,7 +191,7 @@ Each object contains:
 | `stats` | object | Per-metric `MetricStats` computed with linear interpolation. |
 | `statsMangoHud` | object | Per-metric `MetricStats` computed with MangoHud threshold method. |
 
-Each `MetricStats` object contains: `min`, `max`, `avg`, `median`, `p01`, `p05`, `p10`, `p25`, `p75`, `p90`, `p95`, `p97`, `p99`, `iqr`, `stddev`, `variance`, `count` (int), and `density` (`[[roundedValue, count], ...]` histogram filtered to p01–p97 range).
+Each `MetricStats` object contains: `min`, `max`, `avg`, `median`, `p01`, `p05`, `p10`, `p25`, `p75`, `p90`, `p95`, `p97`, `p99`, `iqr`, `stddev`, `variance`, `count` (int), and `density` (`[[roundedValue, count], ...]` histogram filtered to p01–p97 range). Frametime density uses 0.1 ms buckets; FPS and other metrics use whole-unit buckets. Counts remain numbers of samples, not time-weighted values.
 
 Metric keys: `fps`, `frametime`, `cpu_load`, `gpu_load`, `cpu_temp`, `cpu_power`, `gpu_temp`, `gpu_core_clock`, `gpu_mem_clock`, `gpu_vram_used`, `gpu_power`, `ram_used`, `swap_used`.
 
